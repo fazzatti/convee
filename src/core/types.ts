@@ -1,0 +1,20 @@
+import { MetadataHelper } from "../metadata/collector";
+import { MetadataCollected } from "../metadata/collector/types";
+
+export interface IModifier<item> {
+  (item: item, metadataHelper: MetadataHelper): Promise<item>;
+}
+
+export interface ITransformer<input, output> {
+  (item: input, metadataHelper: MetadataHelper): Promise<output>;
+}
+
+export type EngineMetadata = {
+  source: string;
+  type: string;
+  itemId: string;
+  inputBeltMeta?: MetadataCollected;
+  outputBeltMeta?: MetadataCollected;
+  errortBeltMeta?: MetadataCollected;
+  processMeta?: MetadataCollected;
+};

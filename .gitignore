@@ -1,3 +1,9 @@
+# Local test
+src/index-test.ts
+
+# Jest coverage
+coverage/
+
 # Logs
 logs
 *.log

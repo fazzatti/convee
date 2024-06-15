@@ -1,13 +1,13 @@
 import { MetadataHelper } from "../metadata/collector";
 import { MetadataCollected } from "../metadata/collector/types";
 
-export interface IModifier<item> {
+export type Modifier<item> = {
   (item: item, metadataHelper: MetadataHelper): Promise<item>;
-}
+};
 
-export interface ITransformer<input, output> {
+export type Transformer<input, output> = {
   (item: input, metadataHelper: MetadataHelper): Promise<output>;
-}
+};
 
 export type EngineMetadata = {
   source: string;

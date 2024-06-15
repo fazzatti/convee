@@ -1,6 +1,6 @@
-import { IBeltPlugin } from "../../../../belt-plugin/types";
-import { MetadataHelper } from "../../../../metadata/collector";
-import { ProcessEngine } from "../../../../process-engine";
+import { IBeltPlugin } from "../../../../belt-plugin/types.ts";
+import { MetadataHelper } from "../../../../metadata/collector/index.ts";
+import { ProcessEngine } from "../../../../process-engine/index.ts";
 
 export class SumProcessor extends ProcessEngine<
   { a: number; b: number },
@@ -16,6 +16,7 @@ export class SumProcessor extends ProcessEngine<
     super(args);
   }
 
+  // deno-lint-ignore require-await
   protected async process(
     item: {
       a: number;

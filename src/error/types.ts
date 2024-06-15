@@ -1,4 +1,4 @@
-import { EngineMetadata } from "../core/types";
+import { EngineMetadata } from "../core/types.ts";
 
 export interface IConveeError<ErrorT extends Error> extends Error {
   engineStack: EngineMetadata[];

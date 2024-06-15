@@ -1,6 +1,6 @@
-import { ConveeError } from "../../../error";
-import { InvertSignInputPlugin } from "../../utils/examples/plugin/input-belt/invert-sign";
-import { SumProcessor } from "../../utils/examples/process-engine/sum";
+import { ConveeError } from "../../../error/index.ts";
+import { InvertSignInputPlugin } from "../../utils/examples/plugin/input-belt/invert-sign.ts";
+import { SumProcessor } from "../../utils/examples/process-engine/sum.ts";
 
 describe("Given a Sum Process Engine", () => {
   describe("When a user excutes a sum with no plugins", () => {

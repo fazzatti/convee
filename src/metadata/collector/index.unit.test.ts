@@ -1,4 +1,4 @@
-import { MetadataHelper } from ".";
+import { MetadataHelper } from "./index.ts";
 
 describe("metadata/collector", () => {
   describe("MetadataHelper", () => {

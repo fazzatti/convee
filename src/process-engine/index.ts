@@ -27,7 +27,7 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
 
   constructor(args?: IProcessEngineConstructor<Input, Output, ErrorT>) {
     const { name, id, plugins } = args || {};
-    this.id = id || (crypto.randomUUID()() as string);
+    this.id = id || (crypto.randomUUID() as string);
     this.plugins = plugins || [];
     this.name = name || this.type;
   }

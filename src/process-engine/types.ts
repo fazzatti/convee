@@ -1,5 +1,5 @@
-import { IBeltPlugin } from "../belt-plugin/types";
-import { EngineMetadata } from "../core/types";
+import { IBeltPlugin } from "../belt-plugin/types.ts";
+import { EngineMetadata } from "../core/types.ts";
 
 export interface IProcessEngine<Input, Output, ErrorT> {
   name: string;

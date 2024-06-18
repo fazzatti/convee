@@ -1,22 +1,20 @@
-import { v4 as uuidv4 } from "uuid";
-
 import {
   ExecuteOptions,
   IProcessEngine,
   IProcessEngineConstructor,
   ProcessEngineMetadata,
   ProcessEngineType,
-} from "./types";
+} from "./types.ts";
 import {
   IBeltPlugin,
   IBeltPluginError,
   IBeltPluginInput,
   IBeltPluginOutput,
-} from "../belt-plugin/types";
-import { ConveeError } from "../error";
-import { MetadataHelper } from "../metadata/collector";
-import { MetadataCollected } from "../metadata/collector/types";
-import { isConveeError, wrapConveeError } from "../error/util";
+} from "../belt-plugin/types.ts";
+import { ConveeError } from "../error/index.ts";
+import { MetadataHelper } from "../metadata/collector/index.ts";
+import { MetadataCollected } from "../metadata/collector/types.ts";
+import { isConveeError, wrapConveeError } from "../error/util.ts";
 
 export class ProcessEngine<Input, Output, ErrorT extends Error>
   implements IProcessEngine<Input, Output, ErrorT>
@@ -29,7 +27,7 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
 
   constructor(args?: IProcessEngineConstructor<Input, Output, ErrorT>) {
     const { name, id, plugins } = args || {};
-    this.id = id || (uuidv4() as string);
+    this.id = id || (crypto.randomUUID() as string);
     this.plugins = plugins || [];
     this.name = name || this.type;
   }
@@ -39,7 +37,7 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
     options?: ExecuteOptions<Input, Output, ErrorT>
   ): Promise<Output> {
     const { existingItemId, singleUsePlugins } = options || {};
-    const itemId = existingItemId || (uuidv4() as string);
+    const itemId = existingItemId || (crypto.randomUUID() as string);
 
     const inputBeltMetadataHelper = new MetadataHelper(itemId);
     const outputBeltMetadataHelper = new MetadataHelper(itemId);
@@ -156,6 +154,7 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
     return postProcessedError;
   }
 
+  // deno-lint-ignore require-await
   protected async process(
     _item: Input,
     _metadataHelper: MetadataHelper

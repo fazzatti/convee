@@ -1,5 +1,5 @@
-import { EngineMetadata } from "../core/types";
-import { IConveeError, IConveeErrorPayload } from "./types";
+import { EngineMetadata } from "../core/types.ts";
+import { IConveeError, IConveeErrorPayload } from "./types.ts";
 
 export class ConveeError<ErrorT extends Error>
   extends Error

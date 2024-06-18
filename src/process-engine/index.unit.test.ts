@@ -1,11 +1,11 @@
-import { ProcessEngine } from ".";
+import { ProcessEngine } from "./index.ts";
 import {
   IBeltPluginError,
   IBeltPluginInput,
   IBeltPluginOutput,
-} from "../belt-plugin/types";
-import { ConveeError } from "../error";
-import { MetadataHelper } from "../metadata/collector";
+} from "../belt-plugin/types.ts";
+import { ConveeError } from "../error/index.ts";
+import { MetadataHelper } from "../metadata/collector/index.ts";
 
 const processFunctionNotImplementedError = "process function not implemented";
 

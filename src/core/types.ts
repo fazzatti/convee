@@ -1,5 +1,5 @@
-import { MetadataHelper } from "../metadata/collector";
-import { MetadataCollected } from "../metadata/collector/types";
+import { MetadataHelper } from "../metadata/collector/index.ts";
+import { MetadataCollected } from "../metadata/collector/types.ts";
 
 export interface IModifier<item> {
   (item: item, metadataHelper: MetadataHelper): Promise<item>;

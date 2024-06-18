@@ -1,10 +1,11 @@
-import { IBeltPluginInput } from "../../../../../belt-plugin/types";
-import { MetadataHelper } from "../../../../../metadata/collector";
+import { IBeltPluginInput } from "../../../../../belt-plugin/types.ts";
+import { MetadataHelper } from "../../../../../metadata/collector/index.ts";
 
 export class InvertSignInputPlugin
   implements IBeltPluginInput<{ a: number; b: number }>
 {
   public name = "InvertSignInputPlugin";
+  // deno-lint-ignore require-await
   public async processInput(
     item: { a: number; b: number },
     metadataHelper: MetadataHelper

@@ -1,4 +1,6 @@
-import { MetadataCollected } from "./types";
+// deno-lint-ignore-file no-explicit-any
+
+import { MetadataCollected } from "./types.ts";
 
 export class MetadataHelper {
   private metadata: Record<string, any>;
@@ -12,7 +14,6 @@ export class MetadataHelper {
   add(key: string, value: any): void {
     this.metadata[key] = value;
   }
-
   get(key: string): any {
     return this.metadata[key];
   }

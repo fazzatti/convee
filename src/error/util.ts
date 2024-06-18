@@ -1,4 +1,4 @@
-import { ConveeError } from ".";
+import { ConveeError } from "./index.ts";
 
 export const wrapConveeError = <ErrorT extends Error>(
   error: ErrorT

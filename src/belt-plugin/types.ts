@@ -1,5 +1,5 @@
-import { IModifier } from "../core/types";
-import { ConveeError } from "../error";
+import { IModifier } from "../core/types.ts";
+import { ConveeError } from "../error/index.ts";
 
 // Base plugin interface
 interface IPluginBase {

@@ -16,20 +16,20 @@ import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
 import { isConveeError, wrapConveeError } from "../error/util.ts";
 
-export class ProcessEngine<Input, Output, ErrorT extends Error>
+export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
   implements IProcessEngine<Input, Output, ErrorT>
 {
   public readonly id: string;
-  public readonly name: string;
+  public abstract readonly name: string;
   public readonly type = ProcessEngineType.PROCESS_ENGINE;
 
   protected plugins: IBeltPlugin<Input, Output, ErrorT>[];
 
   constructor(args?: IProcessEngineConstructor<Input, Output, ErrorT>) {
-    const { name, id, plugins } = args || {};
+    const { id, plugins } = args || {};
     this.id = id || (crypto.randomUUID() as string);
     this.plugins = plugins || [];
-    this.name = name || this.type;
+    // this.name = name || this.type;
   }
 
   public async execute(
@@ -154,13 +154,10 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
     return postProcessedError;
   }
 
-  // deno-lint-ignore require-await
-  protected async process(
+  protected abstract process(
     _item: Input,
     _metadataHelper: MetadataHelper
-  ): Promise<Output> {
-    throw new Error("process function not implemented");
-  }
+  ): Promise<Output>;
 
   protected getMeta(args: {
     itemId: string;

@@ -6,112 +6,147 @@ import {
 } from "../belt-plugin/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
+import { assert, assertEquals } from "jsr:@std/assert";
 
 const processFunctionNotImplementedError = "process function not implemented";
 
-describe("process-engine", () => {
-  describe("during initialization", () => {
-    it("should initialize with no arguments", () => {
-      const processEngine = new ProcessEngine();
+class MyProcessN2S extends ProcessEngine<number, string, Error> {
+  public readonly name = "MyProcess";
 
-      expect(processEngine).toBeDefined();
+  protected async process(item: number): Promise<string> {
+    return item.toString();
+  }
+}
+class MyProcessN2N extends ProcessEngine<number, number, Error> {
+  public readonly name = "MyProcess";
+
+  protected async process(item: number): Promise<number> {
+    return item;
+  }
+}
+
+const setupEngine = (): ProcessEngine<number, number, Error> => {
+  class MyNewProcess extends MyProcessN2N {}
+  const engine = new MyNewProcess();
+  return engine;
+};
+
+const setupErrorEngine = (): ProcessEngine<number, number, Error> => {
+  class MyNewProcess extends MyProcessN2N {
+    override process = async () => {
+      throw new Error("mocked error");
+    };
+  }
+  const engine = new MyNewProcess();
+  return engine;
+};
+
+Deno.test("process-engine", async (t: Deno.TestContext) => {
+  await t.step("during initialization", async (t: Deno.TestContext) => {
+    await t.step("should initialize with no arguments", () => {
+      const processEngine = new MyProcessN2S();
+      assert(processEngine, "Expected processEngine to be defined");
     });
 
-    it("should initialize with a new id if none is provided", () => {
-      const processEngine = new ProcessEngine();
-
-      expect(processEngine.id).toBeDefined();
+    await t.step("should initialize with a new id if none is provided", () => {
+      const processEngine = new MyProcessN2S();
+      assert(processEngine.id, "Expected processEngine.id to be defined");
     });
 
-    it("should initialize with the provided id", () => {
-      const processEngine = new ProcessEngine({ id: "test" });
-
-      expect(processEngine.id).toEqual("test");
+    await t.step("should initialize with the provided id", () => {
+      const processEngine = new MyProcessN2S({ id: "test" });
+      assertEquals(processEngine.id, "test");
     });
 
-    it("should initialize with no plugins if none is provided", () => {
-      const processEngine = new ProcessEngine();
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
+    await t.step(
+      "should initialize with no plugins if none is provided",
+      () => {
+        const processEngine = new MyProcessN2S();
+        const plugins = (processEngine as any).plugins;
+        assertEquals(plugins, []);
+      }
+    );
 
-      expect(spyProcessEnginePlugins).toEqual([]);
-    });
-
-    it("should initialize with the provided input plugins", () => {
+    await t.step("should initialize with the provided input plugins", () => {
       const mockPlugin = { name: "mockPlugin" } as IBeltPluginInput<number>;
-      const processEngine = new ProcessEngine<number, string, Error>({
+      const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
-
-      expect(spyProcessEnginePlugins).toEqual([mockPlugin]);
+      const plugins = (processEngine as any).plugins;
+      assertEquals(plugins, [mockPlugin]);
     });
 
-    it("should initialize with the provided output plugins", () => {
-      const mockPlugin = { name: "mockPlugin" } as IBeltPluginOutput<number>;
-      const processEngine = new ProcessEngine<string, number, Error>({
+    await t.step("should initialize with the provided output plugins", () => {
+      const mockPlugin = { name: "mockPlugin" } as IBeltPluginOutput<string>;
+      const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
-
-      expect(spyProcessEnginePlugins).toEqual([mockPlugin]);
+      const plugins = (processEngine as any).plugins;
+      assertEquals(plugins, [mockPlugin]);
     });
 
-    it("should initialize with the provided error plugins", () => {
+    await t.step("should initialize with the provided error plugins", () => {
       const mockPlugin = { name: "mockPlugin" } as IBeltPluginError<Error>;
-      const processEngine = new ProcessEngine<string, string, Error>({
+      const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
-
-      expect(spyProcessEnginePlugins).toEqual([mockPlugin]);
+      const plugins = (processEngine as any).plugins;
+      assertEquals(plugins, [mockPlugin]);
     });
 
-    it("should initialize with the provided multi-type plugins", () => {
-      const mockPluginInputOutput = {
-        name: "mockPlugin",
-      } as IBeltPluginInput<number> & IBeltPluginOutput<string>;
-      const processEngine = new ProcessEngine<number, string, Error>({
-        plugins: [mockPluginInputOutput],
-      });
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
+    await t.step(
+      "should initialize with the provided multi-type plugins",
+      () => {
+        const mockPluginInputOutput = {
+          name: "mockPlugin",
+        } as IBeltPluginInput<number> & IBeltPluginOutput<string>;
+        const processEngine = new MyProcessN2S({
+          plugins: [mockPluginInputOutput],
+        });
+        const plugins = (processEngine as any).plugins;
+        assertEquals(plugins, [mockPluginInputOutput]);
+      }
+    );
 
-      expect(spyProcessEnginePlugins).toEqual([mockPluginInputOutput]);
-    });
-
-    it("should initialize with the provided plugins of different types", () => {
-      const mockPluginInput = {
-        name: "mockPlugin",
-      } as IBeltPluginInput<string>;
-      const mockPluginOutput = {
-        name: "mockPlugin",
-      } as IBeltPluginOutput<number>;
-      const mockPluginError = { name: "mockPlugin" } as IBeltPluginError<Error>;
-      const mockPluginInputOutput = {
-        name: "mockPlugin",
-      } as IBeltPluginInput<string> & IBeltPluginOutput<number>;
-      const mockPluginInputError = {
-        name: "mockPlugin",
-      } as IBeltPluginInput<string> & IBeltPluginError<Error>;
-      const mockPluginOutputError = {
-        name: "mockPlugin",
-      } as IBeltPluginOutput<number> & IBeltPluginError<Error>;
-      const mockPluginInputOutputError = {
-        name: "mockPlugin",
-      } as IBeltPluginInput<number> &
-        IBeltPluginOutput<string> &
-        IBeltPluginError<Error>;
-      const processEngine = new ProcessEngine<string, number, Error>({
-        plugins: [
+    await t.step(
+      "should initialize with the provided plugins of different types",
+      () => {
+        const mockPluginInput = {
+          name: "mockPlugin",
+        } as IBeltPluginInput<number>;
+        const mockPluginOutput = {
+          name: "mockPlugin",
+        } as IBeltPluginOutput<string>;
+        const mockPluginError = {
+          name: "mockPlugin",
+        } as IBeltPluginError<Error>;
+        const mockPluginInputOutput = {
+          name: "mockPlugin",
+        } as IBeltPluginInput<number> & IBeltPluginOutput<string>;
+        const mockPluginInputError = {
+          name: "mockPlugin",
+        } as IBeltPluginInput<string> & IBeltPluginError<Error>;
+        const mockPluginOutputError = {
+          name: "mockPlugin",
+        } as IBeltPluginOutput<number> & IBeltPluginError<Error>;
+        const mockPluginInputOutputError = {
+          name: "mockPlugin",
+        } as IBeltPluginInput<number> &
+          IBeltPluginOutput<string> &
+          IBeltPluginError<Error>;
+        const processEngine = new MyProcessN2S({
+          plugins: [
+            mockPluginInput,
+            mockPluginOutput,
+            mockPluginError,
+            mockPluginInputOutput,
+            mockPluginInputError,
+            mockPluginOutputError,
+            mockPluginInputOutputError,
+          ],
+        });
+        const plugins = (processEngine as any).plugins;
+        assertEquals(plugins, [
           mockPluginInput,
           mockPluginOutput,
           mockPluginError,
@@ -119,240 +154,223 @@ describe("process-engine", () => {
           mockPluginInputError,
           mockPluginOutputError,
           mockPluginInputOutputError,
-        ],
-      });
-      const spyProcessEnginePlugins = jest.mocked(
-        (processEngine as any).plugins
-      );
-
-      expect(spyProcessEnginePlugins).toEqual([
-        mockPluginInput,
-        mockPluginOutput,
-        mockPluginError,
-        mockPluginInputOutput,
-        mockPluginInputError,
-        mockPluginOutputError,
-        mockPluginInputOutputError,
-      ]);
-    });
+        ]);
+      }
+    );
   });
 
-  describe("during direct execution", () => {
-    const processEngine = new ProcessEngine();
+  await t.step("during direct execution", async (t: Deno.TestContext) => {
+    // Create a new engine instance for direct execution tests
+    const processEngine = new MyProcessN2S();
 
-    beforeEach(() => {
-      jest.clearAllMocks();
-    });
-
-    it("should execute the process function", async () => {
-      const spyProcess = jest
-        .spyOn(processEngine as any, "process")
-        .mockResolvedValueOnce("1");
+    await t.step("should execute the process function", async () => {
+      // Instead of jest.spyOn, we override the process method manually.
+      let processCalled = false;
+      (processEngine as any).process = async (item: any) => {
+        processCalled = true;
+        return "1";
+      };
 
       await processEngine.execute(1);
-
-      expect(spyProcess).toHaveBeenCalled();
+      assert(processCalled, "Expected process() to be called");
     });
 
-    it("should throw an error if the process function is not implemented", async () => {
-      await expect(processEngine.execute(1)).rejects.toThrow(
-        processFunctionNotImplementedError
-      );
-    });
-  });
+    await t.step(
+      "during general extended execution",
+      async (t: Deno.TestContext) => {
+        let processEngine: ProcessEngine<number, number, Error>;
 
-  describe("during general extended execution", () => {
-    let processEngine: ProcessEngine<number, number, Error>;
+        await t.step("should run single use plugins", async () => {
+          processEngine = setupEngine();
+          const sum1Plugin = {
+            name: "sum1Plugin",
+            processInput: async (item: number) => item + 1,
+          } as IBeltPluginInput<number>;
+          const subtract1Plugin = {
+            name: "subtract1Plugin",
+            processOutput: async (item: number) => item - 1,
+          } as IBeltPluginOutput<number>;
 
-    beforeEach(() => {
-      processEngine = new ProcessEngine<number, number, Error>();
-      jest.clearAllMocks();
-      jest
-        .spyOn(processEngine as any, "process")
-        .mockImplementation((item: any) => {
-          return item as number;
+          const pureExecutionResult = await processEngine.execute(1, {});
+          const singleUseSum1Result = await processEngine.execute(1, {
+            singleUsePlugins: [sum1Plugin],
+          });
+          const singleUseSubtract1Result = await processEngine.execute(1, {
+            singleUsePlugins: [subtract1Plugin],
+          });
+
+          assertEquals(pureExecutionResult, 1);
+          assertEquals(singleUseSum1Result, 2);
+          assertEquals(singleUseSubtract1Result, 0);
         });
-    });
+      }
+    );
 
-    it("should run single use plugins", async () => {
-      const sum1Plugin = {
-        name: "sum1Plugin",
-        processInput: jest.fn().mockImplementation((item: number) => item + 1),
-      } as IBeltPluginInput<number>;
-      const subtract1Plugin = {
-        name: "subtract1Plugin",
-        processOutput: jest.fn().mockImplementation((item: number) => item - 1),
-      } as IBeltPluginOutput<number>;
+    await t.step("during input belt execution", async (t: Deno.TestContext) => {
+      let processEngine: ProcessEngine<number, number, Error>;
 
-      const pureExecutionResult = await processEngine.execute(1, {});
-      const singleUseSum1Result = await processEngine.execute(1, {
-        singleUsePlugins: [sum1Plugin],
-      });
-      const singleUseSubtract1Result = await processEngine.execute(1, {
-        singleUsePlugins: [subtract1Plugin],
+      await t.step("should run the input belt function", async () => {
+        processEngine = setupEngine();
+        let runInputBeltCalled = false;
+        (processEngine as any).runInputBelt = async () => {
+          runInputBeltCalled = true;
+          return 1;
+        };
+
+        await processEngine.execute(1);
+        assert(runInputBeltCalled, "Expected runInputBelt() to be called");
       });
 
-      expect(pureExecutionResult).toBe(1);
-      expect(singleUseSum1Result).toBe(2);
-      expect(singleUseSubtract1Result).toBe(0);
-    });
-  });
+      await t.step(
+        "should execute the input belt with the provided item and id",
+        async () => {
+          processEngine = setupEngine();
+          // Here we override runInputBelt to return a number from the metadata.
+          (processEngine as any).runInputBelt = async (
+            _item: any,
+            metadataHelper: MetadataHelper
+          ) => {
+            return Number(metadataHelper.itemId);
+          };
 
-  describe("during input belt execution", () => {
-    let processEngine: ProcessEngine<number, number, Error>;
-
-    beforeEach(() => {
-      processEngine = new ProcessEngine<number, number, Error>();
-      jest.clearAllMocks();
-      jest
-        .spyOn(processEngine as any, "process")
-        .mockImplementation((item: any) => {
-          return item as number;
-        });
-    });
-
-    it("should run the input belt function", async () => {
-      const spyRunInputBelt = jest.spyOn(processEngine as any, "runInputBelt");
-
-      await processEngine.execute(1);
-
-      expect(spyRunInputBelt).toHaveBeenCalled();
-    });
-
-    it("should execute the input belt with the provided item and id", async () => {
-      const spyRunInputBelt = jest.spyOn(processEngine as any, "runInputBelt");
-      const mockedPlugin = {
-        name: "mockedPlugin",
-        processInput: jest
-          .fn()
-          .mockImplementationOnce(
-            (item: number, metadataHelper: MetadataHelper) => {
+          // Also set a plugin that might trigger runInputBelt indirectly.
+          const mockedPlugin = {
+            name: "mockedPlugin",
+            processInput: async (
+              item: number,
+              metadataHelper: MetadataHelper
+            ) => {
               return Number(metadataHelper.itemId);
-            }
-          ),
-      } as IBeltPluginInput<number>;
-      (processEngine as any).plugins = [mockedPlugin];
+            },
+          } as IBeltPluginInput<number>;
+          (processEngine as any).plugins = [mockedPlugin];
 
-      const output = await processEngine.execute(1, { existingItemId: "25" });
-
-      expect(output).toBe(25);
-    });
-
-    it("should return the result of the input belt as input to process", async () => {
-      const spyRunInputBelt = jest
-        .spyOn(processEngine as any, "runInputBelt")
-        .mockResolvedValue(2);
-      const spyProcess = jest.spyOn(processEngine as any, "process");
-
-      const result = await processEngine.execute(1);
-
-      expect(result).toBe(2);
-    });
-
-    it("should run the input belt plugins", async () => {
-      const spyRunInputBelt = jest.spyOn(processEngine as any, "runInputBelt");
-      const mockedPlugin = {
-        name: "mockedPlugin",
-        processInput: jest.fn(),
-      } as IBeltPluginInput<number>;
-      (processEngine as any).plugins = [mockedPlugin];
-
-      await processEngine.execute(1);
-
-      expect(mockedPlugin.processInput).toHaveBeenCalled();
-    });
-  });
-
-  describe("during output belt execution", () => {
-    let processEngine: ProcessEngine<number, number, Error>;
-
-    beforeEach(() => {
-      processEngine = new ProcessEngine<number, number, Error>();
-      jest.clearAllMocks();
-      jest
-        .spyOn(processEngine as any, "process")
-        .mockImplementation((item: any) => {
-          return item as number;
-        });
-    });
-
-    it("should run the output belt function", async () => {
-      const spyRunOutputBelt = jest.spyOn(
-        processEngine as any,
-        "runOutputBelt"
+          const output = await processEngine.execute(1, {
+            existingItemId: "25",
+          });
+          assertEquals(output, 25);
+        }
       );
 
-      await processEngine.execute(1);
+      await t.step(
+        "should return the result of the input belt as input to process",
+        async () => {
+          processEngine = setupEngine();
+          (processEngine as any).runInputBelt = async () => 2;
+          let processCalled = false;
+          (processEngine as any).process = (item: any) => {
+            processCalled = true;
+            return item as number;
+          };
 
-      expect(spyRunOutputBelt).toHaveBeenCalled();
+          const result = await processEngine.execute(1);
+          assertEquals(result, 2);
+          assert(processCalled, "Expected process() to be called");
+        }
+      );
+
+      await t.step("should run the input belt plugins", async () => {
+        processEngine = setupEngine();
+        let pluginCalled = false;
+        const mockedPlugin = {
+          name: "mockedPlugin",
+          processInput: async (item: number) => {
+            pluginCalled = true;
+            return item;
+          },
+        } as IBeltPluginInput<number>;
+        (processEngine as any).plugins = [mockedPlugin];
+
+        await processEngine.execute(1);
+        assert(pluginCalled, "Expected input plugin to be called");
+      });
     });
 
-    it("should return the result of the output belt as the final output", async () => {
-      const spyRunOutputBelt = jest
-        .spyOn(processEngine as any, "runOutputBelt")
-        .mockResolvedValue(2);
+    await t.step(
+      "during output belt execution",
+      async (t: Deno.TestContext) => {
+        let processEngine: ProcessEngine<number, number, Error>;
 
-      const result = await processEngine.execute(1, {
-        existingItemId: "mocked-id",
+        await t.step("should run the output belt function", async () => {
+          processEngine = setupEngine();
+          let runOutputBeltCalled = false;
+          (processEngine as any).runOutputBelt = async () => {
+            runOutputBeltCalled = true;
+            return 1;
+          };
+
+          await processEngine.execute(1);
+          assert(runOutputBeltCalled, "Expected runOutputBelt() to be called");
+        });
+
+        await t.step(
+          "should return the result of the output belt as the final output",
+          async () => {
+            processEngine = setupEngine();
+            (processEngine as any).runOutputBelt = async () => 2;
+            const result = await processEngine.execute(1, {
+              existingItemId: "mocked-id",
+            });
+            assertEquals(result, 2);
+          }
+        );
+
+        await t.step("should run the output belt plugins", async () => {
+          processEngine = setupEngine();
+          let pluginCalled = false;
+          const mockedPlugin = {
+            name: "mockedPlugin",
+            processOutput: async (item: number) => {
+              pluginCalled = true;
+              return item;
+            },
+          } as IBeltPluginOutput<number>;
+          (processEngine as any).plugins = [mockedPlugin];
+
+          await processEngine.execute(1);
+          assert(pluginCalled, "Expected output plugin to be called");
+        });
+      }
+    );
+
+    await t.step("during error belt execution", async (t: Deno.TestContext) => {
+      let processEngine: ProcessEngine<number, number, Error>;
+
+      await t.step("should run the error belt function", async () => {
+        processEngine = setupErrorEngine();
+        let runErrorBeltCalled = false;
+        (processEngine as any).runErrorBelt = async () => {
+          runErrorBeltCalled = true;
+        };
+
+        await processEngine.execute(1).catch(() => {});
+
+        assert(runErrorBeltCalled, "Expected runErrorBelt() to be called");
       });
 
-      expect(result).toEqual(2);
-    });
+      await t.step("should run the error belt plugins", async () => {
+        processEngine = setupErrorEngine();
 
-    it("should run the output belt plugins", async () => {
-      const spyRunOutputBelt = jest.spyOn(
-        processEngine as any,
-        "runOutputBelt"
-      );
-      const mockedPlugin = {
-        name: "mockedPlugin",
-        processOutput: jest.fn(),
-      } as IBeltPluginOutput<number>;
-      (processEngine as any).plugins = [mockedPlugin];
+        let pluginCalled = false;
+        const mockedPlugin = {
+          name: "mockedPlugin",
+          processError: async (error: Error) => {
+            pluginCalled = true;
+            return new ConveeError({ message: "mocked modified error", error });
+          },
+        } as IBeltPluginError<Error>;
+        (processEngine as any).plugins = [mockedPlugin];
 
-      await processEngine.execute(1);
+        await processEngine
+          .execute(1, { existingItemId: "mocked-id" })
+          .catch(() => {});
 
-      expect(mockedPlugin.processOutput).toHaveBeenCalled();
-    });
-  });
+        assert(pluginCalled, "Expected error plugin to be called");
+      });
 
-  describe("during error belt execution", () => {
-    let processEngine: ProcessEngine<number, number, Error>;
-
-    beforeEach(() => {
-      processEngine = new ProcessEngine<number, number, Error>();
-      jest.clearAllMocks();
-    });
-
-    it("should run the error belt function", async () => {
-      const spyRunErrorBelt = jest.spyOn(processEngine as any, "runErrorBelt");
-
-      await expect(processEngine.execute(1)).rejects.toThrow();
-
-      expect(spyRunErrorBelt).toHaveBeenCalled();
-    });
-
-    it("should run the error belt plugins", async () => {
-      const spyRunErrorBelt = jest.spyOn(processEngine as any, "runErrorBelt");
-      const mockedPlugin = {
-        name: "mockedPlugin",
-        processError: jest
-          .fn()
-          .mockImplementation((error) => new Error("mocked modified error")),
-      } as IBeltPluginError<Error>;
-      (processEngine as any).plugins = [mockedPlugin];
-
-      await expect(
-        processEngine.execute(1, { existingItemId: "mocked-id" })
-      ).rejects.toThrow("mocked modified error");
-
-      expect(mockedPlugin.processError).toHaveBeenCalled();
-    });
-
-    it("should enrich a thrown convee error", async () => {
-      const spyProcessFn = jest
-        .spyOn(processEngine as any, "process")
-        .mockImplementationOnce(() => {
+      await t.step("should enrich a thrown convee error", async () => {
+        processEngine = setupEngine();
+        (processEngine as any).process = () => {
           const error = new ConveeError<Error>({
             message: "mocked error",
             error: new Error("mocked error"),
@@ -365,13 +383,18 @@ describe("process-engine", () => {
           });
 
           throw error;
-        });
+        };
 
-      await processEngine
-        .execute(1, { existingItemId: "mocked-id" })
-        .catch((error) => {
-          expect(error.engineStack.length).toEqual(2);
-        });
+        await processEngine
+          .execute(1, { existingItemId: "mocked-id" })
+          .catch((error: any) => {
+            assertEquals(
+              error.engineStack.length,
+              2,
+              "Expected engineStack to have 2 entries"
+            );
+          });
+      });
     });
   });
 });

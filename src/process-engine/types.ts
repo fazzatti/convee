@@ -12,7 +12,7 @@ export interface IProcessEngineConstructor<
   Output,
   ErrorT extends Error
 > {
-  name?: string;
+  // name?: string;
   plugins?: IBeltPlugin<Input, Output, ErrorT>[];
   id?: string;
 }

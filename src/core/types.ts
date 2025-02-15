@@ -1,13 +1,18 @@
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
 
-export interface IModifier<item> {
-  (item: item, metadataHelper: MetadataHelper): Promise<item>;
+export enum CoreProcessType {
+  PROCESS_ENGINE = "PROCESS_ENGINE",
+  PIPELINE = "PIPELINE",
 }
 
-export interface ITransformer<input, output> {
+export type Modifier<item> = {
+  (item: item, metadataHelper: MetadataHelper): Promise<item>;
+};
+
+export type Transformer<input, output> = {
   (item: input, metadataHelper: MetadataHelper): Promise<output>;
-}
+};
 
 export type EngineMetadata = {
   source: string;

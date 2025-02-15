@@ -1,35 +1,31 @@
-import { IBeltPlugin } from "../belt-plugin/types.ts";
-import { EngineMetadata } from "../core/types.ts";
+import { BeltPlugin } from "../belt-plugin/types.ts";
+import { CoreProcessType, EngineMetadata } from "../core/types.ts";
 
-export interface IProcessEngine<Input, Output, ErrorT> {
+export type ProcessEngine<Input, Output, ErrorT extends Error> = {
   name: string;
   id: string;
-  execute: (item: Input) => Promise<Output>;
-}
+  execute: (
+    item: Input,
+    options?: ExecuteOptions<Input, Output, ErrorT>
+  ) => Promise<Output>;
+  getType: () => CoreProcessType;
+};
 
-export interface IProcessEngineConstructor<
-  Input,
-  Output,
-  ErrorT extends Error
-> {
+export type ProcessEngineConstructor<Input, Output, ErrorT extends Error> = {
   // name?: string;
-  plugins?: IBeltPlugin<Input, Output, ErrorT>[];
+  plugins?: BeltPlugin<Input, Output, ErrorT>[];
   id?: string;
-}
+};
 
-export type IProcessCore<Input, Output> = (item: Input) => Promise<Output>;
-
-export enum ProcessEngineType {
-  PROCESS_ENGINE = "PROCESS_ENGINE",
-}
+export type ProcessCore<Input, Output> = (item: Input) => Promise<Output>;
 
 export interface ProcessEngineMetadata extends EngineMetadata {
   source: string;
   itemId: string;
-  type: ProcessEngineType;
+  type: CoreProcessType;
 }
 
 export interface ExecuteOptions<Input, Output, ErrorT extends Error> {
   existingItemId?: string;
-  singleUsePlugins?: IBeltPlugin<Input, Output, ErrorT>[];
+  singleUsePlugins?: BeltPlugin<Input, Output, ErrorT>[];
 }

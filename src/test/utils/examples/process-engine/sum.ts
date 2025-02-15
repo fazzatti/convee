@@ -1,4 +1,4 @@
-import { IBeltPlugin } from "../../../../belt-plugin/types.ts";
+import { BeltPlugin } from "../../../../belt-plugin/types.ts";
 import { MetadataHelper } from "../../../../metadata/collector/index.ts";
 import { ProcessEngine } from "../../../../process-engine/index.ts";
 
@@ -11,7 +11,7 @@ export class SumProcessor extends ProcessEngine<
 
   constructor(args?: {
     id?: string;
-    plugins?: IBeltPlugin<{ a: number; b: number }, number, Error>[];
+    plugins?: BeltPlugin<{ a: number; b: number }, number, Error>[];
   }) {
     super(args);
   }

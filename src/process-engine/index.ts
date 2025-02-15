@@ -1,37 +1,38 @@
 import {
   ExecuteOptions,
-  IProcessEngine,
-  IProcessEngineConstructor,
+  ProcessEngine as IProcessEngine,
+  ProcessEngineConstructor,
   ProcessEngineMetadata,
-  ProcessEngineType,
 } from "./types.ts";
 import {
-  IBeltPlugin,
-  IBeltPluginError,
-  IBeltPluginInput,
-  IBeltPluginOutput,
+  BeltPlugin,
+  BeltPluginError,
+  BeltPluginInput,
+  BeltPluginOutput,
 } from "../belt-plugin/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
 import { isConveeError, wrapConveeError } from "../error/util.ts";
+import { CoreProcessType } from "../core/types.ts";
 
 export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
   implements IProcessEngine<Input, Output, ErrorT>
 {
   public readonly id: string;
   public abstract readonly name: string;
-  public readonly type = ProcessEngineType.PROCESS_ENGINE;
 
-  protected plugins: IBeltPlugin<Input, Output, ErrorT>[];
+  protected plugins: BeltPlugin<Input, Output, ErrorT>[];
 
-  constructor(args?: IProcessEngineConstructor<Input, Output, ErrorT>) {
+  constructor(args?: ProcessEngineConstructor<Input, Output, ErrorT>) {
     const { id, plugins } = args || {};
     this.id = id || (crypto.randomUUID() as string);
     this.plugins = plugins || [];
-    // this.name = name || this.type;
   }
 
+  public getType(): CoreProcessType {
+    return CoreProcessType.PROCESS_ENGINE;
+  }
   public async execute(
     item: Input,
     options?: ExecuteOptions<Input, Output, ErrorT>
@@ -88,14 +89,14 @@ export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
   private async runInputBelt(
     item: Input,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
+    executionPlugins: BeltPlugin<Input, Output, ErrorT>[]
   ): Promise<Input> {
     let preProcessedItem = item as Input;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const inputPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginInput<Input> => "processInput" in plugin
+      (plugin): plugin is BeltPluginInput<Input> => "processInput" in plugin
     );
 
     for (const plugin of inputPlugins) {
@@ -111,14 +112,14 @@ export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
   private async runOutputBelt(
     item: Output,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
+    executionPlugins: BeltPlugin<Input, Output, ErrorT>[]
   ): Promise<Output> {
     let postProcessedItem = item as Output;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const outputPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginOutput<Output> => "processOutput" in plugin
+      (plugin): plugin is BeltPluginOutput<Output> => "processOutput" in plugin
     );
 
     for (const plugin of outputPlugins) {
@@ -134,14 +135,14 @@ export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
   private async runErrorBelt(
     item: ConveeError<ErrorT>,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
+    executionPlugins: BeltPlugin<Input, Output, ErrorT>[]
   ): Promise<ConveeError<ErrorT>> {
     let postProcessedError = item as ConveeError<ErrorT>;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const errorPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginError<ErrorT> => "processError" in plugin
+      (plugin): plugin is BeltPluginError<ErrorT> => "processError" in plugin
     );
 
     for (const plugin of errorPlugins) {
@@ -169,7 +170,7 @@ export abstract class ProcessEngine<Input, Output, ErrorT extends Error>
     return {
       itemId: args.itemId,
       source: this.id,
-      type: this.type,
+      type: this.getType(),
       inputBeltMeta: args.inputBeltMeta,
       outputBeltMeta: args.outputBeltMeta,
       errortBeltMeta: args.errortBeltMeta,

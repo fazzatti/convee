@@ -1,8 +1,8 @@
 import { ProcessEngine } from "./index.ts";
 import {
-  IBeltPluginError,
-  IBeltPluginInput,
-  IBeltPluginOutput,
+  BeltPluginError,
+  BeltPluginInput,
+  BeltPluginOutput,
 } from "../belt-plugin/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
@@ -68,7 +68,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     );
 
     await t.step("should initialize with the provided input plugins", () => {
-      const mockPlugin = { name: "mockPlugin" } as IBeltPluginInput<number>;
+      const mockPlugin = { name: "mockPlugin" } as BeltPluginInput<number>;
       const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
@@ -77,7 +77,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     });
 
     await t.step("should initialize with the provided output plugins", () => {
-      const mockPlugin = { name: "mockPlugin" } as IBeltPluginOutput<string>;
+      const mockPlugin = { name: "mockPlugin" } as BeltPluginOutput<string>;
       const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
@@ -86,7 +86,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     });
 
     await t.step("should initialize with the provided error plugins", () => {
-      const mockPlugin = { name: "mockPlugin" } as IBeltPluginError<Error>;
+      const mockPlugin = { name: "mockPlugin" } as BeltPluginError<Error>;
       const processEngine = new MyProcessN2S({
         plugins: [mockPlugin],
       });
@@ -99,7 +99,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
       () => {
         const mockPluginInputOutput = {
           name: "mockPlugin",
-        } as IBeltPluginInput<number> & IBeltPluginOutput<string>;
+        } as BeltPluginInput<number> & BeltPluginOutput<string>;
         const processEngine = new MyProcessN2S({
           plugins: [mockPluginInputOutput],
         });
@@ -113,27 +113,27 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
       () => {
         const mockPluginInput = {
           name: "mockPlugin",
-        } as IBeltPluginInput<number>;
+        } as BeltPluginInput<number>;
         const mockPluginOutput = {
           name: "mockPlugin",
-        } as IBeltPluginOutput<string>;
+        } as BeltPluginOutput<string>;
         const mockPluginError = {
           name: "mockPlugin",
-        } as IBeltPluginError<Error>;
+        } as BeltPluginError<Error>;
         const mockPluginInputOutput = {
           name: "mockPlugin",
-        } as IBeltPluginInput<number> & IBeltPluginOutput<string>;
+        } as BeltPluginInput<number> & BeltPluginOutput<string>;
         const mockPluginInputError = {
           name: "mockPlugin",
-        } as IBeltPluginInput<string> & IBeltPluginError<Error>;
+        } as BeltPluginInput<string> & BeltPluginError<Error>;
         const mockPluginOutputError = {
           name: "mockPlugin",
-        } as IBeltPluginOutput<number> & IBeltPluginError<Error>;
+        } as BeltPluginOutput<number> & BeltPluginError<Error>;
         const mockPluginInputOutputError = {
           name: "mockPlugin",
-        } as IBeltPluginInput<number> &
-          IBeltPluginOutput<string> &
-          IBeltPluginError<Error>;
+        } as BeltPluginInput<number> &
+          BeltPluginOutput<string> &
+          BeltPluginError<Error>;
         const processEngine = new MyProcessN2S({
           plugins: [
             mockPluginInput,
@@ -185,11 +185,11 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
           const sum1Plugin = {
             name: "sum1Plugin",
             processInput: async (item: number) => item + 1,
-          } as IBeltPluginInput<number>;
+          } as BeltPluginInput<number>;
           const subtract1Plugin = {
             name: "subtract1Plugin",
             processOutput: async (item: number) => item - 1,
-          } as IBeltPluginOutput<number>;
+          } as BeltPluginOutput<number>;
 
           const pureExecutionResult = await processEngine.execute(1, {});
           const singleUseSum1Result = await processEngine.execute(1, {
@@ -242,7 +242,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
             ) => {
               return Number(metadataHelper.itemId);
             },
-          } as IBeltPluginInput<number>;
+          } as BeltPluginInput<number>;
           (processEngine as any).plugins = [mockedPlugin];
 
           const output = await processEngine.execute(1, {
@@ -278,7 +278,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
             pluginCalled = true;
             return item;
           },
-        } as IBeltPluginInput<number>;
+        } as BeltPluginInput<number>;
         (processEngine as any).plugins = [mockedPlugin];
 
         await processEngine.execute(1);
@@ -324,7 +324,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
               pluginCalled = true;
               return item;
             },
-          } as IBeltPluginOutput<number>;
+          } as BeltPluginOutput<number>;
           (processEngine as any).plugins = [mockedPlugin];
 
           await processEngine.execute(1);
@@ -358,7 +358,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
             pluginCalled = true;
             return new ConveeError({ message: "mocked modified error", error });
           },
-        } as IBeltPluginError<Error>;
+        } as BeltPluginError<Error>;
         (processEngine as any).plugins = [mockedPlugin];
 
         await processEngine

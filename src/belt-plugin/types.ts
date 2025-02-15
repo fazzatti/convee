@@ -1,35 +1,35 @@
-import { IModifier } from "../core/types.ts";
+import { Modifier } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
 
 // Base plugin interface
-interface IPluginBase {
+type PluginBase = {
   readonly name: string;
-}
+};
 
 // Pre-process plugin interface
-export interface IBeltPluginInput<Input> extends IPluginBase {
-  processInput: IModifier<Input>;
-}
+export type BeltPluginInput<Input> = PluginBase & {
+  processInput: Modifier<Input>;
+};
 
 // Post-process plugin interface
-export interface IBeltPluginOutput<Output> extends IPluginBase {
-  processOutput: IModifier<Output>;
-}
+export type BeltPluginOutput<Output> = PluginBase & {
+  processOutput: Modifier<Output>;
+};
 
 // Error-process plugin interface
-export interface IBeltPluginError<ErrorT extends Error> extends IPluginBase {
-  processError: IModifier<ConveeError<ErrorT>>;
-}
+export type BeltPluginError<ErrorT extends Error> = PluginBase & {
+  processError: Modifier<ConveeError<ErrorT>>;
+};
 
 // Combined interface that includes all plugin types
-export interface IBeltPluginPartial<Input, Output, ErrorT extends Error>
-  extends Partial<IBeltPluginInput<Input>>,
-    Partial<IBeltPluginOutput<Output>>,
-    Partial<IBeltPluginError<ErrorT>> {}
+export interface BeltPluginPartial<Input, Output, ErrorT extends Error>
+  extends Partial<BeltPluginInput<Input>>,
+    Partial<BeltPluginOutput<Output>>,
+    Partial<BeltPluginError<ErrorT>> {}
 
 // Union type for any plugin type
-export type IBeltPlugin<Input, Output, ErrorT extends Error> =
-  | IBeltPluginInput<Input>
-  | IBeltPluginOutput<Output>
-  | IBeltPluginError<ErrorT>
-  | IBeltPluginPartial<Input, Output, ErrorT>;
+export type BeltPlugin<Input, Output, ErrorT extends Error> =
+  | BeltPluginInput<Input>
+  | BeltPluginOutput<Output>
+  | BeltPluginError<ErrorT>
+  | BeltPluginPartial<Input, Output, ErrorT>;

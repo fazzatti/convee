@@ -62,7 +62,10 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     });
 
     await t.step("should initialize with the provided error plugins", () => {
-      const mockPlugin = { name: "mockPlugin" } as BeltPluginError<Error>;
+      const mockPlugin = { name: "mockPlugin" } as BeltPluginError<
+        string,
+        Error
+      >;
       const engine = ProcessEngine.create((n: number) => n.toString(), {
         name: "MyProcess",
         plugins: [mockPlugin],
@@ -95,21 +98,21 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         } as BeltPluginOutput<string>;
         const mockPluginError = {
           name: "mockPlugin",
-        } as BeltPluginError<Error>;
+        } as BeltPluginError<any, Error>;
         const mockPluginInputOutput = {
           name: "mockPlugin",
         } as BeltPluginInput<number> & BeltPluginOutput<string>;
         const mockPluginInputError = {
           name: "mockPlugin",
-        } as BeltPluginInput<number> & BeltPluginError<Error>;
+        } as BeltPluginInput<number> & BeltPluginError<any, Error>;
         const mockPluginOutputError = {
           name: "mockPlugin",
-        } as BeltPluginOutput<number> & BeltPluginError<Error>;
+        } as BeltPluginOutput<number> & BeltPluginError<any, Error>;
         const mockPluginInputOutputError = {
           name: "mockPlugin",
         } as BeltPluginInput<number> &
           BeltPluginOutput<string> &
-          BeltPluginError<Error>;
+          BeltPluginError<any, Error>;
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
           plugins: [
@@ -229,7 +232,7 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         processError: async (error: Error) => {
           return new ConveeError({ message: "modified error", error });
         },
-      } as BeltPluginError<Error>;
+      } as BeltPluginError<any, Error>;
 
       const engine = ProcessEngine.create(
         (n: number) => {

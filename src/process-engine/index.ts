@@ -6,7 +6,7 @@ import {
 } from "../belt-plugin/types.ts";
 import { CoreProcessType } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
-import { isConveeError, wrapConveeError } from "../error/util.ts";
+import { isConveeError, isError, wrapConveeError } from "../error/util.ts";
 import { ProcessEngineMetadata, ProcessEngineOptions } from "../index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
@@ -86,6 +86,12 @@ function CreateProcess<I, O, E extends Error>(
           errorBeltMetadataHelper,
           singleUsePlugins || []
         );
+
+        // if a plugin has handled the error graciouslly, return the output
+        if (!isError(processedError)) {
+          return processedError;
+        }
+
         error.enrichConveeStack(
           getMeta({
             itemId,
@@ -162,23 +168,36 @@ function CreateProcess<I, O, E extends Error>(
     item: ConveeError<E>,
     metadataHelper: MetadataHelper,
     executionPlugins: BeltPlugin<I, O, E>[]
-  ): Promise<ConveeError<E>> {
+  ): Promise<ConveeError<E> | O> {
     let postProcessedError = item as ConveeError<E>;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const errorPlugins = combinedPlugins.filter(
-      (plugin): plugin is BeltPluginError<E> => "processError" in plugin
+      (plugin): plugin is BeltPluginError<O, E> => "processError" in plugin
     );
 
+    let handledOutput: O | undefined;
+
     for (const plugin of errorPlugins) {
-      postProcessedError = (await plugin.processError(
+      const pluginOutput = await plugin.processError(
         postProcessedError,
         metadataHelper
-      )) as ConveeError<E>;
+      );
+
+      if (isError(pluginOutput)) {
+        postProcessedError = pluginOutput;
+      } else {
+        handledOutput = pluginOutput;
+        break;
+      }
     }
 
-    return postProcessedError;
+    if (handledOutput) {
+      return handledOutput as O;
+    }
+
+    return postProcessedError as ConveeError<E>;
   }
 
   function getMeta(args: {

@@ -1,23 +1,33 @@
-import { Modifier, Transformer } from "../core/types.ts";
-import { ProcessEngine } from "../process-engine/index.ts";
+import { BeltPlugin } from "../belt-plugin/types.ts";
+import { CoreProcessType, Modifier, Transformer } from "../core/types.ts";
+import { ProcessEngineOptions } from "../process-engine/types.ts";
 import {
   ProcessEngine as IProcessEngine,
-  ProcessEngineConstructor,
+  ProcessEngine,
 } from "../process-engine/types.ts";
 
-export type Pipeline<Input, Output, ErrorT extends Error> = IProcessEngine<
-  Input,
-  Output,
-  ErrorT
+export type Pipeline<I, O, E extends Error> = IProcessEngine<
+  I,
+  Promise<O>,
+  E
+> & {
+  type: CoreProcessType.PIPELINE;
+  // plugins: BeltPlugin<Promise<I>, Promise<O>, E>[];
+};
+
+export type PipelineOptions<I, O, E extends Error> = ProcessEngineOptions<
+  I,
+  O,
+  E
 >;
 
-export type InnerPipelineConstructor<
-  Input,
-  Output,
-  ErrorT extends Error
-> = ProcessEngineConstructor<Input, Output, ErrorT> & {
-  readonly name?: string;
-};
+// export type InnerPipelineConstructor<
+//   Input,
+//   Output,
+//   ErrorT extends Error
+// > = ProcessEngineConstructor<Input, Output, ErrorT> & {
+//   readonly name?: string;
+// };
 
 type StepError<T> = T extends ProcessEngine<any, any, infer E> ? E : never;
 
@@ -31,7 +41,7 @@ export type DefaultErrorT<Steps extends readonly any[]> =
 
 // A PipelineStep is either a Modifier, a Transformer, or a ProcessEngine.
 export type PipelineStep<Input, Output, ErrorT extends Error> =
-  | Modifier<Input>
+  | Modifier<Input & Output>
   | Transformer<Input, Output>
   | ProcessEngine<Input, Output, ErrorT>;
 

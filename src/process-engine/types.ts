@@ -1,6 +1,9 @@
 import { BeltPlugin } from "../belt-plugin/types.ts";
 import { CoreProcessType, EngineMetadata } from "../core/types.ts";
+import { BeltPlugin } from "../belt-plugin/types.ts";
+import { CoreProcessType, EngineMetadata } from "../core/types.ts";
 
+export type ProcessEngine<Input, Output, ErrorT extends Error> = {
 export type ProcessEngine<Input, Output, ErrorT extends Error> = {
   name: string;
   id: string;
@@ -24,9 +27,11 @@ export interface ProcessEngineMetadata extends EngineMetadata {
   source: string;
   itemId: string;
   type: CoreProcessType;
+  type: CoreProcessType;
 }
 
 export interface RunOptions<Input, Output, ErrorT extends Error> {
   existingItemId?: string;
+  singleUsePlugins?: BeltPlugin<Input, Output, ErrorT>[];
   singleUsePlugins?: BeltPlugin<Input, Output, ErrorT>[];
 }

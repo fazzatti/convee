@@ -2,6 +2,9 @@ import {
   BeltPluginError,
   BeltPluginInput,
   BeltPluginOutput,
+  BeltPluginError,
+  BeltPluginInput,
+  BeltPluginOutput,
 } from "../belt-plugin/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
@@ -90,20 +93,25 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         const mockPluginInput = {
           name: "mockPlugin",
         } as BeltPluginInput<number>;
+        } as BeltPluginInput<number>;
         const mockPluginOutput = {
           name: "mockPlugin",
+        } as BeltPluginOutput<string>;
         } as BeltPluginOutput<string>;
         const mockPluginError = {
           name: "mockPlugin",
         } as BeltPluginError<Error>;
+        } as BeltPluginError<Error>;
         const mockPluginInputOutput = {
           name: "mockPlugin",
+        } as BeltPluginInput<number> & BeltPluginOutput<string>;
         } as BeltPluginInput<number> & BeltPluginOutput<string>;
         const mockPluginInputError = {
           name: "mockPlugin",
         } as BeltPluginInput<number> & BeltPluginError<Error>;
         const mockPluginOutputError = {
           name: "mockPlugin",
+        } as BeltPluginOutput<number> & BeltPluginError<Error>;
         } as BeltPluginOutput<number> & BeltPluginError<Error>;
         const mockPluginInputOutputError = {
           name: "mockPlugin",

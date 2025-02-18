@@ -1,5 +1,0 @@
-{
-  "name": "@fifo/convee",
-  "version": "0.3.0",
-  "exports": "./src/index.ts"
-}

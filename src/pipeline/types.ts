@@ -5,6 +5,7 @@ import {
   ProcessEngine as IProcessEngine,
   ProcessEngine,
 } from "../process-engine/types.ts";
+import { Unwrap } from "../utils/types/unwrap.ts";
 
 export type Pipeline<I, O, E extends Error> = IProcessEngine<
   I,
@@ -61,7 +62,7 @@ export type CheckChain<Steps extends readonly unknown[]> =
   Steps extends readonly [infer First, infer Second, ...infer Rest]
     ? StepIO<First> extends [infer _I, infer Out]
       ? StepIO<Second> extends [infer In2, infer _O2]
-        ? [Out] extends [In2]
+        ? [Unwrap<Out>] extends [In2]
           ? CheckChain<readonly [Second, ...Rest]>
           : never
         : never

@@ -1,6 +1,6 @@
 import { ConveeError } from "../../../error/index.ts";
-import { invertSignInputPlugin } from "../../utils/examples/plugin/input-belt/invert-sign.ts";
 import { sumProcessor } from "../../utils/examples/process-engine/sum.ts";
+import { invertSignInputPlugin } from "../../utils/examples/plugin/input-belt/invert-sign.ts";
 import { assertEquals, assert } from "jsr:@std/assert";
 
 Deno.test("Given a Sum Process Engine", async (t: Deno.TestContext) => {

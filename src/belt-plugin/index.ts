@@ -23,7 +23,7 @@ function create<I, O, E extends Error = Error>(
 function create<I, O, E extends Error = Error>(
   modifiers: { processError: Modifier<ConveeError<E>> },
   options?: { name: string }
-): BeltPluginError<E>;
+): BeltPluginError<O, E>;
 // General overload:
 function create<I, O, E extends Error = Error>(
   modifiers: RequireAtLeastOne<{

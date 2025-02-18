@@ -1,10 +1,17 @@
 {
   "name": "@fifo/convee",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "exports": "./src/index.ts",
   "imports": {
     "std/": "https://deno.land/std@0.224.0/"
   },
+  "files": [
+    "src/**/*",
+    "!src/**/*.test.ts",
+    "!src/index-test.ts",
+    "!src/testdata/**",
+    "!src/fixtures/**"
+  ],
   "tasks": {
     "dev": "deno run --watch src/index-test.ts"
   },
@@ -13,7 +20,7 @@
     "exclude": [
       "src/testdata/",
       "src/fixtures/**/*.ts",
-      "src/**/*.test.ts",
+      "**/*.test.ts",
       "src/index-test.ts"
     ],
     "rules": {

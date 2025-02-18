@@ -7,11 +7,11 @@ export enum CoreProcessType {
 }
 
 export type Modifier<item> = {
-  (item: item, metadataHelper: MetadataHelper): Promise<item>;
+  (item: item, metadataHelper?: MetadataHelper): Promise<item>;
 };
 
 export type Transformer<input, output> = {
-  (item: input, metadataHelper: MetadataHelper): Promise<output>;
+  (item: input, metadataHelper?: MetadataHelper): Promise<output>;
 };
 
 export type EngineMetadata = {

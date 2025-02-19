@@ -7,11 +7,7 @@ import {
 } from "../process-engine/types.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 
-export type Pipeline<I, O, E extends Error> = IProcessEngine<
-  I,
-  Promise<O>,
-  E
-> & {
+export type Pipeline<I, O, E extends Error> = IProcessEngine<I, O, E> & {
   type: CoreProcessType.PIPELINE;
   // plugins: BeltPlugin<Promise<I>, Promise<O>, E>[];
 };

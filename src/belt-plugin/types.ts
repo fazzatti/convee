@@ -18,10 +18,7 @@ export type BeltPluginOutput<Output> = PluginBase & {
 
 // Error-process plugin interface
 export type BeltPluginError<Output, ErrorT extends Error> = PluginBase & {
-  processError: Transformer<
-    ConveeError<ErrorT>,
-    Promise<ConveeError<ErrorT> | Output>
-  >;
+  processError: Transformer<ConveeError<ErrorT>, ConveeError<ErrorT> | Output>;
 };
 
 // Combined interface that includes all plugin types

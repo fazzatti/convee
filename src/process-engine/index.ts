@@ -10,12 +10,13 @@ import { isConveeError, isError, wrapConveeError } from "../error/util.ts";
 import { ProcessEngineMetadata, ProcessEngineOptions } from "../index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
+import { Unwrap } from "../utils/types/unwrap.ts";
 import { RunOptions, ProcessEngine as IProcessEngine } from "./types.ts";
 
 function CreateProcess<I, O, E extends Error>(
   process: (args: I, metadataHelper?: MetadataHelper) => O,
   options?: ProcessEngineOptions<I, O, E>
-): IProcessEngine<I, O, E> {
+): IProcessEngine<I, Unwrap<O>, E> {
   const processType = CoreProcessType.PROCESS_ENGINE;
   const processId = options?.id || (crypto.randomUUID() as string);
 
@@ -218,7 +219,7 @@ function CreateProcess<I, O, E extends Error>(
     };
   }
 
-  return engine;
+  return engine as IProcessEngine<I, Unwrap<O>, E>;
 }
 
 export const ProcessEngine = {

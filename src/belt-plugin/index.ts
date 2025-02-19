@@ -10,18 +10,28 @@ import {
 
 // Overload for a pure input plugin:
 function create<I, E extends Error = Error>(
-  modifiers: { processInput: Modifier<I> },
+  modifiers: {
+    processInput: Modifier<I>;
+    processOutput?: never;
+    processError?: never;
+  },
   options?: { name: string }
 ): BeltPluginInput<I>;
 // Overload for a pure output plugin:
 function create<I, O, E extends Error = Error>(
-  modifiers: { processOutput: Modifier<O> },
+  modifiers: {
+    processOutput: Modifier<O>;
+    processInput?: never;
+    processError?: never;
+  },
   options?: { name: string }
 ): BeltPluginOutput<O>;
 // Overload for a pure error plugin:
 function create<I, O, E extends Error = Error>(
   modifiers: {
-    processError: Transformer<ConveeError<E>, Promise<ConveeError<E> | O>>;
+    processError: Transformer<ConveeError<E>, ConveeError<E> | O>;
+    processInput?: never;
+    processOutput?: never;
   },
   options?: { name: string }
 ): BeltPluginError<O, E>;
@@ -30,7 +40,7 @@ function create<I, O, E extends Error = Error>(
   modifiers: RequireAtLeastOne<{
     processInput?: Modifier<I>;
     processOutput?: Modifier<O>;
-    processError?: Transformer<ConveeError<E>, Promise<ConveeError<E> | O>>;
+    processError?: Transformer<ConveeError<E>, ConveeError<E> | O>;
   }>,
   options?: { name: string }
 ): BeltPlugin<I, O, E> {

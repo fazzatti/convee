@@ -92,7 +92,7 @@ function CreateProcess<I, O, E extends Error>(
           return processedError;
         }
 
-        error.enrichConveeStack(
+        processedError.enrichConveeStack(
           getMeta({
             itemId,
             inputBeltMeta: inputBeltMetadataHelper.getAll(),

@@ -1,6 +1,5 @@
-import { Modifier } from "../core/types.ts";
+import { Modifier, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
-import { MetadataHelper } from "../index.ts";
 import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";
 import {
   BeltPlugin,
@@ -21,7 +20,7 @@ function create<I, O, E extends Error = Error>(
 ): BeltPluginOutput<O>;
 // Overload for a pure error plugin:
 function create<I, O, E extends Error = Error>(
-  modifiers: { processError: Modifier<ConveeError<E>> },
+  modifiers: { processError: Transformer<ConveeError<E>, ConveeError<E> | O> },
   options?: { name: string }
 ): BeltPluginError<O, E>;
 // General overload:
@@ -29,7 +28,7 @@ function create<I, O, E extends Error = Error>(
   modifiers: RequireAtLeastOne<{
     processInput?: Modifier<I>;
     processOutput?: Modifier<O>;
-    processError?: Modifier<ConveeError<E>>;
+    processError?: Transformer<ConveeError<E>, ConveeError<E> | O>;
   }>,
   options?: { name: string }
 ): BeltPlugin<I, O, E> {

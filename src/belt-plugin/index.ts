@@ -20,7 +20,9 @@ function create<I, O, E extends Error = Error>(
 ): BeltPluginOutput<O>;
 // Overload for a pure error plugin:
 function create<I, O, E extends Error = Error>(
-  modifiers: { processError: Transformer<ConveeError<E>, ConveeError<E> | O> },
+  modifiers: {
+    processError: Transformer<ConveeError<E>, Promise<ConveeError<E> | O>>;
+  },
   options?: { name: string }
 ): BeltPluginError<O, E>;
 // General overload:
@@ -28,7 +30,7 @@ function create<I, O, E extends Error = Error>(
   modifiers: RequireAtLeastOne<{
     processInput?: Modifier<I>;
     processOutput?: Modifier<O>;
-    processError?: Transformer<ConveeError<E>, ConveeError<E> | O>;
+    processError?: Transformer<ConveeError<E>, Promise<ConveeError<E> | O>>;
   }>,
   options?: { name: string }
 ): BeltPlugin<I, O, E> {

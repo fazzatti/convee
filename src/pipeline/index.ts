@@ -11,6 +11,7 @@ import {
 } from "./types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
 import { ProcessEngineOptions } from "../process-engine/types.ts";
+import { RunOptions } from "../index.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
@@ -18,8 +19,10 @@ function createPipeline<
 >(
   steps: Steps & PipelineSteps<FirstInput<Steps>, LastOutput<Steps>, Steps>,
   options?: PipelineOptions<FirstInput<Steps>, LastOutput<Steps>, ErrorT>
-): IPipeline<FirstInput<Steps>, LastOutput<Steps>, ErrorT> {
-  return {
+): IPipeline<FirstInput<Steps>, LastOutput<Steps>, ErrorT, Steps> {
+  let customizedSteps: typeof steps | undefined = undefined;
+
+  const pipeline = {
     ...ProcessEngine.create(executePipeline, {
       ...options,
 
@@ -30,13 +33,25 @@ function createPipeline<
       >[],
     }),
     type: CoreProcessType.PIPELINE,
+    steps,
+    runCustom: undefined as any,
   };
+
+  pipeline.runCustom = wrapRunWithCustomSteps();
+  return pipeline as IPipeline<
+    FirstInput<Steps>,
+    LastOutput<Steps>,
+    ErrorT,
+    Steps
+  >;
 
   async function executePipeline(
     input: FirstInput<Steps>
   ): Promise<LastOutput<Steps>> {
+    const currentSteps = customizedSteps ? customizedSteps : steps;
+
     let result: any = input;
-    for (const step of steps) {
+    for (const step of currentSteps) {
       if (typeof step === "function") {
         // For simple functions (modifier or transformer), simply call the function.
         result = await step(result);
@@ -55,6 +70,25 @@ function createPipeline<
       }
     }
     return await result; //as LastOutput<Steps>;
+  }
+
+  function wrapRunWithCustomSteps() {
+    return async function (
+      this: typeof pipeline,
+      input: FirstInput<Steps>,
+      customSteps: typeof steps,
+      options?: RunOptions<FirstInput<Steps>, LastOutput<Steps>, ErrorT>
+    ): Promise<LastOutput<Steps>> {
+      customizedSteps = customSteps;
+      const result = await this.run
+        .call(this, input, options)
+        .catch((error: Error) => {
+          customizedSteps = undefined;
+          throw error;
+        });
+      customizedSteps = undefined;
+      return result;
+    };
   }
 }
 

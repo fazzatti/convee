@@ -1,8 +1,9 @@
 import { Modifier, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
+import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";
 
 // Base plugin interface
-type PluginBase = {
+export type PluginBase = {
   readonly name: string;
 };
 
@@ -28,8 +29,28 @@ export interface BeltPluginPartial<Input, Output, ErrorT extends Error>
     Partial<BeltPluginError<Output, ErrorT>> {}
 
 // Union type for any plugin type
-export type BeltPlugin<Input, Output, ErrorT extends Error> =
-  | BeltPluginInput<Input>
-  | BeltPluginOutput<Output>
-  | BeltPluginError<Output, ErrorT>
-  | BeltPluginPartial<Input, Output, ErrorT>;
+export type BeltPlugin<Input, Output, ErrorT extends Error> = (PluginBase &
+  BeltPluginPartial<Input, Output, ErrorT>) &
+  (
+    | BeltPluginInput<Input>
+    | BeltPluginOutput<Output>
+    | BeltPluginError<Output, ErrorT>
+    | RequireAtLeastOne<{
+        processInput?: Modifier<Input>;
+        processOutput?: Modifier<Output>;
+        processError?: Transformer<
+          ConveeError<ErrorT>,
+          ConveeError<ErrorT> | Output
+        >;
+      }>
+  );
+
+// export type BeltPlugin<Input, Output, ErrorT extends Error> = PluginBase &
+//   RequireAtLeastOne<{
+//     processInput?: Modifier<Input>;
+//     processOutput?: Modifier<Output>;
+//     processError?: Transformer<
+//       ConveeError<ErrorT>,
+//       ConveeError<ErrorT> | Output
+//     >;
+//   }>;

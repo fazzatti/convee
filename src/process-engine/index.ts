@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import {
   BeltPlugin,
   BeltPluginError,
@@ -123,7 +124,6 @@ function CreateProcess<I, O, E extends Error>(
   ): Promise<I> {
     let preProcessedItem = item as I;
 
-    // Use this.plugins (current state) instead of a captured variable.
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const inputPlugins = combinedPlugins.filter(

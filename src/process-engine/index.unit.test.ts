@@ -7,6 +7,7 @@ import { ConveeError } from "../error/index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { assert, assertEquals } from "jsr:@std/assert";
 import { ProcessEngine } from "./index.ts";
+import { Plugin } from "../index.ts";
 
 Deno.test("process-engine", async (t: Deno.TestContext) => {
   await t.step("during initialization", async (t: Deno.TestContext) => {
@@ -76,9 +77,15 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should initialize with the provided multi-type plugins",
       () => {
-        const mockPluginInputOutput = {
-          name: "mockPlugin",
-        } as BeltPluginInput<number> & BeltPluginOutput<string>;
+        const mockPluginInputOutput = Plugin.create(
+          {
+            processOutput: async (item: string) => item,
+            processInput: async (item: number) => item,
+          },
+          {
+            name: "mockPlugin",
+          }
+        );
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
           plugins: [mockPluginInputOutput],

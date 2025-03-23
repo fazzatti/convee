@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import { BeltPlugin } from "../belt-plugin/types.ts";
 import { CoreProcessType, Modifier, Transformer } from "../core/types.ts";
 import { ProcessEngineOptions } from "../process-engine/types.ts";
@@ -9,6 +10,11 @@ import { Unwrap } from "../utils/types/unwrap.ts";
 
 export type Pipeline<I, O, E extends Error> = IProcessEngine<I, O, E> & {
   type: CoreProcessType.PIPELINE;
+  steps: PipelineSteps<
+    I,
+    O,
+    [PipelineStep<I, any, E>, ...PipelineStep<any, O, E>[]]
+  >;
   // plugins: BeltPlugin<Promise<I>, Promise<O>, E>[];
 };
 

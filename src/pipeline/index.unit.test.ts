@@ -5,43 +5,49 @@ import { Modifier, Transformer, CoreProcessType } from "../core/types.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
 
-// Dummy transformer: converts a string to a number by parsing and adding 1.
-const transformerStep: Transformer<string, number> = async (item: string) => {
+const stringToNumberTransformer: Transformer<string, number> = async (
+  item: string
+) => {
   return Number(item) + 1;
 };
 
-// Dummy modifier: multiplies the number by 2.
-const modifierStep: Modifier<number> = async (item: number) => {
+const doubleNumberModifier: Modifier<number> = async (item: number) => {
   return item * 2;
 };
 
-// Dummy process engine step: converts a number to a string.
-const dummyProcessEngine = ProcessEngine.create((n: number) => n.toString(), {
-  name: "dummyProcessEngine",
+const numberToStringEngine = ProcessEngine.create((n: number) => n.toString(), {
+  name: "numberToStringEngine",
 });
 
-// Test 1: Pipeline creation with valid inner chain (single-element).
 Deno.test("Pipeline creation with valid inner chain", () => {
+  const pipeline = Pipeline.create([doubleNumberModifier], {
+    name: "TestPipeline",
+    id: "test123",
+    plugins: [],
+  });
+  assert(pipeline, "Expected pipeline to be defined");
+  assertEquals(pipeline.name, "TestPipeline");
+  assertEquals(pipeline.id, "test123");
+  assertEquals(pipeline.type, CoreProcessType.PIPELINE);
+});
+
+Deno.test("Pipeline exposes inner chain", () => {
   const pipeline = Pipeline.create(
-    [modifierStep], // Modifier<number> expected: number -> number.
+    [doubleNumberModifier, numberToStringEngine],
     {
       name: "TestPipeline",
       id: "test123",
       plugins: [],
     }
   );
-  assert(pipeline, "Expected pipeline to be defined");
-  assertEquals(pipeline.name, "TestPipeline");
-  assertEquals(pipeline.id, "test123");
-  // Check that the pipeline's type (via getType) returns the correct value.
-  assertEquals(pipeline.type, CoreProcessType.PIPELINE);
+  assertEquals(pipeline.steps, [doubleNumberModifier, numberToStringEngine]);
 });
 
 // Test 2: Pipeline execution with a multi-element chain.
 Deno.test("Pipeline execution with valid inner chain", async () => {
-  // Chain: transformerStep: string -> number, modifierStep: number -> number, dummyProcessEngine: number -> string.
+  // Chain: stringToNumberTransformer: string -> number, doubleNumberModifier: number -> number, numberToStringEngine: number -> string.
   const pipeline = Pipeline.create(
-    [transformerStep, modifierStep, dummyProcessEngine],
+    [stringToNumberTransformer, doubleNumberModifier, numberToStringEngine],
     {
       name: "TestPipeline",
       id: "test123",
@@ -49,9 +55,9 @@ Deno.test("Pipeline execution with valid inner chain", async () => {
     }
   );
   // Expected execution:
-  // transformerStep: "10" => Number("10") + 1 = 11
-  // modifierStep: 11 * 2 = 22
-  // dummyProcessEngine: 22 => "22"
+  // stringToNumberTransformer: "10" => Number("10") + 1 = 11
+  // doubleNumberModifier: 11 * 2 = 22
+  // numberToStringEngine: 22 => "22"
   const result = await pipeline.run("10");
   assertEquals(result, "22");
 });
@@ -63,9 +69,9 @@ Deno.test("Pipeline execution error handling", async () => {
     throw new Error("inner error");
   };
 
-  // Chain: transformerStep then errorModifier then dummyProcessEngine.
+  // Chain: stringToNumberTransformer then errorModifier then numberToStringEngine.
   const pipeline = Pipeline.create(
-    [transformerStep, errorModifier, dummyProcessEngine],
+    [stringToNumberTransformer, errorModifier, numberToStringEngine],
     {
       name: "ErrorPipeline",
       id: "err123",
@@ -99,7 +105,7 @@ Deno.test("Pipeline execution with outer belt plugins", async () => {
 
   // Create a pipeline with a single modifier.
   const pipeline = Pipeline.create(
-    [modifierStep], // Modifier<number>: multiplies by 2.
+    [doubleNumberModifier], // Modifier<number>: multiplies by 2.
     {
       name: "PluginPipeline",
       id: "plugin1",
@@ -108,7 +114,7 @@ Deno.test("Pipeline execution with outer belt plugins", async () => {
   );
   // Expected flow:
   // Outer input belt: addFivePlugin adds 5 to input 10 => 15.
-  // Inner chain: modifierStep multiplies 15 by 2 => 30.
+  // Inner chain: doubleNumberModifier multiplies 15 by 2 => 30.
   // Outer output belt: subtractThreePlugin subtracts 3 => 27.
   const result = await pipeline.run(10);
   assertEquals(result, 27);
@@ -123,7 +129,7 @@ Deno.test("Pipeline execution with single-use plugin", async () => {
 
   // Build a simple pipeline: a modifier that multiplies by 2.
   const pipeline = Pipeline.create(
-    [modifierStep], // Modifier<number>: multiplies input by 2.
+    [doubleNumberModifier], // Modifier<number>: multiplies input by 2.
     { name: "SingleUseTest", id: "su1", plugins: [] }
   );
 
@@ -138,6 +144,6 @@ Deno.test("Pipeline execution with single-use plugin", async () => {
   });
   // With single-use plugin:
   //  1. Input plugin adds 10 → 5 + 10 = 15.
-  //  2. Then modifierStep multiplies: 15 * 2 = 30.
+  //  2. Then doubleNumberModifier multiplies: 15 * 2 = 30.
   assertEquals(resultWith, 30);
 });

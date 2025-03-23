@@ -30,6 +30,7 @@ function createPipeline<
       >[],
     }),
     type: CoreProcessType.PIPELINE,
+    steps,
   };
 
   async function executePipeline(

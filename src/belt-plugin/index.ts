@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import { Modifier, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";

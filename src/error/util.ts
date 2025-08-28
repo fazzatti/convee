@@ -15,6 +15,6 @@ export const isConveeError = <ErrorT extends Error>(
   return (error as ConveeError<ErrorT>).engineStack !== undefined;
 };
 
-export const isError = (value: any): value is Error => {
+export const isError = (value: unknown): value is Error => {
   return value instanceof Error;
 };

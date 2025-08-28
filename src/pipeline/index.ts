@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import { BeltPlugin } from "../belt-plugin/types.ts";
 import { CoreProcessType } from "../core/types.ts";
 import {
@@ -10,7 +11,6 @@ import {
   PipelineSteps,
 } from "./types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
-import { ProcessEngineOptions } from "../process-engine/types.ts";
 import { RunOptions } from "../index.ts";
 
 function createPipeline<
@@ -50,7 +50,7 @@ function createPipeline<
   ): Promise<LastOutput<Steps>> {
     const currentSteps = customizedSteps ? customizedSteps : steps;
 
-    let result: any = input;
+    let result: unknown = input;
     for (const step of currentSteps) {
       if (typeof step === "function") {
         // For simple functions (modifier or transformer), simply call the function.
@@ -69,7 +69,7 @@ function createPipeline<
         throw new Error("Invalid pipeline step");
       }
     }
-    return await result; //as LastOutput<Steps>;
+    return (await result) as LastOutput<Steps>;
   }
 
   function wrapRunWithCustomSteps() {

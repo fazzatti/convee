@@ -1,6 +1,6 @@
 {
   "name": "@fifo/convee",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "exports": "./src/index.ts",
   "imports": {
     "std/": "https://deno.land/std@0.224.0/"
@@ -15,7 +15,8 @@
       "src/testdata/",
       "src/fixtures/**/*.ts",
       "**/*.test.ts",
-      "src/index-test.ts"
+      "src/index-test.ts",
+      "src/test/utils/examples/**/*.ts"
     ],
     "rules": {
       "tags": ["recommended"],

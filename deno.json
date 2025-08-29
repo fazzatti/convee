@@ -1,6 +1,6 @@
 {
   "name": "@fifo/convee",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "exports": "./src/index.ts",
   "imports": {
     "std/": "https://deno.land/std@0.224.0/"

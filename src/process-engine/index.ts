@@ -7,7 +7,7 @@ import {
 } from "../belt-plugin/types.ts";
 import { CoreProcessType } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
-import { isConveeError, isError, wrapConveeError } from "../error/util.ts";
+import { isConveeCapable, isError, makeConveeCapable } from "../error/util.ts";
 import { ProcessEngineMetadata, ProcessEngineOptions } from "../index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
@@ -78,8 +78,8 @@ function CreateProcess<I, O, E extends Error>(
           processMetadataHelper
         )) as O;
       } catch (e) {
-        const error = !isConveeError(e as E)
-          ? wrapConveeError(e as E)
+        const error = !isConveeCapable(e as E)
+          ? makeConveeCapable(e as E)
           : (e as ConveeError<E>);
 
         const processedError = await runErrorBelt.call(

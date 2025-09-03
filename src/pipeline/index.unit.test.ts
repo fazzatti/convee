@@ -12,7 +12,7 @@ const stringToNumberPlusOneTransformer: Transformer<string, number> = async (
 };
 
 const doubleNumberModifier: Modifier<number> = async (item: number) => {
-  return item * 2;
+  return Promise.resolve(item * 2);
 };
 
 const numberToStringEngine = ProcessEngine.create((n: number) => n.toString(), {
@@ -102,7 +102,7 @@ Deno.test("Pipeline execution with outer belt plugins", async () => {
 
   const subtractThreePlugin = {
     name: "subtractThree",
-    processOutput: (item: number) => item - 3,
+    processOutput: async (item: number) => Promise.resolve(item - 3),
   };
 
   // Create a pipeline with a single modifier.

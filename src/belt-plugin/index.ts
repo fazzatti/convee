@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
-import { Modifier, Transformer } from "../core/types.ts";
+import { Modifier, Transformer, TransformerSync } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
+import { ModifierAsync, ModifierSync } from "../index.ts";
 import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";
 import {
   BeltPlugin,
@@ -24,16 +25,23 @@ type ComposeBeltPlugin<I, O, E extends Error, M> = PluginBase &
     ? { processError: Transformer<ConveeError<E>, ConveeError<E> | O> }
     : Empty);
 
-type ExtractInput<M> = M extends { processInput: Modifier<infer I> }
+type ExtractInput<M> = M extends { processInput: ModifierSync<infer I> }
+  ? I
+  : M extends { processInput: ModifierAsync<infer I> }
   ? I
   : never;
-type ExtractOutput<M> = M extends { processOutput: Modifier<infer O> }
+type ExtractOutput<M> = M extends { processOutput: ModifierSync<infer O> }
+  ? O
+  : M extends { processOutput: ModifierAsync<infer O> }
   ? O
   : never;
 type ExtractError<M> = M extends {
-  processError: Transformer<ConveeError<infer E>, ConveeError<infer E> | any>;
+  processError: TransformerSync<
+    ConveeError<infer E>,
+    ConveeError<infer E> | any
+  >;
 }
-  ? E
+  ? ConveeError<E>
   : Error;
 
 function create<

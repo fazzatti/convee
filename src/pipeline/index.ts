@@ -11,7 +11,8 @@ import {
   PipelineSteps,
 } from "./types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
-import { RunOptions } from "../index.ts";
+import { RunOptions, TransformerAsync } from "../index.ts";
+import { Unwrap } from "../utils/types/unwrap.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
@@ -23,15 +24,20 @@ function createPipeline<
   let customizedSteps: typeof steps | undefined = undefined;
 
   const pipeline = {
-    ...ProcessEngine.create(executePipeline, {
-      ...options,
+    ...ProcessEngine.create(
+      executePipeline as TransformerAsync<FirstInput<Steps>, LastOutput<Steps>>,
+      {
+        ...options,
 
-      plugins: options?.plugins as BeltPlugin<
-        FirstInput<Steps>,
-        Promise<LastOutput<Steps>>,
-        ErrorT
-      >[],
-    }),
+        plugins:
+          (options?.plugins as BeltPlugin<
+            FirstInput<Steps>,
+            LastOutput<Steps>,
+            ErrorT
+          >[]) ||
+          ([] as BeltPlugin<FirstInput<Steps>, LastOutput<Steps>, ErrorT>[]),
+      }
+    ),
     type: CoreProcessType.PIPELINE,
     steps,
     runCustom: undefined as any,
@@ -69,7 +75,7 @@ function createPipeline<
         throw new Error("Invalid pipeline step");
       }
     }
-    return (await result) as LastOutput<Steps>;
+    return result as LastOutput<Steps>;
   }
 
   function wrapRunWithCustomSteps() {
@@ -77,7 +83,7 @@ function createPipeline<
       this: typeof pipeline,
       input: FirstInput<Steps>,
       customSteps: typeof steps,
-      options?: RunOptions<FirstInput<Steps>, LastOutput<Steps>, ErrorT>
+      options?: RunOptions<FirstInput<Steps>, Unwrap<LastOutput<Steps>>, ErrorT>
     ): Promise<LastOutput<Steps>> {
       customizedSteps = customSteps;
       const result = await this.run
@@ -87,7 +93,7 @@ function createPipeline<
           throw error;
         });
       customizedSteps = undefined;
-      return result;
+      return result as LastOutput<Steps>;
     };
   }
 }

@@ -97,12 +97,12 @@ Deno.test("Pipeline execution with outer belt plugins", async () => {
   // Define dummy belt plugins for pre- and post-processing.
   const addFivePlugin = {
     name: "addFive",
-    processInput: async (item: number) => item + 5,
+    processInput: (item: number) => item + 5,
   };
 
   const subtractThreePlugin = {
     name: "subtractThree",
-    processOutput: async (item: number) => item - 3,
+    processOutput: (item: number) => item - 3,
   };
 
   // Create a pipeline with a single modifier.

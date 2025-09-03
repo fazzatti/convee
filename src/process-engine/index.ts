@@ -5,17 +5,21 @@ import {
   BeltPluginInput,
   BeltPluginOutput,
 } from "../belt-plugin/types.ts";
-import { CoreProcessType } from "../core/types.ts";
+import { CoreProcessType, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { isConveeCapable, isError, makeConveeCapable } from "../error/util.ts";
-import { ProcessEngineMetadata, ProcessEngineOptions } from "../index.ts";
+import {
+  Modifier,
+  ProcessEngineMetadata,
+  ProcessEngineOptions,
+} from "../index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 import { RunOptions, ProcessEngine as IProcessEngine } from "./types.ts";
 
 function CreateProcess<I, O, E extends Error>(
-  process: (args: I, metadataHelper?: MetadataHelper) => O,
+  process: Modifier<I | O> | Transformer<I, O>, //(args: I, metadataHelper?: MetadataHelper) => O,
   options?: ProcessEngineOptions<I, O, E>
 ): IProcessEngine<I, Unwrap<O>, E> {
   const processType = CoreProcessType.PROCESS_ENGINE;
@@ -50,7 +54,7 @@ function CreateProcess<I, O, E extends Error>(
   engine.run = wrapProcessFn(process);
 
   function wrapProcessFn(
-    process: (input: I, metadataHelper?: MetadataHelper) => O
+    process: Modifier<I | O> | Transformer<I, O> //(input: I, metadataHelper?: MetadataHelper) => O
   ): (input: I, options?: RunOptions<I, O, E>) => Promise<O> {
     return async function (
       this: typeof engine,

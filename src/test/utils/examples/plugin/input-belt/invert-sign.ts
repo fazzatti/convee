@@ -4,10 +4,10 @@ import { MetadataHelper } from "../../../../../metadata/collector/index.ts";
 
 export const invertSignInputPlugin: BeltPluginInput<{ a: number; b: number }> =
   Plugin.create({
-    processInput: async (
+    processInput: (
       item: { a: number; b: number },
       metadataHelper?: MetadataHelper
-    ): Promise<{ a: number; b: number }> => {
+    ): { a: number; b: number } => {
       if (metadataHelper) {
         metadataHelper.add(
           "InvertSignInputPlugin",

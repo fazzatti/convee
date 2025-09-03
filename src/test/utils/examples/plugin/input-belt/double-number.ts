@@ -14,6 +14,6 @@ export const doubleNumberInputPlugin: BeltPluginInput<number> = Plugin.create({
       );
     }
 
-    return n * 2;
+    return Promise.resolve(n * 2);
   },
 });

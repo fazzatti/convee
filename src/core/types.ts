@@ -6,19 +6,29 @@ export enum CoreProcessType {
   PIPELINE = "PIPELINE",
 }
 
-export type Modifier<item> = {
-  (item: item, metadataHelper?: MetadataHelper): Promise<item> | item;
-};
-// | {
-//     (item: item, metadataHelper?: MetadataHelper): item;
-//   };
+export type Modifier<ItemType> =
+  | ModifierSync<ItemType>
+  | ModifierAsync<ItemType>;
 
-export type Transformer<input, output> = {
-  (item: input, metadataHelper?: MetadataHelper): Promise<output> | output;
+export type ModifierSync<ItemType> = {
+  (item: ItemType, metadataHelper?: MetadataHelper): ItemType;
 };
-// | {
-//     (item: input, metadataHelper?: MetadataHelper): output;
-//   };
+
+export type ModifierAsync<ItemType> = {
+  (item: ItemType, metadataHelper?: MetadataHelper): Promise<ItemType>;
+};
+
+export type Transformer<Input, Output> =
+  | TransformerSync<Input, Output>
+  | TransformerAsync<Input, Output>;
+
+export type TransformerAsync<Input, Output> = {
+  (item: Input, metadataHelper?: MetadataHelper): Promise<Output>;
+};
+
+export type TransformerSync<Input, Output> = {
+  (item: Input, metadataHelper?: MetadataHelper): Output;
+};
 
 export type EngineMetadata = {
   source: string;

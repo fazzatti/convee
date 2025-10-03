@@ -13,6 +13,7 @@ import {
 import { ProcessEngine } from "../process-engine/index.ts";
 import { RunOptions, TransformerAsync } from "../index.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
+import { isProcessEngine } from "../utils/types/is-process-engine.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
@@ -61,7 +62,7 @@ function createPipeline<
       if (typeof step === "function") {
         // For simple functions (modifier or transformer), simply call the function.
         result = await step(result);
-      } else if (typeof step === "object" && "run" in step) {
+      } else if (isProcessEngine(step)) {
         // Process engine step.
         if (
           step.type === CoreProcessType.PROCESS_ENGINE ||

@@ -12,6 +12,6 @@ export const storeOutput = <PreviousStepOutput>(
     metadataHelper: MetadataHelper
   ): PreviousStepOutput => {
     metadataHelper.add(key, input);
-    return input as unknown as PreviousStepOutput;
+    return input;
   }) as Modifier<PreviousStepOutput>;
 };

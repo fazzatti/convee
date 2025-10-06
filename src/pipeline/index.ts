@@ -11,8 +11,9 @@ import {
   PipelineSteps,
 } from "./types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
-import { RunOptions, TransformerAsync } from "../index.ts";
+import { MetadataHelper, RunOptions, TransformerAsync } from "../index.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
+import { isProcessEngine } from "../utils/types/is-process-engine.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
@@ -52,7 +53,8 @@ function createPipeline<
   >;
 
   async function executePipeline(
-    input: FirstInput<Steps>
+    input: FirstInput<Steps>,
+    metadata: MetadataHelper
   ): Promise<LastOutput<Steps>> {
     const currentSteps = customizedSteps ? customizedSteps : steps;
 
@@ -60,14 +62,14 @@ function createPipeline<
     for (const step of currentSteps) {
       if (typeof step === "function") {
         // For simple functions (modifier or transformer), simply call the function.
-        result = await step(result);
-      } else if (typeof step === "object" && "run" in step) {
+        result = await step(result, metadata);
+      } else if (isProcessEngine(step)) {
         // Process engine step.
         if (
           step.type === CoreProcessType.PROCESS_ENGINE ||
           step.type === CoreProcessType.PIPELINE
         ) {
-          result = await step.run(result);
+          result = await step.run(result, { metadataHelper: metadata });
         } else {
           throw new Error("Invalid process engine type");
         }

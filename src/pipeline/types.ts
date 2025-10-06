@@ -59,7 +59,7 @@ export type PipelineStep<Input, Output, ErrorT extends Error> =
   | ProcessEngine<Input, Output, ErrorT>;
 
 // StepIO extracts the input/output pair from a PipelineStep.
-type StepIO<T> = T extends ModifierSync<infer U>
+export type StepIO<T> = T extends ModifierSync<infer U>
   ? [U, U]
   : T extends ModifierAsync<infer U>
   ? [U, U]

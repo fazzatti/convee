@@ -7,6 +7,6 @@ export const isProcessEngine = <I, O, E extends Error>(
     typeof value === "object" &&
     value !== null &&
     "run" in value &&
-    value.run instanceof Function
+    typeof value.run === "function"
   );
 };

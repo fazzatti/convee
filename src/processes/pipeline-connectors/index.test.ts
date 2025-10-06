@@ -8,7 +8,7 @@ import {
 import { Pipeline } from "../../pipeline/index.ts";
 import { ProcessEngine } from "../../process-engine/index.ts";
 import { MetadataHelper } from "../../metadata/collector/index.ts";
-import { storeOutput } from "./store-output.ts";
+import { storeOutput, StoreOutputConnector } from "./store-output.ts";
 
 const stringToNumberPlusOneTransformer: Transformer<string, number> = async (
   item: string
@@ -35,14 +35,26 @@ Deno.test("Pipeline store output connector", async () => {
     return input;
   };
 
+  const numberToObject = (item: number) => {
+    return { n: item, tag: "custom" };
+  };
+
+  const objToNumber = (input: { n: number; tag: string }): number => {
+    return input.n;
+  };
+
   const pipeline = Pipeline.create(
     [
       doubleNumberModifier,
-      storeOutput("doubleNumberModifier"),
+      storeOutput(doubleNumberModifier, "first"),
+      numberToObject,
+      storeOutput(numberToObject, "second"),
+      objToNumber,
+      storeOutput(objToNumber, "third"),
       numberToStringEngine,
-      storeOutput("numberToStringEngine"),
+      storeOutput(numberToStringEngine, "fourth"),
       stringToNumberPlusOneTransformer,
-      storeOutput("stringToNumberPlusOneTransformer"),
+      storeOutput(stringToNumberPlusOneTransformer, "fifth"),
       extractedMetadataHelperStep,
     ],
     {
@@ -57,9 +69,11 @@ Deno.test("Pipeline store output connector", async () => {
   assertEquals(firstResult, 21);
   assertExists(metadataHelper);
   if (metadataHelper) {
-    assertEquals(metadataHelper.get("doubleNumberModifier"), 20);
-    assertEquals(metadataHelper.get("numberToStringEngine"), "20");
-    assertEquals(metadataHelper.get("stringToNumberPlusOneTransformer"), 21);
+    assertEquals(metadataHelper.get("first"), 20);
+    assertEquals(metadataHelper.get("second"), { n: 20, tag: "custom" });
+    assertEquals(metadataHelper.get("third"), 20);
+    assertEquals(metadataHelper.get("fourth"), "20");
+    assertEquals(metadataHelper.get("fifth"), 21);
   }
 
   const secondResult = await pipeline.run(5);
@@ -67,8 +81,10 @@ Deno.test("Pipeline store output connector", async () => {
   assertEquals(secondResult, 11);
   assertExists(metadataHelper);
   if (metadataHelper) {
-    assertEquals(metadataHelper.get("doubleNumberModifier"), 10);
-    assertEquals(metadataHelper.get("numberToStringEngine"), "10");
-    assertEquals(metadataHelper.get("stringToNumberPlusOneTransformer"), 11);
+    assertEquals(metadataHelper.get("first"), 10);
+    assertEquals(metadataHelper.get("second"), { n: 10, tag: "custom" });
+    assertEquals(metadataHelper.get("third"), 10);
+    assertEquals(metadataHelper.get("fourth"), "10");
+    assertEquals(metadataHelper.get("fifth"), 11);
   }
 });

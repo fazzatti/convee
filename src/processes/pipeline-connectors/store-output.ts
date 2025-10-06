@@ -1,17 +1,19 @@
-import { Modifier } from "../../core/types.ts";
+// deno-lint-ignore-file no-explicit-any
+import { Modifier, ModifierAsync, ModifierSync } from "../../core/types.ts";
 import { MetadataHelper } from "../../metadata/collector/index.ts";
+import { PipelineStep } from "../../pipeline/types.ts";
 
-export type StoreOutputConnector<PreviousStepOutput> =
-  Modifier<PreviousStepOutput>;
+export type StoreOutputConnector<PreviousStep> =
+  PreviousStep extends PipelineStep<any, infer PreviousStepOutput, any>
+    ? Modifier<PreviousStepOutput>
+    : never;
 
-export const storeOutput = <PreviousStepOutput>(
+export function storeOutput<PreviousStep extends PipelineStep<any, any, any>>(
+  previousStep: PreviousStep,
   key: string
-): StoreOutputConnector<PreviousStepOutput> => {
-  return ((
-    input: PreviousStepOutput,
-    metadataHelper: MetadataHelper
-  ): PreviousStepOutput => {
+): StoreOutputConnector<PreviousStep> {
+  return ((input: unknown, metadataHelper: MetadataHelper) => {
     metadataHelper.add(key, input);
     return input;
-  }) as Modifier<PreviousStepOutput>;
-};
+  }) as StoreOutputConnector<typeof previousStep>;
+}

@@ -1,5 +1,6 @@
 import { BeltPlugin } from "../belt-plugin/types.ts";
 import { CoreProcessType, EngineMetadata } from "../core/types.ts";
+import { MetadataHelper } from "../metadata/collector/index.ts";
 
 export type ProcessEngine<Input, Output, ErrorT extends Error> = {
   name: string;
@@ -29,4 +30,5 @@ export interface ProcessEngineMetadata extends EngineMetadata {
 export interface RunOptions<Input, Output, ErrorT extends Error> {
   existingItemId?: string;
   singleUsePlugins?: BeltPlugin<Input, Output, ErrorT>[];
+  metadataHelper?: MetadataHelper;
 }

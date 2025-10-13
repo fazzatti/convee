@@ -18,10 +18,16 @@ import { MetadataCollected } from "../metadata/collector/types.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 import { RunOptions, ProcessEngine as IProcessEngine } from "./types.ts";
 
-function CreateProcess<I, O, E extends Error>(
+function CreateProcess<
+  I,
+  O,
+  E extends Error,
+  Name extends string = string,
+  Id extends string = string
+>(
   process: Modifier<I | O> | Transformer<I, O>, //(args: I, metadataHelper?: MetadataHelper) => O,
-  options?: ProcessEngineOptions<I, O, E>
-): IProcessEngine<I, Unwrap<O>, E> {
+  options?: ProcessEngineOptions<I, O, E> & { name?: Name; id?: Id }
+): IProcessEngine<I, Unwrap<O>, E> & { name?: Name; id?: Id } {
   const processType = CoreProcessType.PROCESS_ENGINE;
   const processId = options?.id || (crypto.randomUUID() as string);
 
@@ -35,7 +41,7 @@ function CreateProcess<I, O, E extends Error>(
     // run: (input: I, options?: RunOptions<I, O, E>) => Promise<O>;
     // }
     {
-      name: options?.name || "Process",
+      name: (options?.name || "UnnamedProcess") as Name,
       id: processId,
       type: processType,
       plugins: options?.plugins || ([] as BeltPlugin<I, O, E>[]),
@@ -223,7 +229,7 @@ function CreateProcess<I, O, E extends Error>(
     };
   }
 
-  return engine as IProcessEngine<I, Unwrap<O>, E>;
+  return engine as IProcessEngine<I, Unwrap<O>, E> & { name: Name; id: Id };
 }
 
 export const ProcessEngine = {

@@ -179,11 +179,6 @@ Deno.test("Pipeline execution with belt plugins", async () => {
     processInput: (item: number) => item + 5,
   };
 
-  const test = {
-    name: "addFive",
-    processInput: (item: string) => true,
-  };
-
   const numberToStringEngine = ProcessEngine.create(
     (n: number) => n.toString(),
     {

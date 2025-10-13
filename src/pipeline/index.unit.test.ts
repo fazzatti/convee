@@ -258,7 +258,6 @@ Deno.test("Pipeline execution with multiple belt operations", async () => {
     }
   );
 
-  pipeline.pluggableSteps;
 
   assertEquals(await pipeline.run("1"), "9");
   pipeline.addPlugin(addFivePlugin, "TimesFive");

@@ -2,11 +2,13 @@
 import { BeltPlugin } from "../belt-plugin/types.ts";
 import { CoreProcessType } from "../core/types.ts";
 import {
+  PluggableNames,
   DefaultErrorT,
   FirstInput,
   Pipeline as IPipeline,
   LastOutput,
   PipelineOptions,
+  PipelinePlugin,
   PipelineStep,
   PipelineSteps,
 } from "./types.ts";
@@ -14,43 +16,83 @@ import { ProcessEngine } from "../process-engine/index.ts";
 import { MetadataHelper, RunOptions, TransformerAsync } from "../index.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 import { isProcessEngine } from "../utils/types/is-process-engine.ts";
+import { reducePipelineStepsToNames } from "../utils/reduce-pipeline-steps-to-names.ts";
+import { ProcessEngine as IProcessEngine } from "../process-engine/types.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
   ErrorT extends Error = DefaultErrorT<Steps>
 >(
-  steps: Steps & PipelineSteps<FirstInput<Steps>, LastOutput<Steps>, Steps>,
-  options?: PipelineOptions<FirstInput<Steps>, LastOutput<Steps>, ErrorT>
+  steps: [...Steps] &
+    PipelineSteps<FirstInput<Steps>, LastOutput<Steps>, Steps>,
+  options?: PipelineOptions
 ): IPipeline<FirstInput<Steps>, LastOutput<Steps>, ErrorT, Steps> {
   let customizedSteps: typeof steps | undefined = undefined;
 
-  const pipeline = {
-    ...ProcessEngine.create(
-      executePipeline as TransformerAsync<FirstInput<Steps>, LastOutput<Steps>>,
-      {
-        ...options,
+  const _processEngine = ProcessEngine.create(
+    executePipeline as TransformerAsync<FirstInput<Steps>, LastOutput<Steps>>,
+    options
+  );
 
-        plugins:
-          (options?.plugins as BeltPlugin<
-            FirstInput<Steps>,
-            LastOutput<Steps>,
-            ErrorT
-          >[]) ||
-          ([] as BeltPlugin<FirstInput<Steps>, LastOutput<Steps>, ErrorT>[]),
-      }
-    ),
+  const pluggableSteps = reducePipelineStepsToNames(
+    steps
+  ) as PluggableNames<Steps>;
+
+  const pipeline = {
+    ..._processEngine,
+    addPlugin,
+    removePlugin,
     type: CoreProcessType.PIPELINE,
     steps,
     runCustom: undefined as any,
+    pluggableSteps,
   };
 
   pipeline.runCustom = wrapRunWithCustomSteps();
+
   return pipeline as IPipeline<
     FirstInput<Steps>,
     LastOutput<Steps>,
     ErrorT,
     Steps
   >;
+
+  function addPlugin(
+    plugin: PipelinePlugin<Steps>,
+    target: PluggableNames<Steps>[number]
+  ): void {
+    const step = steps.find((step) => {
+      return "name" in step && step.name === target;
+    });
+
+    if (isProcessEngine(step)) {
+      if (!step || step.name !== target) {
+        throw new Error(`Step with name ${target} not found`);
+      }
+
+      step.addPlugin(plugin);
+    }
+
+    return;
+  }
+
+  function removePlugin(
+    target: PluggableNames<Steps>[number],
+    pluginName: string
+  ) {
+    const step = steps.find((step) => {
+      return "name" in step && step.name === target;
+    });
+
+    if (!step) {
+      throw new Error(`Step with name ${target} not found`);
+    }
+
+    if (isProcessEngine(step)) {
+      step.removePlugin(pluginName);
+      return;
+    }
+  }
 
   async function executePipeline(
     input: FirstInput<Steps>,

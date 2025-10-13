@@ -44,12 +44,3 @@ export type BeltPlugin<Input, Output, ErrorT extends Error> = (PluginBase &
         >;
       }>
   );
-// export type BeltPlugin<Input, Output, ErrorT extends Error> = PluginBase &
-//   RequireAtLeastOne<{
-//     processInput?: Modifier<Input>;
-//     processOutput?: Modifier<Output>;
-//     processError?: Transformer<
-//       ConveeError<ErrorT>,
-//       ConveeError<ErrorT> | Output
-//     >;
-//   }>;

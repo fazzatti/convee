@@ -1,168 +1,211 @@
+// deno-lint-ignore-file no-explicit-any
 import {
-  ExecuteOptions,
-  IProcessEngine,
-  IProcessEngineConstructor,
-  ProcessEngineMetadata,
-  ProcessEngineType,
-} from "./types.ts";
-import {
-  IBeltPlugin,
-  IBeltPluginError,
-  IBeltPluginInput,
-  IBeltPluginOutput,
+  BeltPlugin,
+  BeltPluginError,
+  BeltPluginInput,
+  BeltPluginOutput,
 } from "../belt-plugin/types.ts";
+import { CoreProcessType, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
+import { isConveeCapable, isError, makeConveeCapable } from "../error/util.ts";
+import {
+  Modifier,
+  ProcessEngineMetadata,
+  ProcessEngineOptions,
+} from "../index.ts";
 import { MetadataHelper } from "../metadata/collector/index.ts";
 import { MetadataCollected } from "../metadata/collector/types.ts";
-import { isConveeError, wrapConveeError } from "../error/util.ts";
+import { Unwrap } from "../utils/types/unwrap.ts";
+import { RunOptions, ProcessEngine as IProcessEngine } from "./types.ts";
 
-export class ProcessEngine<Input, Output, ErrorT extends Error>
-  implements IProcessEngine<Input, Output, ErrorT>
-{
-  public readonly id: string;
-  public readonly name: string;
-  public readonly type = ProcessEngineType.PROCESS_ENGINE;
+function CreateProcess<I, O, E extends Error>(
+  process: Modifier<I | O> | Transformer<I, O>, //(args: I, metadataHelper?: MetadataHelper) => O,
+  options?: ProcessEngineOptions<I, O, E>
+): IProcessEngine<I, Unwrap<O>, E> {
+  const processType = CoreProcessType.PROCESS_ENGINE;
+  const processId = options?.id || (crypto.randomUUID() as string);
 
-  protected plugins: IBeltPlugin<Input, Output, ErrorT>[];
+  // Create an engine object whose methods use `this` to refer to the current plugins.
+  const engine: IProcessEngine<I, O, E> =
+    // {
+    // name: string;
+    // id: string;
+    // type: CoreProcessType;
+    // plugins: BeltPlugin<I, O, E>[];
+    // run: (input: I, options?: RunOptions<I, O, E>) => Promise<O>;
+    // }
+    {
+      name: options?.name || "Process",
+      id: processId,
+      type: processType,
+      plugins: options?.plugins || ([] as BeltPlugin<I, O, E>[]),
+      run: undefined as any,
+      addPlugin(plugin: BeltPlugin<I, O, E>) {
+        this.plugins.push(plugin);
+      },
+      removePlugin(pluginName: string) {
+        this.plugins = this.plugins.filter(
+          (plugin) => plugin.name !== pluginName
+        );
+      },
+    };
 
-  constructor(args?: IProcessEngineConstructor<Input, Output, ErrorT>) {
-    const { name, id, plugins } = args || {};
-    this.id = id || (crypto.randomUUID() as string);
-    this.plugins = plugins || [];
-    this.name = name || this.type;
-  }
+  // Assign process using our wrapper function
+  engine.run = wrapProcessFn(process);
 
-  public async execute(
-    item: Input,
-    options?: ExecuteOptions<Input, Output, ErrorT>
-  ): Promise<Output> {
-    const { existingItemId, singleUsePlugins } = options || {};
-    const itemId = existingItemId || (crypto.randomUUID() as string);
+  function wrapProcessFn(
+    process: Modifier<I | O> | Transformer<I, O> //(input: I, metadataHelper?: MetadataHelper) => O
+  ): (input: I, options?: RunOptions<I, O, E>) => Promise<O> {
+    return async function (
+      this: typeof engine,
+      input: I,
+      options?: RunOptions<I, O, E>
+    ): Promise<O> {
+      const { existingItemId, singleUsePlugins } = options || {};
+      const itemId = existingItemId || (crypto.randomUUID() as string);
 
-    const inputBeltMetadataHelper = new MetadataHelper(itemId);
-    const outputBeltMetadataHelper = new MetadataHelper(itemId);
-    const errorBeltMetadataHelper = new MetadataHelper(itemId);
-    const processMetadataHelper = new MetadataHelper(itemId);
+      const inputBeltMetadataHelper = new MetadataHelper(itemId);
+      const outputBeltMetadataHelper = new MetadataHelper(itemId);
+      const errorBeltMetadataHelper = new MetadataHelper(itemId);
+      const processMetadataHelper = new MetadataHelper(itemId);
 
-    const preProcessedItem = await this.runInputBelt(
-      item,
-      inputBeltMetadataHelper,
-      singleUsePlugins || []
-    );
-    let processedItem: Output;
-    try {
-      processedItem = (await this.process(
-        preProcessedItem,
-        processMetadataHelper
-      )) as Output;
-    } catch (e) {
-      const error = !isConveeError(e as ErrorT)
-        ? wrapConveeError(e as ErrorT)
-        : (e as ConveeError<ErrorT>);
-
-      const processedError = await this.runErrorBelt(
-        error,
-        errorBeltMetadataHelper,
+      const preProcessedItem = await runInputBelt.call(
+        this,
+        input,
+        inputBeltMetadataHelper,
         singleUsePlugins || []
       );
-      error.enrichConveeStack(
-        this.getMeta({
-          itemId,
-          inputBeltMeta: inputBeltMetadataHelper.getAll(),
-          outputBeltMeta: outputBeltMetadataHelper.getAll(),
-          errortBeltMeta: errorBeltMetadataHelper.getAll(),
-          processMeta: processMetadataHelper.getAll(),
-        })
-      );
-      throw processedError;
-    }
-    const postProcessedItem = await this.runOutputBelt(
-      processedItem,
-      outputBeltMetadataHelper,
-      singleUsePlugins || []
-    );
+      let processedItem: O;
+      try {
+        processedItem = (await process(
+          preProcessedItem,
+          processMetadataHelper
+        )) as O;
+      } catch (e) {
+        const error = !isConveeCapable(e as E)
+          ? makeConveeCapable(e as E)
+          : (e as ConveeError<E>);
 
-    return postProcessedItem as Output;
+        const processedError = await runErrorBelt.call(
+          this,
+          error,
+          errorBeltMetadataHelper,
+          singleUsePlugins || []
+        );
+
+        // if a plugin has handled the error graciouslly, return the output
+        if (!isError(processedError)) {
+          return processedError;
+        }
+
+        processedError.enrichConveeStack(
+          getMeta({
+            itemId,
+            inputBeltMeta: inputBeltMetadataHelper.getAll(),
+            outputBeltMeta: outputBeltMetadataHelper.getAll(),
+            errortBeltMeta: errorBeltMetadataHelper.getAll(),
+            processMeta: processMetadataHelper.getAll(),
+          })
+        );
+        throw processedError;
+      }
+      const postProcessedItem = await runOutputBelt.call(
+        this,
+        processedItem,
+        outputBeltMetadataHelper,
+        singleUsePlugins || []
+      );
+
+      return postProcessedItem as O;
+    };
   }
 
-  private async runInputBelt(
-    item: Input,
+  async function runInputBelt(
+    this: typeof engine,
+    item: I,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
-  ): Promise<Input> {
-    let preProcessedItem = item as Input;
+    executionPlugins: BeltPlugin<I, O, E>[]
+  ): Promise<I> {
+    let preProcessedItem = item as I;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const inputPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginInput<Input> => "processInput" in plugin
+      (plugin): plugin is BeltPluginInput<I> => "processInput" in plugin
     );
 
     for (const plugin of inputPlugins) {
       preProcessedItem = (await plugin.processInput(
         preProcessedItem,
         metadataHelper
-      )) as Input;
+      )) as I;
     }
 
     return preProcessedItem;
   }
 
-  private async runOutputBelt(
-    item: Output,
+  async function runOutputBelt(
+    this: typeof engine,
+    item: O,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
-  ): Promise<Output> {
-    let postProcessedItem = item as Output;
+    executionPlugins: BeltPlugin<I, O, E>[]
+  ): Promise<O> {
+    let postProcessedItem = item as O;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const outputPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginOutput<Output> => "processOutput" in plugin
+      (plugin): plugin is BeltPluginOutput<O> => "processOutput" in plugin
     );
 
     for (const plugin of outputPlugins) {
       postProcessedItem = (await plugin.processOutput(
         postProcessedItem,
         metadataHelper
-      )) as Output;
+      )) as O;
     }
 
     return postProcessedItem;
   }
 
-  private async runErrorBelt(
-    item: ConveeError<ErrorT>,
+  async function runErrorBelt(
+    this: typeof engine,
+    item: ConveeError<E>,
     metadataHelper: MetadataHelper,
-    executionPlugins: IBeltPlugin<Input, Output, ErrorT>[]
-  ): Promise<ConveeError<ErrorT>> {
-    let postProcessedError = item as ConveeError<ErrorT>;
+    executionPlugins: BeltPlugin<I, O, E>[]
+  ): Promise<ConveeError<E> | O> {
+    let postProcessedError = item as ConveeError<E>;
 
     const combinedPlugins = [...this.plugins, ...executionPlugins];
 
     const errorPlugins = combinedPlugins.filter(
-      (plugin): plugin is IBeltPluginError<ErrorT> => "processError" in plugin
+      (plugin): plugin is BeltPluginError<O, E> => "processError" in plugin
     );
 
+    let handledOutput: O | undefined;
+
     for (const plugin of errorPlugins) {
-      postProcessedError = (await plugin.processError(
+      const pluginOutput = await plugin.processError(
         postProcessedError,
         metadataHelper
-      )) as ConveeError<ErrorT>;
+      );
+
+      if (isError(pluginOutput)) {
+        postProcessedError = pluginOutput;
+      } else {
+        handledOutput = pluginOutput;
+        break;
+      }
     }
 
-    return postProcessedError;
+    if (handledOutput) {
+      return handledOutput as O;
+    }
+
+    return postProcessedError as ConveeError<E>;
   }
 
-  // deno-lint-ignore require-await
-  protected async process(
-    _item: Input,
-    _metadataHelper: MetadataHelper
-  ): Promise<Output> {
-    throw new Error("process function not implemented");
-  }
-
-  protected getMeta(args: {
+  function getMeta(args: {
     itemId: string;
     inputBeltMeta?: MetadataCollected;
     outputBeltMeta?: MetadataCollected;
@@ -171,12 +214,18 @@ export class ProcessEngine<Input, Output, ErrorT extends Error>
   }): ProcessEngineMetadata {
     return {
       itemId: args.itemId,
-      source: this.id,
-      type: this.type,
+      source: processId,
+      type: processType,
       inputBeltMeta: args.inputBeltMeta,
       outputBeltMeta: args.outputBeltMeta,
       errortBeltMeta: args.errortBeltMeta,
       processMeta: args.processMeta,
     };
   }
+
+  return engine as IProcessEngine<I, Unwrap<O>, E>;
 }
+
+export const ProcessEngine = {
+  create: CreateProcess,
+};

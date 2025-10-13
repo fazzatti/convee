@@ -6,15 +6,13 @@ export class ConveeError<ErrorT extends Error>
   implements IConveeError<ErrorT>
 {
   public engineStack: EngineMetadata[];
-  public sourceError: ErrorT;
 
   constructor(args: IConveeErrorPayload<ErrorT>) {
     super(args.message);
 
     // Restore prototype chain (for instanceof checks to work properly)
-    Object.setPrototypeOf(this, new.target.prototype);
+    Object.assign(this, args.error); // Copy custom properties
 
-    this.sourceError = args.error;
     this.engineStack = [];
   }
 

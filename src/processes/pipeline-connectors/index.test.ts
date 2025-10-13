@@ -60,7 +60,6 @@ Deno.test("Pipeline store metadata connector with step arg", async () => {
     {
       name: "TestPipeline",
       id: "test123",
-      plugins: [],
     }
   );
 
@@ -127,7 +126,6 @@ Deno.test("Pipeline store metadata connector without step arg", async () => {
     {
       name: "TestPipeline",
       id: "test123",
-      plugins: [],
     }
   );
 
@@ -196,7 +194,6 @@ Deno.test(
       {
         name: "TestPipeline",
         id: "test123",
-        plugins: [],
       }
     );
 

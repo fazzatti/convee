@@ -7,39 +7,80 @@ import {
   TransformerAsync,
   TransformerSync,
 } from "../index.ts";
-import { ProcessEngineOptions, RunOptions } from "../process-engine/types.ts";
+import { RunOptions } from "../process-engine/types.ts";
 import {
   ProcessEngine as IProcessEngine,
   ProcessEngine,
 } from "../process-engine/types.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 
-export type Pipeline<I, O, E extends Error, S> = IProcessEngine<I, O, E> & {
+export type Pipeline<
+  I,
+  O,
+  E extends Error,
+  S extends readonly PipelineStep<any, any, any>[]
+> = {
+  name: IProcessEngine<I, O, E>["name"];
+  id: IProcessEngine<I, O, E>["id"];
+  run: IProcessEngine<I, O, E>["run"];
   type: CoreProcessType.PIPELINE;
   steps: S;
+  pluggableSteps: PluggableNames<S>;
+  addPlugin: (
+    plugin: PipelinePlugin<S>,
+    target: PluggableNames<S>[number]
+  ) => void;
+  removePlugin: (target: PluggableNames<S>[number], pluginName: string) => void;
   runCustom: (
     input: I,
     customSteps: S,
     options?: RunOptions<I, O, E>
   ) => Promise<O>;
-
-  // plugins?: BeltPlugin<I, O, E>[];
 };
 
-export type PipelineOptions<I, O, E extends Error> = ProcessEngineOptions<
-  I,
-  O,
-  E
+export type PipelineOptions = {
+  name: string;
+  id?: string;
+};
+
+type IsStringLiteral<S> = string extends S ? never : S;
+
+// Only include steps with literal name strings
+type NamedNamesTuple<Arr extends readonly any[]> = Arr extends [
+  infer Head,
+  ...infer Tail
+]
+  ? Head extends { name: infer N extends string }
+    ? IsStringLiteral<N> extends never
+      ? NamedNamesTuple<Tail> // Skip if name is a general string type
+      : [N, ...NamedNamesTuple<Tail>] // Include if name is a literal
+    : NamedNamesTuple<Tail> // Skip steps without a name
+  : [];
+
+export type PluggableNames<S extends readonly PipelineStep<any, any, any>[]> =
+  NamedNamesTuple<S>;
+
+//========================================================
+// ====== Plugin Belt inference types and utilities ======
+//========================================================
+
+export type PipelinePlugin<Steps extends readonly unknown[]> =
+  InnerPluginsUnion<Steps>;
+
+// Per-step plugin type (same as you already have)
+export type PluginForStep<S> = S extends PipelineStep<infer I, infer O, infer E>
+  ? BeltPlugin<Unwrap<I>, Unwrap<O>, E extends Error ? E : Error>
+  : never;
+
+// Union of plugins for every step (Plugin1 | Plugin2 | Plugin3)
+export type InnerPluginsUnion<Steps extends readonly unknown[]> = PluginForStep<
+  Steps[number]
 >;
 
-// export type InnerPipelineConstructor<
-//   Input,
-//   Output,
-//   ErrorT extends Error
-// > = ProcessEngineConstructor<Input, Output, ErrorT> & {
-//   readonly name?: string;
-// };
-
+//
+//========================================================
+// === Pipeline chaining inference types and utilities ===
+//========================================================
 type StepError<T> = T extends ProcessEngine<any, any, infer E> ? E : never;
 
 export type PipelineErrors<Steps extends readonly any[]> = Exclude<

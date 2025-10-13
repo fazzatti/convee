@@ -15,15 +15,3 @@ export const reducePipelineStepsToNames = <T>(steps: T[]) =>
     return acc;
   }, []);
 
-//   steps.reduce((acc: string[], s) => {
-//   if (
-//     s &&
-//     typeof s === "object" &&
-//     "type" in s &&
-//     s.type === CoreProcessType.PROCESS_ENGINE &&
-//     "name" in s
-//   ) {
-//     acc.push(s.name);
-//   }
-//   return acc;
-// }, []);

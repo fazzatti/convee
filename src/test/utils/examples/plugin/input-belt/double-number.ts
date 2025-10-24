@@ -3,6 +3,7 @@ import { BeltPluginInput } from "../../../../../belt-plugin/types.ts";
 import { MetadataHelper } from "../../../../../metadata/collector/index.ts";
 
 export const doubleNumberInputPlugin: BeltPluginInput<number> = Plugin.create({
+  name: "doubleNumberInputPlugin",
   processInput: async (
     n: number,
     metadataHelper?: MetadataHelper

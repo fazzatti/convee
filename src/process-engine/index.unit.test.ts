@@ -77,15 +77,12 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should initialize with the provided multi-type plugins",
       () => {
-        const mockPluginInputOutput = Plugin.create(
-          {
-            processOutput: async (item: string) => item,
-            processInput: async (item: number) => item,
-          },
-          {
-            name: "mockPlugin",
-          }
-        );
+        const mockPluginInputOutput = Plugin.create({
+          name: "mockPlugin",
+
+          processOutput: async (item: string) => item,
+          processInput: async (item: number) => item,
+        });
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
           plugins: [mockPluginInputOutput],
@@ -98,22 +95,16 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
       "should initialize with sync plugins only",
       async (t: Deno.TestContext) => {
         await t.step("with single input and output plugins", () => {
-          const syncInputPlugin = Plugin.create(
-            {
-              processInput: (item: number) => item * 2,
-            },
-            {
-              name: "syncInputPlugin",
-            }
-          );
-          const syncOutputPlugin = Plugin.create(
-            {
-              processOutput: (item: string) => item.toUpperCase(),
-            },
-            {
-              name: "syncOutputPlugin",
-            }
-          );
+          const syncInputPlugin = Plugin.create({
+            name: "syncInputPlugin",
+
+            processInput: (item: number) => item * 2,
+          });
+          const syncOutputPlugin = Plugin.create({
+            name: "syncOutputPlugin",
+
+            processOutput: (item: string) => item.toUpperCase(),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncInputPlugin, syncOutputPlugin],
@@ -122,30 +113,19 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple input plugins", () => {
-          const syncInputPlugin1 = Plugin.create(
-            {
-              processInput: (item: number) => item * 2,
-            },
-            {
-              name: "syncInputPlugin1",
-            }
-          );
-          const syncInputPlugin2 = Plugin.create(
-            {
-              processInput: (item: number) => item + 10,
-            },
-            {
-              name: "syncInputPlugin2",
-            }
-          );
-          const syncInputPlugin3 = Plugin.create(
-            {
-              processInput: (item: number) => item - 1,
-            },
-            {
-              name: "syncInputPlugin3",
-            }
-          );
+          const syncInputPlugin1 = Plugin.create({
+            name: "syncInputPlugin1",
+
+            processInput: (item: number) => item * 2,
+          });
+          const syncInputPlugin2 = Plugin.create({
+            name: "syncInputPlugin2",
+            processInput: (item: number) => item + 10,
+          });
+          const syncInputPlugin3 = Plugin.create({
+            name: "syncInputPlugin3",
+            processInput: (item: number) => item - 1,
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncInputPlugin1, syncInputPlugin2, syncInputPlugin3],
@@ -158,30 +138,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple output plugins", () => {
-          const syncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: (item: string) => item.toUpperCase(),
-            },
-            {
-              name: "syncOutputPlugin1",
-            }
-          );
-          const syncOutputPlugin2 = Plugin.create(
-            {
-              processOutput: (item: string) => item.trim(),
-            },
-            {
-              name: "syncOutputPlugin2",
-            }
-          );
-          const syncOutputPlugin3 = Plugin.create(
-            {
-              processOutput: (item: string) => `[${item}]`,
-            },
-            {
-              name: "syncOutputPlugin3",
-            }
-          );
+          const syncOutputPlugin1 = Plugin.create({
+            name: "syncOutputPlugin1",
+            processOutput: (item: string) => item.toUpperCase(),
+          });
+          const syncOutputPlugin2 = Plugin.create({
+            name: "syncOutputPlugin2",
+            processOutput: (item: string) => item.trim(),
+          });
+          const syncOutputPlugin3 = Plugin.create({
+            name: "syncOutputPlugin3",
+            processOutput: (item: string) => `[${item}]`,
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncOutputPlugin1, syncOutputPlugin2, syncOutputPlugin3],
@@ -194,38 +162,22 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with mixed multiple input and output plugins", () => {
-          const syncInputPlugin1 = Plugin.create(
-            {
-              processInput: (item: number) => item * 2,
-            },
-            {
-              name: "syncInputPlugin1",
-            }
-          );
-          const syncInputPlugin2 = Plugin.create(
-            {
-              processInput: (item: number) => item + 5,
-            },
-            {
-              name: "syncInputPlugin2",
-            }
-          );
-          const syncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: (item: string) => item.toUpperCase(),
-            },
-            {
-              name: "syncOutputPlugin1",
-            }
-          );
-          const syncOutputPlugin2 = Plugin.create(
-            {
-              processOutput: (item: string) => `Result: ${item}`,
-            },
-            {
-              name: "syncOutputPlugin2",
-            }
-          );
+          const syncInputPlugin1 = Plugin.create({
+            name: "syncInputPlugin1",
+            processInput: (item: number) => item * 2,
+          });
+          const syncInputPlugin2 = Plugin.create({
+            name: "syncInputPlugin2",
+            processInput: (item: number) => item + 5,
+          });
+          const syncOutputPlugin1 = Plugin.create({
+            name: "syncOutputPlugin1",
+            processOutput: (item: string) => item.toUpperCase(),
+          });
+          const syncOutputPlugin2 = Plugin.create({
+            name: "syncOutputPlugin2",
+            processOutput: (item: string) => `Result: ${item}`,
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [
@@ -267,23 +219,15 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
       "should initialize with async plugins only",
       async (t: Deno.TestContext) => {
         await t.step("with single input and output plugins", () => {
-          const asyncInputPlugin = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item * 2),
-            },
-            {
-              name: "asyncInputPlugin",
-            }
-          );
-          const asyncOutputPlugin = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.toUpperCase()),
-            },
-            {
-              name: "asyncOutputPlugin",
-            }
-          );
+          const asyncInputPlugin = Plugin.create({
+            name: "asyncInputPlugin",
+            processInput: async (item: number) => Promise.resolve(item * 2),
+          });
+          const asyncOutputPlugin = Plugin.create({
+            name: "asyncOutputPlugin",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.toUpperCase()),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [asyncInputPlugin, asyncOutputPlugin],
@@ -292,30 +236,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple input plugins", () => {
-          const asyncInputPlugin1 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item * 3),
-            },
-            {
-              name: "asyncInputPlugin1",
-            }
-          );
-          const asyncInputPlugin2 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item + 20),
-            },
-            {
-              name: "asyncInputPlugin2",
-            }
-          );
-          const asyncInputPlugin3 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item - 5),
-            },
-            {
-              name: "asyncInputPlugin3",
-            }
-          );
+          const asyncInputPlugin1 = Plugin.create({
+            name: "asyncInputPlugin1",
+            processInput: async (item: number) => Promise.resolve(item * 3),
+          });
+          const asyncInputPlugin2 = Plugin.create({
+            name: "asyncInputPlugin2",
+            processInput: async (item: number) => Promise.resolve(item + 20),
+          });
+          const asyncInputPlugin3 = Plugin.create({
+            name: "asyncInputPlugin3",
+            processInput: async (item: number) => Promise.resolve(item - 5),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [asyncInputPlugin1, asyncInputPlugin2, asyncInputPlugin3],
@@ -328,33 +260,20 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple output plugins", () => {
-          const asyncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.toLowerCase()),
-            },
-            {
-              name: "asyncOutputPlugin1",
-            }
-          );
-          const asyncOutputPlugin2 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.padStart(10, "0")),
-            },
-            {
-              name: "asyncOutputPlugin2",
-            }
-          );
-          const asyncOutputPlugin3 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(`<${item}>`),
-            },
-            {
-              name: "asyncOutputPlugin3",
-            }
-          );
+          const asyncOutputPlugin1 = Plugin.create({
+            name: "asyncOutputPlugin1",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.toLowerCase()),
+          });
+          const asyncOutputPlugin2 = Plugin.create({
+            name: "asyncOutputPlugin2",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.padStart(10, "0")),
+          });
+          const asyncOutputPlugin3 = Plugin.create({
+            name: "asyncOutputPlugin3",
+            processOutput: async (item: string) => Promise.resolve(`<${item}>`),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [
@@ -371,40 +290,24 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with mixed multiple input and output plugins", () => {
-          const asyncInputPlugin1 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item * 4),
-            },
-            {
-              name: "asyncInputPlugin1",
-            }
-          );
-          const asyncInputPlugin2 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item + 15),
-            },
-            {
-              name: "asyncInputPlugin2",
-            }
-          );
-          const asyncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.toLowerCase()),
-            },
-            {
-              name: "asyncOutputPlugin1",
-            }
-          );
-          const asyncOutputPlugin2 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(`Async: ${item}`),
-            },
-            {
-              name: "asyncOutputPlugin2",
-            }
-          );
+          const asyncInputPlugin1 = Plugin.create({
+            name: "asyncInputPlugin1",
+            processInput: async (item: number) => Promise.resolve(item * 4),
+          });
+          const asyncInputPlugin2 = Plugin.create({
+            name: "asyncInputPlugin2",
+            processInput: async (item: number) => Promise.resolve(item + 15),
+          });
+          const asyncOutputPlugin1 = Plugin.create({
+            name: "asyncOutputPlugin1",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.toLowerCase()),
+          });
+          const asyncOutputPlugin2 = Plugin.create({
+            name: "asyncOutputPlugin2",
+            processOutput: async (item: string) =>
+              Promise.resolve(`Async: ${item}`),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [
@@ -446,23 +349,15 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
       "should initialize with mixed sync and async plugins",
       async (t: Deno.TestContext) => {
         await t.step("with sync input and async output", () => {
-          const syncPlugin = Plugin.create(
-            {
-              processInput: (item: number) => item * 2,
-            },
-            {
-              name: "syncPlugin",
-            }
-          );
-          const asyncPlugin = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.toUpperCase()),
-            },
-            {
-              name: "asyncPlugin",
-            }
-          );
+          const syncPlugin = Plugin.create({
+            name: "syncPlugin",
+            processInput: (item: number) => item * 2,
+          });
+          const asyncPlugin = Plugin.create({
+            name: "asyncPlugin",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.toUpperCase()),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncPlugin, asyncPlugin],
@@ -471,22 +366,14 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with async input and sync output", () => {
-          const asyncInputPlugin = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item / 2),
-            },
-            {
-              name: "asyncInputPlugin",
-            }
-          );
-          const syncOutputPlugin = Plugin.create(
-            {
-              processOutput: (item: string) => item.toLowerCase(),
-            },
-            {
-              name: "syncOutputPlugin",
-            }
-          );
+          const asyncInputPlugin = Plugin.create({
+            name: "asyncInputPlugin",
+            processInput: async (item: number) => Promise.resolve(item / 2),
+          });
+          const syncOutputPlugin = Plugin.create({
+            name: "syncOutputPlugin",
+            processOutput: (item: string) => item.toLowerCase(),
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [asyncInputPlugin, syncOutputPlugin],
@@ -495,30 +382,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple mixed input plugins", () => {
-          const syncInputPlugin1 = Plugin.create(
-            {
-              processInput: (item: number) => item * 3,
-            },
-            {
-              name: "syncInputPlugin1",
-            }
-          );
-          const asyncInputPlugin1 = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item + 7),
-            },
-            {
-              name: "asyncInputPlugin1",
-            }
-          );
-          const syncInputPlugin2 = Plugin.create(
-            {
-              processInput: (item: number) => item - 2,
-            },
-            {
-              name: "syncInputPlugin2",
-            }
-          );
+          const syncInputPlugin1 = Plugin.create({
+            name: "syncInputPlugin1",
+            processInput: (item: number) => item * 3,
+          });
+          const asyncInputPlugin1 = Plugin.create({
+            name: "asyncInputPlugin1",
+            processInput: async (item: number) => Promise.resolve(item + 7),
+          });
+          const syncInputPlugin2 = Plugin.create({
+            name: "syncInputPlugin2",
+            processInput: (item: number) => item - 2,
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncInputPlugin1, asyncInputPlugin1, syncInputPlugin2],
@@ -531,31 +406,19 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with multiple mixed output plugins", () => {
-          const syncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: (item: string) => item.toUpperCase(),
-            },
-            {
-              name: "syncOutputPlugin1",
-            }
-          );
-          const asyncOutputPlugin1 = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(item.replace(/\d/g, "X")),
-            },
-            {
-              name: "asyncOutputPlugin1",
-            }
-          );
-          const syncOutputPlugin2 = Plugin.create(
-            {
-              processOutput: (item: string) => `Final: ${item}`,
-            },
-            {
-              name: "syncOutputPlugin2",
-            }
-          );
+          const syncOutputPlugin1 = Plugin.create({
+            name: "syncOutputPlugin1",
+            processOutput: (item: string) => item.toUpperCase(),
+          });
+          const asyncOutputPlugin1 = Plugin.create({
+            name: "asyncOutputPlugin1",
+            processOutput: async (item: string) =>
+              Promise.resolve(item.replace(/\d/g, "X")),
+          });
+          const syncOutputPlugin2 = Plugin.create({
+            name: "syncOutputPlugin2",
+            processOutput: (item: string) => `Final: ${item}`,
+          });
           const engine = ProcessEngine.create((n: number) => n.toString(), {
             name: "MyProcess",
             plugins: [syncOutputPlugin1, asyncOutputPlugin1, syncOutputPlugin2],
@@ -585,39 +448,23 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
         });
 
         await t.step("with comprehensive mixed plugins", () => {
-          const syncInputPlugin = Plugin.create(
-            {
-              processInput: (item: number) => item * 2,
-            },
-            {
-              name: "syncInputPlugin",
-            }
-          );
-          const asyncInputPlugin = Plugin.create(
-            {
-              processInput: async (item: number) => Promise.resolve(item + 10),
-            },
-            {
-              name: "asyncInputPlugin",
-            }
-          );
-          const syncOutputPlugin = Plugin.create(
-            {
-              processOutput: (item: string) => item.toUpperCase(),
-            },
-            {
-              name: "syncOutputPlugin",
-            }
-          );
-          const asyncOutputPlugin = Plugin.create(
-            {
-              processOutput: async (item: string) =>
-                Promise.resolve(`Result: ${item}`),
-            },
-            {
-              name: "asyncOutputPlugin",
-            }
-          );
+          const syncInputPlugin = Plugin.create({
+            name: "syncInputPlugin",
+            processInput: (item: number) => item * 2,
+          });
+          const asyncInputPlugin = Plugin.create({
+            name: "asyncInputPlugin",
+            processInput: async (item: number) => Promise.resolve(item + 10),
+          });
+          const syncOutputPlugin = Plugin.create({
+            name: "syncOutputPlugin",
+            processOutput: (item: string) => item.toUpperCase(),
+          });
+          const asyncOutputPlugin = Plugin.create({
+            name: "asyncOutputPlugin",
+            processOutput: async (item: string) =>
+              Promise.resolve(`Result: ${item}`),
+          });
           const syncErrorPlugin = {
             name: "syncErrorPlugin",
             processError: (error: Error) => new Error(`Sync: ${error.message}`),
@@ -652,37 +499,29 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     );
 
     await t.step("should initialize with mixed multi-plugins", () => {
-      const syncMultiPlugin = Plugin.create(
-        {
-          processInput: (item: number) => item * 2,
-          processOutput: (item: string) => item.toUpperCase(),
-          processError: (error: Error) => new Error(`Sync: ${error.message}`),
-        },
-        {
-          name: "syncMultiPlugin",
-        }
-      );
-      const asyncMultiPlugin = Plugin.create(
-        {
-          processInput: async (item: number) => Promise.resolve(item + 1),
-          processOutput: async (item: string) =>
-            Promise.resolve(item.toLowerCase()),
-          processError: async (error: Error) =>
-            Promise.resolve(new Error(`Async: ${error.message}`)),
-        },
-        {
-          name: "asyncMultiPlugin",
-        }
-      );
-      const mixedMultiPlugin = Plugin.create(
-        {
-          processInput: (item: number) => item / 2,
-          processOutput: async (item: string) => Promise.resolve(item.trim()),
-        },
-        {
-          name: "mixedMultiPlugin",
-        }
-      );
+      const syncMultiPlugin = Plugin.create({
+        name: "syncMultiPlugin",
+        processInput: (item: number) => item * 2,
+        processOutput: (item: string) => item.toUpperCase(),
+        processError: (error: Error) =>
+          new ConveeError({ error, message: `Sync: ${error.message}` }),
+      });
+      const asyncMultiPlugin = Plugin.create({
+        name: "asyncMultiPlugin",
+
+        processInput: async (item: number) => Promise.resolve(item + 1),
+        processOutput: async (item: string) =>
+          Promise.resolve(item.toLowerCase()),
+        processError: async (error: Error) =>
+          Promise.resolve(
+            new ConveeError({ error, message: `Async: ${error.message}` })
+          ),
+      });
+      const mixedMultiPlugin = Plugin.create({
+        name: "mixedMultiPlugin",
+        processInput: (item: number) => item / 2,
+        processOutput: async (item: string) => Promise.resolve(item.trim()),
+      });
       const engine = ProcessEngine.create((n: number) => n.toString(), {
         name: "MyProcess",
         plugins: [syncMultiPlugin, asyncMultiPlugin, mixedMultiPlugin],
@@ -890,30 +729,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute multiple sync input plugins in sequence",
       async () => {
-        const syncInputPlugin1 = Plugin.create(
-          {
-            processInput: (item: number) => item * 2, // 5 -> 10
-          },
-          {
-            name: "syncInputPlugin1",
-          }
-        );
-        const syncInputPlugin2 = Plugin.create(
-          {
-            processInput: (item: number) => item + 5, // 10 -> 15
-          },
-          {
-            name: "syncInputPlugin2",
-          }
-        );
-        const syncInputPlugin3 = Plugin.create(
-          {
-            processInput: (item: number) => item - 3, // 15 -> 12
-          },
-          {
-            name: "syncInputPlugin3",
-          }
-        );
+        const syncInputPlugin1 = Plugin.create({
+          name: "syncInputPlugin1",
+          processInput: (item: number) => item * 2, // 5 -> 10
+        });
+        const syncInputPlugin2 = Plugin.create({
+          name: "syncInputPlugin2",
+          processInput: (item: number) => item + 5, // 10 -> 15
+        });
+        const syncInputPlugin3 = Plugin.create({
+          name: "syncInputPlugin3",
+          processInput: (item: number) => item - 3, // 15 -> 12
+        });
 
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
@@ -928,30 +755,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute multiple async input plugins in sequence",
       async () => {
-        const asyncInputPlugin1 = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item * 3), // 4 -> 12
-          },
-          {
-            name: "asyncInputPlugin1",
-          }
-        );
-        const asyncInputPlugin2 = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item + 8), // 12 -> 20
-          },
-          {
-            name: "asyncInputPlugin2",
-          }
-        );
-        const asyncInputPlugin3 = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item / 2), // 20 -> 10
-          },
-          {
-            name: "asyncInputPlugin3",
-          }
-        );
+        const asyncInputPlugin1 = Plugin.create({
+          name: "asyncInputPlugin1",
+          processInput: async (item: number) => Promise.resolve(item * 3), // 4 -> 12
+        });
+        const asyncInputPlugin2 = Plugin.create({
+          name: "asyncInputPlugin2",
+          processInput: async (item: number) => Promise.resolve(item + 8), // 12 -> 20
+        });
+        const asyncInputPlugin3 = Plugin.create({
+          name: "asyncInputPlugin3",
+          processInput: async (item: number) => Promise.resolve(item / 2), // 20 -> 10
+        });
 
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
@@ -966,30 +781,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute multiple sync output plugins in sequence",
       async () => {
-        const syncOutputPlugin1 = Plugin.create(
-          {
-            processOutput: (item: string) => item.toUpperCase(), // "hello" -> "HELLO"
-          },
-          {
-            name: "syncOutputPlugin1",
-          }
-        );
-        const syncOutputPlugin2 = Plugin.create(
-          {
-            processOutput: (item: string) => `[${item}]`, // "HELLO" -> "[HELLO]"
-          },
-          {
-            name: "syncOutputPlugin2",
-          }
-        );
-        const syncOutputPlugin3 = Plugin.create(
-          {
-            processOutput: (item: string) => `Result: ${item}`, // "[HELLO]" -> "Result: [HELLO]"
-          },
-          {
-            name: "syncOutputPlugin3",
-          }
-        );
+        const syncOutputPlugin1 = Plugin.create({
+          name: "syncOutputPlugin1",
+          processOutput: (item: string) => item.toUpperCase(), // "hello" -> "HELLO"
+        });
+        const syncOutputPlugin2 = Plugin.create({
+          name: "syncOutputPlugin2",
+          processOutput: (item: string) => `[${item}]`, // "HELLO" -> "[HELLO]"
+        });
+        const syncOutputPlugin3 = Plugin.create({
+          name: "syncOutputPlugin3",
+          processOutput: (item: string) => `Result: ${item}`, // "[HELLO]" -> "Result: [HELLO]"
+        });
 
         const engine = ProcessEngine.create((n: number) => "hello", {
           name: "MyProcess",
@@ -1004,32 +807,20 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute multiple async output plugins in sequence",
       async () => {
-        const asyncOutputPlugin1 = Plugin.create(
-          {
-            processOutput: async (item: string) =>
-              Promise.resolve(item.toLowerCase()), // "WORLD" -> "world"
-          },
-          {
-            name: "asyncOutputPlugin1",
-          }
-        );
-        const asyncOutputPlugin2 = Plugin.create(
-          {
-            processOutput: async (item: string) =>
-              Promise.resolve(item.padStart(10, "0")), // "world" -> "00000world"
-          },
-          {
-            name: "asyncOutputPlugin2",
-          }
-        );
-        const asyncOutputPlugin3 = Plugin.create(
-          {
-            processOutput: async (item: string) => Promise.resolve(`<${item}>`), // "00000world" -> "<00000world>"
-          },
-          {
-            name: "asyncOutputPlugin3",
-          }
-        );
+        const asyncOutputPlugin1 = Plugin.create({
+          name: "asyncOutputPlugin1",
+          processOutput: async (item: string) =>
+            Promise.resolve(item.toLowerCase()), // "WORLD" -> "world"
+        });
+        const asyncOutputPlugin2 = Plugin.create({
+          name: "asyncOutputPlugin2",
+          processOutput: async (item: string) =>
+            Promise.resolve(item.padStart(10, "0")), // "world" -> "00000world"
+        });
+        const asyncOutputPlugin3 = Plugin.create({
+          name: "asyncOutputPlugin3",
+          processOutput: async (item: string) => Promise.resolve(`<${item}>`), // "00000world" -> "<00000world>"
+        });
 
         const engine = ProcessEngine.create((n: number) => "WORLD", {
           name: "MyProcess",
@@ -1044,30 +835,18 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute mixed sync and async input plugins in sequence",
       async () => {
-        const syncInputPlugin1 = Plugin.create(
-          {
-            processInput: (item: number) => item * 2, // 6 -> 12
-          },
-          {
-            name: "syncInputPlugin1",
-          }
-        );
-        const asyncInputPlugin1 = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item + 3), // 12 -> 15
-          },
-          {
-            name: "asyncInputPlugin1",
-          }
-        );
-        const syncInputPlugin2 = Plugin.create(
-          {
-            processInput: (item: number) => item / 3, // 15 -> 5
-          },
-          {
-            name: "syncInputPlugin2",
-          }
-        );
+        const syncInputPlugin1 = Plugin.create({
+          name: "syncInputPlugin1",
+          processInput: (item: number) => item * 2, // 6 -> 12
+        });
+        const asyncInputPlugin1 = Plugin.create({
+          name: "asyncInputPlugin1",
+          processInput: async (item: number) => Promise.resolve(item + 3), // 12 -> 15
+        });
+        const syncInputPlugin2 = Plugin.create({
+          name: "syncInputPlugin2",
+          processInput: (item: number) => item / 3, // 15 -> 5
+        });
 
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
@@ -1082,31 +861,19 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute mixed sync and async output plugins in sequence",
       async () => {
-        const syncOutputPlugin1 = Plugin.create(
-          {
-            processOutput: (item: string) => item.toUpperCase(), // "test" -> "TEST"
-          },
-          {
-            name: "syncOutputPlugin1",
-          }
-        );
-        const asyncOutputPlugin1 = Plugin.create(
-          {
-            processOutput: async (item: string) =>
-              Promise.resolve(item.replace(/T/g, "X")), // "TEST" -> "XESX"
-          },
-          {
-            name: "asyncOutputPlugin1",
-          }
-        );
-        const syncOutputPlugin2 = Plugin.create(
-          {
-            processOutput: (item: string) => `Final: ${item}`, // "XESX" -> "Final: XESX"
-          },
-          {
-            name: "syncOutputPlugin2",
-          }
-        );
+        const syncOutputPlugin1 = Plugin.create({
+          name: "syncOutputPlugin1",
+          processOutput: (item: string) => item.toUpperCase(), // "test" -> "TEST"
+        });
+        const asyncOutputPlugin1 = Plugin.create({
+          name: "asyncOutputPlugin1",
+          processOutput: async (item: string) =>
+            Promise.resolve(item.replace(/T/g, "X")), // "TEST" -> "XESX"
+        });
+        const syncOutputPlugin2 = Plugin.create({
+          name: "syncOutputPlugin2",
+          processOutput: (item: string) => `Final: ${item}`, // "XESX" -> "Final: XESX"
+        });
 
         const engine = ProcessEngine.create((n: number) => "test", {
           name: "MyProcess",
@@ -1121,39 +888,23 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute comprehensive mixed plugins together",
       async () => {
-        const syncInputPlugin = Plugin.create(
-          {
-            processInput: (item: number) => item * 2, // 3 -> 6
-          },
-          {
-            name: "syncInputPlugin",
-          }
-        );
-        const asyncInputPlugin = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item + 4), // 6 -> 10
-          },
-          {
-            name: "asyncInputPlugin",
-          }
-        );
-        const syncOutputPlugin = Plugin.create(
-          {
-            processOutput: (item: string) => item.toUpperCase(), // "10" -> "10" (no letters to uppercase)
-          },
-          {
-            name: "syncOutputPlugin",
-          }
-        );
-        const asyncOutputPlugin = Plugin.create(
-          {
-            processOutput: async (item: string) =>
-              Promise.resolve(`Value: ${item}`), // "10" -> "Value: 10"
-          },
-          {
-            name: "asyncOutputPlugin",
-          }
-        );
+        const syncInputPlugin = Plugin.create({
+          name: "syncInputPlugin",
+          processInput: (item: number) => item * 2, // 3 -> 6
+        });
+        const asyncInputPlugin = Plugin.create({
+          name: "asyncInputPlugin",
+          processInput: async (item: number) => Promise.resolve(item + 4), // 6 -> 10
+        });
+        const syncOutputPlugin = Plugin.create({
+          name: "syncOutputPlugin",
+          processOutput: (item: string) => item.toUpperCase(), // "10" -> "10" (no letters to uppercase)
+        });
+        const asyncOutputPlugin = Plugin.create({
+          name: "asyncOutputPlugin",
+          processOutput: async (item: string) =>
+            Promise.resolve(`Value: ${item}`), // "10" -> "Value: 10"
+        });
 
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",
@@ -1173,34 +924,22 @@ Deno.test("process-engine", async (t: Deno.TestContext) => {
     await t.step(
       "should execute mixed multi-plugins with different sync/async combinations",
       async () => {
-        const syncMultiPlugin = Plugin.create(
-          {
-            processInput: (item: number) => item * 2, // 5 -> 10
-            processOutput: (item: string) => item.toUpperCase(), // "10" -> "10"
-          },
-          {
-            name: "syncMultiPlugin",
-          }
-        );
-        const asyncMultiPlugin = Plugin.create(
-          {
-            processInput: async (item: number) => Promise.resolve(item + 5), // 10 -> 15
-            processOutput: async (item: string) =>
-              Promise.resolve(`Result: ${item}`), // "10" -> "Result: 10"
-          },
-          {
-            name: "asyncMultiPlugin",
-          }
-        );
-        const mixedMultiPlugin = Plugin.create(
-          {
-            processInput: (item: number) => item - 3, // 15 -> 12
-            processOutput: async (item: string) => Promise.resolve(`[${item}]`), // "Result: 10" -> "[Result: 10]"
-          },
-          {
-            name: "mixedMultiPlugin",
-          }
-        );
+        const syncMultiPlugin = Plugin.create({
+          name: "syncMultiPlugin",
+          processInput: (item: number) => item * 2, // 5 -> 10
+          processOutput: (item: string) => item.toUpperCase(), // "10" -> "10"
+        });
+        const asyncMultiPlugin = Plugin.create({
+          name: "asyncMultiPlugin",
+          processInput: async (item: number) => Promise.resolve(item + 5), // 10 -> 15
+          processOutput: async (item: string) =>
+            Promise.resolve(`Result: ${item}`), // "10" -> "Result: 10"
+        });
+        const mixedMultiPlugin = Plugin.create({
+          name: "mixedMultiPlugin",
+          processInput: (item: number) => item - 3, // 15 -> 12
+          processOutput: async (item: string) => Promise.resolve(`[${item}]`), // "Result: 10" -> "[Result: 10]"
+        });
 
         const engine = ProcessEngine.create((n: number) => n.toString(), {
           name: "MyProcess",

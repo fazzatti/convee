@@ -4,6 +4,7 @@ import { MetadataHelper } from "../../../../../metadata/collector/index.ts";
 
 export const invertSignInputPlugin: BeltPluginInput<{ a: number; b: number }> =
   Plugin.create({
+    name: "InvertSignInputPlugin",
     processInput: (
       item: { a: number; b: number },
       metadataHelper?: MetadataHelper

@@ -33,6 +33,7 @@ Deno.test(
           "Then it should return the processed with another discount if a pipeline coupom is applied first",
           async () => {
             const plugin = Plugin.create({
+              name: "DiscountPlugin",
               processInput: async (n: number) => n - n * 0.5, // apply 50% discount
             });
             // Run: 500 - 500 * 0.5 = 250 - 250 * 0.02 = 245 + 245 * 0.1 = 269.5

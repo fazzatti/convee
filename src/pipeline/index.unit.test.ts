@@ -3,6 +3,8 @@ import { assert, assertEquals } from "jsr:@std/assert";
 import { Pipeline } from "./index.ts";
 import { Modifier, Transformer, CoreProcessType } from "../core/types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
+import { Plugin } from "../belt-plugin/index.ts";
+import { ConveeError } from "../error/index.ts";
 
 const stringToNumberPlusOneTransformer: Transformer<string, number> = async (
   item: string
@@ -258,7 +260,6 @@ Deno.test("Pipeline execution with multiple belt operations", async () => {
     }
   );
 
-
   assertEquals(await pipeline.run("1"), "9");
   pipeline.addPlugin(addFivePlugin, "TimesFive");
   assertEquals(await pipeline.run("1"), "34");
@@ -275,3 +276,111 @@ Deno.test("Pipeline execution with multiple belt operations", async () => {
   pipeline.addPlugin(timesTwoPlugin, "MinusOne");
   assertEquals(await pipeline.run("1"), "18");
 });
+
+Deno.test("Pipeline execution with pipeline-level plugins", async () => {
+  const pipePlugin = Plugin.create({
+    name: "pipePlugin",
+
+    processInput: async (item: string) => item + "1",
+    processOutput: async (item: string) => item + "5",
+  });
+
+  const numberToStringEngine = ProcessEngine.create(
+    (n: number) => n.toString(),
+    {
+      name: "numberToStringEngine",
+    }
+  );
+
+  // Create a pipeline with a single modifier.
+  const pipeline = Pipeline.create(
+    [
+      stringToNumberPlusOneTransformer,
+      doubleNumberModifier,
+      numberToStringEngine,
+    ],
+    {
+      name: "PluginPipeline",
+      id: "plugin1",
+    }
+  );
+
+  pipeline.addPlugin(pipePlugin, pipeline.name);
+
+  // Expected flow:
+  // pipePlugin processInput: "10" + "1" = "101"
+  // Inner chain:
+  // stringToNumberPlusOneTransformer: "101" => Number("101") + 1 = 102
+  // doubleNumberModifier: 102 * 2 = 204
+  // numberToStringEngine: 204 => "204"
+  // pipePlugin processOutput: "204" + "5" = "2045"
+  const result = await pipeline.run("10");
+  assertEquals(result, "2045");
+});
+
+Deno.test(
+  "Pipeline execution with pipeline-level plugins for error",
+  async () => {
+    const pipePlugin = Plugin.create({
+      name: "pipePlugin",
+
+      processInput: async (item: string) => item + "1",
+      processError: async (_item: ConveeError<Error>) => "errorHandled",
+    });
+
+    const numberToStringEngine = ProcessEngine.create(
+      (n: number) => n.toString(),
+      {
+        name: "numberToStringEngine",
+      }
+    );
+
+    const throwIfInputIsOver100: Modifier<number> = async (item: number) => {
+      if (item > 100) {
+        const message = "Input too large";
+        throw new ConveeError({
+          error: new Error(message),
+          message: message,
+        });
+      }
+      return item;
+    };
+
+    // Create a pipeline with a single modifier.
+    const pipeline = Pipeline.create(
+      [
+        stringToNumberPlusOneTransformer,
+        doubleNumberModifier,
+        throwIfInputIsOver100,
+        numberToStringEngine,
+      ],
+      {
+        name: "PluginPipeline",
+        id: "plugin1",
+      }
+    );
+
+    pipeline.addPlugin(pipePlugin, pipeline.name);
+
+    // Expected flow for normal input:
+    // pipePlugin processInput: "1" + "1" = "11"
+    // Inner chain:
+    // stringToNumberPlusOneTransformer: "11" => Number("11") + 1 = 12
+    // doubleNumberModifier: 12 * 2 = 24
+    // throwIfInputIsOver100: 24 (no error)
+    // numberToStringEngine: 24 => "24"
+    // pipePlugin processOutput: "24" (no output plugin)
+    const resultOk = await pipeline.run("1");
+    assertEquals(resultOk, "24");
+
+    // Expected flow:
+    // pipePlugin processInput: "10" + "1" = "101"
+    // Inner chain:
+    // stringToNumberPlusOneTransformer: "101" => Number("101") + 1 = 102
+    // doubleNumberModifier: 102 * 2 = 204
+    // throwIfInputIsOver100: throws ConveeError
+    // pipePlugin processError: handles error and returns "errorHandled"
+    const result = await pipeline.run("10");
+    assertEquals(result, "errorHandled");
+  }
+);

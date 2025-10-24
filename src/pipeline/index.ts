@@ -8,9 +8,10 @@ import {
   Pipeline as IPipeline,
   LastOutput,
   PipelineOptions,
-  PipelinePlugin,
+  PipelineStepPlugin,
   PipelineStep,
   PipelineSteps,
+  PipelinePlugin,
 } from "./types.ts";
 import { ProcessEngine } from "../process-engine/index.ts";
 import { MetadataHelper, RunOptions, TransformerAsync } from "../index.ts";
@@ -21,12 +22,19 @@ import { ProcessEngine as IProcessEngine } from "../process-engine/types.ts";
 
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
-  ErrorT extends Error = DefaultErrorT<Steps>
+  ErrorT extends Error = DefaultErrorT<Steps>,
+  PipelineName extends string = string
 >(
   steps: [...Steps] &
     PipelineSteps<FirstInput<Steps>, LastOutput<Steps>, Steps>,
-  options?: PipelineOptions
-): IPipeline<FirstInput<Steps>, LastOutput<Steps>, ErrorT, Steps> {
+  options: PipelineOptions & { name: PipelineName }
+): IPipeline<
+  FirstInput<Steps>,
+  LastOutput<Steps>,
+  ErrorT,
+  Steps,
+  PipelineName
+> {
   let customizedSteps: typeof steps | undefined = undefined;
 
   const _processEngine = ProcessEngine.create(
@@ -54,13 +62,33 @@ function createPipeline<
     FirstInput<Steps>,
     LastOutput<Steps>,
     ErrorT,
-    Steps
+    Steps,
+    PipelineName
   >;
 
+  /**
+   *
+   *  Adds a plugin to a specific step or to the entire pipeline
+   *  based on the target name. The plugin type must match the target step type
+   *  or the pipeline type.
+   *
+   * @param plugin : The plugin to be added.
+   * @param target : The target step or pipeline to add the plugin to.
+   * @returns void
+   */
   function addPlugin(
-    plugin: PipelinePlugin<Steps>,
-    target: PluggableNames<Steps>[number]
+    plugin:
+      | PipelineStepPlugin<Steps>
+      | PipelinePlugin<FirstInput<Steps>, Unwrap<LastOutput<Steps>>, ErrorT>,
+    target: PipelineName | PluggableNames<Steps>[number]
   ): void {
+    // Add to pipeline-level plugins
+    if (pipeline.name === target) {
+      pipeline.plugins.push(plugin);
+      return;
+    }
+
+    // Add to step-level plugins
     const step = steps.find((step) => {
       return "name" in step && step.name === target;
     });
@@ -77,9 +105,18 @@ function createPipeline<
   }
 
   function removePlugin(
-    target: PluggableNames<Steps>[number],
+    target: PipelineName | PluggableNames<Steps>[number],
     pluginName: string
   ) {
+    // Remove from pipeline-level plugins
+    if (pipeline.name === target) {
+      pipeline.plugins = pipeline.plugins.filter(
+        (plugin) => plugin.name !== pluginName
+      );
+      return;
+    }
+
+    // Remove from step-level plugins
     const step = steps.find((step) => {
       return "name" in step && step.name === target;
     });

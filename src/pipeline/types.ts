@@ -15,22 +15,26 @@ import {
 import { Unwrap } from "../utils/types/unwrap.ts";
 
 export type Pipeline<
-  I,
-  O,
-  E extends Error,
-  S extends readonly PipelineStep<any, any, any>[]
+  I, // Input
+  O, // Output
+  E extends Error, // Error type
+  S extends readonly PipelineStep<any, any, any>[], // Steps
+  N extends IProcessEngine<I, O, E>["name"] // Name
 > = {
-  name: IProcessEngine<I, O, E>["name"];
+  name: N;
   id: IProcessEngine<I, O, E>["id"];
   run: IProcessEngine<I, O, E>["run"];
   type: CoreProcessType.PIPELINE;
   steps: S;
-  pluggableSteps: PluggableNames<S>;
+  pluggableSteps: PluggableNames<S> | N;
   addPlugin: (
-    plugin: PipelinePlugin<S>,
-    target: PluggableNames<S>[number]
+    plugin: PipelineStepPlugin<S> | PipelinePlugin<I, O, E>,
+    target: N | PluggableNames<S>[number]
   ) => void;
-  removePlugin: (target: PluggableNames<S>[number], pluginName: string) => void;
+  removePlugin: (
+    target: N | PluggableNames<S>[number],
+    pluginName: string
+  ) => void;
   runCustom: (
     input: I,
     customSteps: S,
@@ -64,7 +68,7 @@ export type PluggableNames<S extends readonly PipelineStep<any, any, any>[]> =
 // ====== Plugin Belt inference types and utilities ======
 //========================================================
 
-export type PipelinePlugin<Steps extends readonly unknown[]> =
+export type PipelineStepPlugin<Steps extends readonly unknown[]> =
   InnerPluginsUnion<Steps>;
 
 // Per-step plugin type (same as you already have)
@@ -76,6 +80,8 @@ export type PluginForStep<S> = S extends PipelineStep<infer I, infer O, infer E>
 export type InnerPluginsUnion<Steps extends readonly unknown[]> = PluginForStep<
   Steps[number]
 >;
+
+export type PipelinePlugin<I, O, E extends Error> = BeltPlugin<I, O, E>;
 
 //
 //========================================================

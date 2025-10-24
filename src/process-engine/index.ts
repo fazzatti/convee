@@ -99,21 +99,22 @@ function CreateProcess<
           singleUsePlugins || []
         );
 
-        // if a plugin has handled the error graciouslly, return the output
-        if (!isError(processedError)) {
-          return processedError;
+        // if a plugin has not handled the error graciously, throw it enriched with metadata
+        if (isError(processedError)) {
+          processedError.enrichConveeStack(
+            getMeta({
+              itemId,
+              inputBeltMeta: inputBeltMetadataHelper.getAll(),
+              outputBeltMeta: outputBeltMetadataHelper.getAll(),
+              errortBeltMeta: errorBeltMetadataHelper.getAll(),
+              processMeta: processMetadataHelper.getAll(),
+            })
+          );
+          throw processedError;
         }
 
-        processedError.enrichConveeStack(
-          getMeta({
-            itemId,
-            inputBeltMeta: inputBeltMetadataHelper.getAll(),
-            outputBeltMeta: outputBeltMetadataHelper.getAll(),
-            errortBeltMeta: errorBeltMetadataHelper.getAll(),
-            processMeta: processMetadataHelper.getAll(),
-          })
-        );
-        throw processedError;
+        // if the error has been handled and transformed into an output, continue the normal flow
+        processedItem = processedError as O;
       }
       const postProcessedItem = await runOutputBelt.call(
         this,

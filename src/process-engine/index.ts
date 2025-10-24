@@ -99,7 +99,7 @@ function CreateProcess<
           singleUsePlugins || []
         );
 
-        // if a plugin has not handled the error graciouslly, throw it enriched with metadata
+        // if a plugin has not handled the error graciously, throw it enriched with metadata
         if (isError(processedError)) {
           processedError.enrichConveeStack(
             getMeta({

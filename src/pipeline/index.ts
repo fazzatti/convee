@@ -20,6 +20,51 @@ import { isProcessEngine } from "../utils/types/is-process-engine.ts";
 import { reducePipelineStepsToNames } from "../utils/reduce-pipeline-steps-to-names.ts";
 import { ProcessEngine as IProcessEngine } from "../process-engine/types.ts";
 
+/**
+ * Creates a new Pipeline that chains multiple processing steps together.
+ *
+ * A Pipeline:
+ * - Executes steps in sequence, passing output of each step to the next
+ * - Supports both ProcessEngine instances and simple functions as steps
+ * - Shares a single MetadataHelper across all steps
+ * - Supports plugins at both pipeline-level and individual step-level
+ * - Provides type-safe chaining with compile-time validation
+ *
+ * @template Steps - Tuple type of the pipeline steps
+ * @template ErrorT - Union of all error types from the steps
+ * @template PipelineName - Literal type of the pipeline name
+ *
+ * @param steps - Array of processing steps (ProcessEngines or functions)
+ * @param options - Pipeline configuration
+ * @param options.name - Name for the pipeline (required, used for plugin targeting)
+ * @param options.id - Optional custom ID
+ *
+ * @returns A Pipeline instance with run, runCustom, addPlugin, and removePlugin methods
+ *
+ * @example
+ * ```typescript
+ * // Pipeline with ProcessEngine steps
+ * const pricePipeline = Pipeline.create(
+ *   [applyDiscount, addTax, roundPrice],
+ *   { name: "PricePipeline" }
+ * );
+ * await pricePipeline.run(100); // Processed price
+ *
+ * // Pipeline with simple functions
+ * const mathPipeline = Pipeline.create(
+ *   [
+ *     (n: number) => n * 2,
+ *     (n: number) => n + 10,
+ *   ],
+ *   { name: "MathPipeline" }
+ * );
+ * await mathPipeline.run(5); // 20
+ *
+ * // Adding plugins
+ * pipeline.addPlugin(loggerPlugin, "PricePipeline"); // Pipeline-level
+ * pipeline.addPlugin(validatorPlugin, "applyDiscount"); // Step-level
+ * ```
+ */
 function createPipeline<
   Steps extends [PipelineStep<any, any, any>, ...PipelineStep<any, any, any>[]],
   ErrorT extends Error = DefaultErrorT<Steps>,
@@ -179,6 +224,24 @@ function createPipeline<
   }
 }
 
+/**
+ * Factory for creating Pipeline instances.
+ *
+ * @example
+ * ```typescript
+ * import { Pipeline, ProcessEngine } from "@fifo/convee";
+ *
+ * const step1 = ProcessEngine.create((n: number) => n * 2, { name: "Double" });
+ * const step2 = ProcessEngine.create((n: number) => n + 10, { name: "AddTen" });
+ *
+ * const myPipeline = Pipeline.create(
+ *   [step1, step2],
+ *   { name: "MyPipeline" }
+ * );
+ *
+ * const result = await myPipeline.run(5); // 20
+ * ```
+ */
 export const Pipeline = {
   create: createPipeline,
 };

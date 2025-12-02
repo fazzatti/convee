@@ -68,17 +68,5 @@ Deno.test(
         );
       }
     );
-
-    // await t.step(
-    //   "When a user executes a sum with plugin(s)",
-    //   async (t: Deno.TestContext) => {
-    //     await t.step("And the plugin is an InvertSign", async () => {
-    //       sumProcessor.addPlugin(invertSignInputPlugin);
-
-    //       const result = await sumProcessor.run({ a: 1, b: 2 });
-    //       assertEquals(result, -3);
-    //     });
-    //   }
-    // );
   }
 );

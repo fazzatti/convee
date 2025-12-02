@@ -1,89 +1,48 @@
 // deno-lint-ignore-file no-explicit-any
-import { Modifier, Transformer, TransformerSync } from "../core/types.ts";
+import { Modifier, Transformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
-import { ModifierAsync, ModifierSync } from "../index.ts";
-import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";
 import { Unwrap } from "../utils/types/unwrap.ts";
 import {
   BeltPlugin,
   BeltPluginError,
   BeltPluginInput,
   BeltPluginOutput,
-  PluginBase,
 } from "./types.ts";
 
-type Empty = Record<PropertyKey, never>;
-type NotEmptyObject<T extends object> = keyof T extends never ? never : T;
-
-// type ComposeBeltPlugin<I, O, E extends Error, M> = PluginBase &
-//   (M extends { processInput: Modifier<I> }
-//     ? { processInput: Modifier<I> }
-//     : Empty) &
-//   (M extends { processOutput: Modifier<O> }
-//     ? { processOutput: Modifier<O> }
-//     : Empty) &
-//   (M extends { processError: Transformer<ConveeError<E>, ConveeError<E> | O> }
-//     ? { processError: Transformer<ConveeError<E>, ConveeError<E> | O> }
-//     : Empty);
-
-// type ExtractInput<M> = M extends { processInput: ModifierSync<infer I> }
-//   ? I
-//   : M extends { processInput: ModifierAsync<infer I> }
-//   ? I
-//   : never;
-// type ExtractOutput<M> = M extends { processOutput: ModifierSync<infer O> }
-//   ? O
-//   : M extends { processOutput: ModifierAsync<infer O> }
-//   ? O
-//   : never;
-
-// type ExtractError<M> = M extends {
-//   processError: TransformerSync<ConveeError<infer E>, any>;
-// }
-//   ? E
-//   : M extends {
-//       processError: Transformer<ConveeError<infer E>, any>;
-//     }
-//   ? E
-//   : Error;
-
-// function create<
-//   M extends NotEmptyObject<{
-//     processInput?: Modifier<any>;
-//     processOutput?: Modifier<any>;
-//     processError?: Transformer<ConveeError<any>, any>;
-//   }>
-// >(
-//   modifiers: M,
-//   options?: { name: string }
-// ): ComposeBeltPlugin<ExtractInput<M>, ExtractOutput<M>, ExtractError<M>, M> {
-//   return {
-//     name: options?.name || "BeltPlugin",
-//     ...modifiers,
-//   } as ComposeBeltPlugin<ExtractInput<M>, ExtractOutput<M>, ExtractError<M>, M>;
-// }
-
-// Overload for a pure input plugin:
-
-// Input only
+/**
+ * Creates an input-only plugin.
+ * @template I - The input type
+ */
 function create<I>(methods: {
   name: string;
   processInput: Modifier<I>;
 }): BeltPluginInput<Unwrap<I>>;
 
-// Output only
+/**
+ * Creates an output-only plugin.
+ * @template O - The output type
+ */
 function create<O>(methods: {
   name: string;
   processOutput: Modifier<O>;
 }): BeltPluginOutput<Unwrap<O>>;
 
-// Error only
+/**
+ * Creates an error-only plugin.
+ * @template O - The output type (for error recovery)
+ * @template E - The error type
+ */
 function create<O, E extends Error>(methods: {
   name: string;
   processError: Transformer<ConveeError<E>, ConveeError<E> | O>;
 }): BeltPluginError<Unwrap<O>, E>;
 
-// All three (or any combination)
+/**
+ * Creates a plugin with any combination of input, output, and error handlers.
+ * @template I - The input type
+ * @template O - The output type
+ * @template E - The error type
+ */
 function create<I, O, E extends Error>(methods: {
   name: string;
   processInput?: Modifier<I>;
@@ -91,9 +50,66 @@ function create<I, O, E extends Error>(methods: {
   processError?: Transformer<ConveeError<E>, ConveeError<E> | O>;
 }): BeltPlugin<Unwrap<I>, Unwrap<O>, E>;
 
-// Implementation
+/**
+ * Creates a plugin with the specified handlers.
+ *
+ * Plugins hook into the processing lifecycle at three points:
+ * - **processInput**: Runs before the main process, can modify input
+ * - **processOutput**: Runs after the main process, can modify output
+ * - **processError**: Handles errors, can recover or transform them
+ *
+ * @param methods - Object containing the plugin name and handler functions
+ * @returns A typed plugin object
+ *
+ * @example
+ * ```typescript
+ * // Input plugin
+ * const validate = Plugin.create({
+ *   name: "Validate",
+ *   processInput: (n: number, metadata) => {
+ *     if (n < 0) throw new Error("Must be positive");
+ *     return n;
+ *   },
+ * });
+ *
+ * // Output plugin
+ * const logger = Plugin.create({
+ *   name: "Logger",
+ *   processOutput: (result: number, metadata) => {
+ *     console.log(`Result: ${result}`);
+ *     return result;
+ *   },
+ * });
+ *
+ * // Combined plugin
+ * const audit = Plugin.create({
+ *   name: "Audit",
+ *   processInput: (n: number, metadata) => {
+ *     metadata.add("startTime", Date.now());
+ *     return n;
+ *   },
+ *   processOutput: (result: number, metadata) => {
+ *     metadata.add("endTime", Date.now());
+ *     return result;
+ *   },
+ * });
+ * ```
+ */
 function create(methods: any): any {
   return methods;
 }
 
+/**
+ * Factory for creating plugins.
+ *
+ * @example
+ * ```typescript
+ * import { Plugin } from "@fifo/convee";
+ *
+ * const myPlugin = Plugin.create({
+ *   name: "MyPlugin",
+ *   processInput: (input, metadata) => input,
+ * });
+ * ```
+ */
 export const Plugin = { create };

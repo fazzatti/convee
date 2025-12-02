@@ -1,11 +1,11 @@
 import { EngineMetadata } from "../core/types.ts";
-import { IConveeError, IConveeErrorPayload } from "./types.ts";
+import { IConveeError, IConveeErrorPayload, ParsedMetadata } from "./types.ts";
 
 export class ConveeError<ErrorT extends Error>
   extends Error
   implements IConveeError<ErrorT>
 {
-  public engineStack: EngineMetadata[];
+  public engineStack: ParsedMetadata[];
 
   constructor(args: IConveeErrorPayload<ErrorT>) {
     super(args.message);
@@ -17,7 +17,12 @@ export class ConveeError<ErrorT extends Error>
   }
 
   public enrichConveeStack(metadata: EngineMetadata): ConveeError<ErrorT> {
-    this.engineStack.push(metadata);
+    this.engineStack.push({
+      source: metadata.source,
+      type: metadata.type,
+      itemId: metadata.itemId,
+      dataKeys: [...Object.keys(metadata.processMeta || [])],
+    });
     return this;
   }
 }

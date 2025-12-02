@@ -17,3 +17,10 @@ export interface ConveeCapable {
   engineStack: EngineMetadata[];
   enrichConveeStack(metadata: EngineMetadata): this;
 }
+
+export type ParsedMetadata = {
+  source: string;
+  type: string;
+  itemId: string;
+  dataKeys?: string[];
+};

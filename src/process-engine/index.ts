@@ -67,18 +67,25 @@ function CreateProcess<
       input: I,
       options?: RunOptions<I, O, E>
     ): Promise<O> {
-      const { existingItemId, singleUsePlugins } = options || {};
-      const itemId = existingItemId || (crypto.randomUUID() as string);
+      const { existingItemId, singleUsePlugins, metadataHelper } =
+        options || {};
+      const itemId =
+        metadataHelper?.itemId ||
+        existingItemId ||
+        (crypto.randomUUID() as string);
 
-      const inputBeltMetadataHelper = new MetadataHelper(itemId);
-      const outputBeltMetadataHelper = new MetadataHelper(itemId);
-      const errorBeltMetadataHelper = new MetadataHelper(itemId);
-      const processMetadataHelper = new MetadataHelper(itemId);
+      const processMetadataHelper =
+        metadataHelper || new MetadataHelper(itemId);
+
+      // const inputBeltMetadataHelper = new MetadataHelper(itemId);
+      // const outputBeltMetadataHelper = new MetadataHelper(itemId);
+      // const errorBeltMetadataHelper = new MetadataHelper(itemId);
+      // const processMetadataHelper = new MetadataHelper(itemId);
 
       const preProcessedItem = await runInputBelt.call(
         this,
         input,
-        inputBeltMetadataHelper,
+        processMetadataHelper,
         singleUsePlugins || []
       );
       let processedItem: O;
@@ -95,7 +102,7 @@ function CreateProcess<
         const processedError = await runErrorBelt.call(
           this,
           error,
-          errorBeltMetadataHelper,
+          processMetadataHelper,
           singleUsePlugins || []
         );
 
@@ -104,9 +111,6 @@ function CreateProcess<
           processedError.enrichConveeStack(
             getMeta({
               itemId,
-              inputBeltMeta: inputBeltMetadataHelper.getAll(),
-              outputBeltMeta: outputBeltMetadataHelper.getAll(),
-              errortBeltMeta: errorBeltMetadataHelper.getAll(),
               processMeta: processMetadataHelper.getAll(),
             })
           );
@@ -119,7 +123,7 @@ function CreateProcess<
       const postProcessedItem = await runOutputBelt.call(
         this,
         processedItem,
-        outputBeltMetadataHelper,
+        processMetadataHelper,
         singleUsePlugins || []
       );
 
@@ -214,18 +218,12 @@ function CreateProcess<
 
   function getMeta(args: {
     itemId: string;
-    inputBeltMeta?: MetadataCollected;
-    outputBeltMeta?: MetadataCollected;
-    errortBeltMeta?: MetadataCollected;
     processMeta?: MetadataCollected;
   }): ProcessEngineMetadata {
     return {
       itemId: args.itemId,
       source: processId,
       type: processType,
-      inputBeltMeta: args.inputBeltMeta,
-      outputBeltMeta: args.outputBeltMeta,
-      errortBeltMeta: args.errortBeltMeta,
       processMeta: args.processMeta,
     };
   }

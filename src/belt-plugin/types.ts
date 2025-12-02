@@ -1,4 +1,4 @@
-import { Modifier, Transformer } from "../core/types.ts";
+import { PluginModifier, PluginTransformer } from "../core/types.ts";
 import { ConveeError } from "../error/index.ts";
 import { RequireAtLeastOne } from "../utils/types/require-at-least-one.ts";
 
@@ -9,17 +9,20 @@ export type PluginBase = {
 
 // Pre-process plugin interface
 export type BeltPluginInput<Input> = PluginBase & {
-  processInput: Modifier<Input>;
+  processInput: PluginModifier<Input>;
 };
 
 // Post-process plugin interface
 export type BeltPluginOutput<Output> = PluginBase & {
-  processOutput: Modifier<Output>;
+  processOutput: PluginModifier<Output>;
 };
 
 // Error-process plugin interface
 export type BeltPluginError<Output, ErrorT extends Error> = PluginBase & {
-  processError: Transformer<ConveeError<ErrorT>, ConveeError<ErrorT> | Output>;
+  processError: PluginTransformer<
+    ConveeError<ErrorT>,
+    ConveeError<ErrorT> | Output
+  >;
 };
 
 // Combined interface that includes all plugin types
@@ -36,9 +39,9 @@ export type BeltPlugin<Input, Output, ErrorT extends Error> = (PluginBase &
     | BeltPluginOutput<Output>
     | BeltPluginError<Output, ErrorT>
     | RequireAtLeastOne<{
-        processInput?: Modifier<Input>;
-        processOutput?: Modifier<Output>;
-        processError?: Transformer<
+        processInput?: PluginModifier<Input>;
+        processOutput?: PluginModifier<Output>;
+        processError?: PluginTransformer<
           ConveeError<ErrorT>,
           ConveeError<ErrorT> | Output
         >;

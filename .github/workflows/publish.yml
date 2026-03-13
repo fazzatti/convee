@@ -1,0 +1,83 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  detect-version:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      should_publish: ${{ steps.version.outputs.should_publish }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect publishable version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' deno.json)
+          TAG="v${VERSION}"
+
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Version tag already exists: $TAG"
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version detected: $TAG"
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: detect-version
+    if: needs.detect-version.outputs.should_publish == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run linter
+        run: deno lint
+
+      - name: Run type check
+        run: deno check src/index.ts
+
+      - name: Run tests
+        run: deno task test
+
+      - name: Publish package
+        run: deno publish --allow-slow-types
+
+      - name: Create tag and release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ needs.detect-version.outputs.tag }}
+          name: ${{ needs.detect-version.outputs.tag }}
+          draft: false
+          prerelease: false
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}

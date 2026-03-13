@@ -1,49 +1,77 @@
-import { EngineMetadata } from "../core/types.ts";
+export type ConveeErrorDomain =
+  | "core"
+  | "context"
+  | "pipe"
+  | "plugin"
+  | "step"
+  | "runtime"
+  | (string & {});
 
-/**
- * Interface for ConveeError that extends the standard Error.
- * @template ErrorT - The original error type
- */
-export interface IConveeError<ErrorT extends Error> extends Error {
-  /** Stack of metadata from processes this error has passed through */
-  engineStack: EngineMetadata[];
-  /** Method to add process metadata to the error stack */
-  enrichConveeStack: (metadata: EngineMetadata) => IConveeError<ErrorT>;
+export type BaseMeta = Record<string, unknown>;
+
+export interface Diagnostic {
+  rootCause: string;
+  suggestion: string;
+  materials?: string[];
 }
 
-/**
- * Payload for creating a ConveeError.
- * @template T - The original error type
- */
-export interface IConveeErrorPayload<T> {
-  /** The error message */
+export type ConveeTraceFrameKind = "pipe" | "step" | "plugin";
+export type ConveeTracePhase = "input" | "run" | "output" | "error";
+
+export interface ConveeTraceFrame {
+  kind: ConveeTraceFrameKind;
+  id: string;
+  phase?: ConveeTracePhase;
+  target?: string;
+}
+
+export interface ConveeErrorTrace {
+  runId?: string;
+  rootRunId?: string;
+  frames: readonly ConveeTraceFrame[];
+}
+
+export interface ConveeErrorShape<
+  Code extends string = string,
+  Meta extends BaseMeta = BaseMeta,
+  Domain extends ConveeErrorDomain = ConveeErrorDomain,
+> {
+  domain: Domain;
+  code: Code;
   message: string;
-  /** The original error being wrapped */
-  error: T;
-}
-
-/**
- * Interface for making any error Convee-capable.
- * Used to wrap external errors with Convee tracking capabilities.
- */
-export interface ConveeCapable {
-  /** Stack of metadata from processes this error has passed through */
-  engineStack: EngineMetadata[];
-  /** Method to add process metadata to the error stack */
-  enrichConveeStack(metadata: EngineMetadata): this;
-}
-
-/**
- * Parsed metadata stored in the error's engine stack.
- * A simplified view of EngineMetadata for error tracking.
- */
-export type ParsedMetadata = {
-  /** The source identifier (process ID) */
   source: string;
-  /** The type of process (PROCESS_ENGINE or PIPELINE) */
-  type: string;
-  /** Unique identifier for the item being processed */
-  itemId: string;
-  /** Keys of metadata that were collected at time of error */
-  dataKeys?: string[];
+  details?: string;
+  diagnostic?: Diagnostic;
+  meta?: Meta;
+  cause?: unknown;
+  trace?: ConveeErrorTrace;
+}
+
+export interface ConveeErrorBuild<Meta extends BaseMeta = BaseMeta> {
+  meta: Meta;
+  message?: string;
+  details?: string;
+  diagnostic?: Diagnostic;
+  cause?: unknown;
+  trace?: ConveeErrorTrace;
+}
+
+export type ConveeErrorContext<
+  Code extends string = string,
+  Meta extends BaseMeta = BaseMeta,
+  Domain extends ConveeErrorDomain = ConveeErrorDomain,
+> = Partial<Omit<ConveeErrorShape<Code, Meta, Domain>, "message">> & {
+  message?: string;
 };
+
+export interface SerializedErrorLike {
+  name?: string;
+  message?: string;
+  code?: string;
+  source?: string;
+  details?: string;
+  diagnostic?: Diagnostic;
+  meta?: unknown;
+  trace?: ConveeErrorTrace;
+  cause?: unknown;
+}

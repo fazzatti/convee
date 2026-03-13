@@ -6,6 +6,7 @@ import type {
 import type { Args, MaybePromise, NoInfer } from "@/core/types.ts";
 import type { AnyPlugin, AnySyncPlugin, Plugin } from "@/plugin/types.ts";
 
+/** Raw argument tuple accepted by a step. */
 export type StepArgs = Args;
 export type NonPromise<T> = T extends Promise<unknown> ? never : T;
 
@@ -23,6 +24,7 @@ type NormalizePublicStepArgs<I> = [I] extends [never]
       ? I
       : [I];
 
+/** Function signature accepted by `step(...)`. */
 export type StepFn<
   I = StepArgs,
   O = unknown,
@@ -111,6 +113,7 @@ type FluentStepPluginContract<
     >
 );
 
+/** Plugin contract accepted by async steps. */
 export type StepPlugin<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
@@ -194,10 +197,12 @@ export type SyncStepRunOptions<
   context?: RunContextOptions<ExtractStepContext<Fn>>;
 };
 
+/** Stable identity fields exposed by step runtimes. */
 export type StepIdentity<Id extends string = string> = {
   readonly id: Id;
 };
 
+/** Public runtime surface shared by every async step instance. */
 export interface StepInstance<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
@@ -252,6 +257,7 @@ export type SyncStepRuntime<
   StepIdentity<Id> &
   SyncStepInstance<Fn, E>;
 
+/** Callable step type returned by `step(...)`. */
 export type Step<
   I = StepArgs,
   O = unknown,
@@ -271,6 +277,7 @@ export type SyncStep<
   Shared extends ContextValues = ContextValues,
 > = SyncStepRuntime<SyncStepFn<I, O, Shared>, E, Id>;
 
+/** Derives the public step type from an existing function signature. */
 export type StepFromFunction<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
@@ -283,6 +290,7 @@ export type StepFromFunction<
   ExtractStepContext<Fn>
 >;
 
+/** Derives the public sync step type from an existing function signature. */
 export type SyncStepFromFunction<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,

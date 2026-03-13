@@ -143,12 +143,17 @@ describe("Pipe", () => {
       );
     });
 
-    it("rejects plugins targeted to inner steps that do not accept plugins", () => {
+    it("applies plugins targeted to compatible inner steps without host helpers", async () => {
+      const baseStep = step((value: number) => value + 1, {
+        id: "plain-step",
+      } as const);
       const plainStep = {
         id: "plain-step",
         isSync: false,
-        runWith: (_options: object, value: number) =>
-          Promise.resolve(value + 1),
+        runWith: (
+          options: Parameters<typeof baseStep.runWith>[0],
+          value: number,
+        ) => baseStep.runWith(options, value),
       } as const satisfies AnyPipeStep;
       const numberPipe = pipe([plainStep], { id: "number-pipe" } as const);
 
@@ -162,13 +167,35 @@ describe("Pipe", () => {
         } as const,
       );
 
-      assertThrows(
-        () => numberPipe.use(innerPlugin),
-        ConveeError,
-        'Plugin "plain-step-plugin" targets "plain-step", but that inner step does not accept plugins.',
+      numberPipe.use(innerPlugin);
+      assertEquals(await numberPipe(1), 12);
+      assertEquals(await baseStep(1), 2);
+      numberPipe.remove("plain-step-plugin");
+      assertEquals(await numberPipe(1), 2);
+    });
+
+    it("keeps targeted inner-step plugins scoped to the owning pipe", async () => {
+      const sharedStep = step((value: number) => value + 1, {
+        id: "shared-step",
+      } as const);
+      const firstPipe = pipe([sharedStep], { id: "first-pipe" } as const);
+      const secondPipe = pipe([sharedStep], { id: "second-pipe" } as const);
+
+      firstPipe.use(
+        plugin.for<[value: number], number>()(
+          {
+            output: (output: number) => output + 10,
+          },
+          {
+            id: "shared-step-plugin",
+            target: "shared-step",
+          } as const,
+        ) as never,
       );
 
-      numberPipe.remove("plain-step-plugin");
+      assertEquals(await firstPipe(1), 12);
+      assertEquals(await secondPipe(1), 2);
+      assertEquals(await sharedStep(1), 2);
     });
 
     it("rejects mutation of proxied pipeline properties", () => {
@@ -984,11 +1011,17 @@ describe("Pipe", () => {
         assertEquals(syncPipe(2), 6);
       });
 
-      it("rejects sync plugins targeted to inner steps that do not accept plugins", () => {
+      it("applies sync plugins targeted to compatible inner steps without host helpers", () => {
+        const baseStep = step.sync((value: number) => value + 1, {
+          id: "plain-sync-step",
+        } as const);
         const plainStep = {
           id: "plain-sync-step",
           isSync: true,
-          runWith: (_options: object, value: number) => value + 1,
+          runWith: (
+            options: Parameters<typeof baseStep.runWith>[0],
+            value: number,
+          ) => baseStep.runWith(options, value),
         } as const satisfies AnySyncPipeStep;
         const syncPipe = pipe.sync([plainStep], {
           id: "sync-number-pipe",
@@ -1004,13 +1037,39 @@ describe("Pipe", () => {
           } as const,
         );
 
-        assertThrows(
-          () => syncPipe.use(innerPlugin),
-          ConveeError,
-          'Plugin "plain-sync-step-plugin" targets "plain-sync-step", but that inner step does not accept plugins.',
+        syncPipe.use(innerPlugin);
+        assertEquals(syncPipe(1), 12);
+        assertEquals(baseStep(1), 2);
+        syncPipe.remove("plain-sync-step-plugin");
+        assertEquals(syncPipe(1), 2);
+      });
+
+      it("keeps targeted sync inner-step plugins scoped to the owning pipe", () => {
+        const sharedStep = step.sync((value: number) => value + 1, {
+          id: "shared-sync-step",
+        } as const);
+        const firstPipe = pipe.sync([sharedStep], {
+          id: "first-sync-pipe",
+        } as const);
+        const secondPipe = pipe.sync([sharedStep], {
+          id: "second-sync-pipe",
+        } as const);
+
+        firstPipe.use(
+          plugin.sync.for<[value: number], number>()(
+            {
+              output: (output: number) => output + 10,
+            },
+            {
+              id: "shared-sync-step-plugin",
+              target: "shared-sync-step",
+            } as const,
+          ) as never,
         );
 
-        syncPipe.remove("plain-sync-step-plugin");
+        assertEquals(firstPipe(1), 12);
+        assertEquals(secondPipe(1), 2);
+        assertEquals(sharedStep(1), 2);
       });
 
       it("rejects sync plugins with unknown targets", () => {

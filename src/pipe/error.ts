@@ -11,10 +11,12 @@ const definePipeError = createErrorFactory({
   source: "convee/pipe",
 });
 
+/** Metadata attached to pipe errors created from non-`Error` throws. */
 export type PipeUnknownThrownMeta = {
   pipeId: string;
 };
 
+/** Metadata attached to invalid pipe input plugin results. */
 export type PipeInvalidInputPluginResultMeta = {
   pipeId: string;
   pluginId: string;
@@ -22,6 +24,7 @@ export type PipeInvalidInputPluginResultMeta = {
   received: unknown;
 };
 
+/** Metadata attached to unknown targeted plugin errors. */
 export type PipeUnknownPluginTargetMeta = {
   pipeId: string;
   pluginId: string;
@@ -29,18 +32,13 @@ export type PipeUnknownPluginTargetMeta = {
   allowedTargets: readonly string[];
 };
 
-export type PipeUnpluggableTargetMeta = {
-  pipeId: string;
-  stepId: string;
-  pluginId: string;
-  target: string;
-};
-
+/** Metadata attached to non-sync-step validation errors. */
 export type PipeNonSyncStepMeta = {
   pipeId: string;
   stepIds: readonly string[];
 };
 
+/** Built-in pipe error catalog. */
 export const PIP_ERRORS = {
   UNKNOWN_THROWN: definePipeError({
     code: "PIP_000",
@@ -106,28 +104,6 @@ export const PIP_ERRORS = {
       };
     },
   }),
-  UNPLUGGABLE_TARGET: definePipeError({
-    code: "PIP_003",
-    message: "Pipe inner step does not accept plugins",
-    build(args: {
-      pipeId: string;
-      stepId: string;
-      pluginId: string;
-      target: string;
-      trace?: ConveeErrorTrace;
-    }) {
-      return {
-        trace: args.trace,
-        message: `Plugin "${args.pluginId}" targets "${args.target}", but that inner step does not accept plugins.`,
-        meta: {
-          pipeId: args.pipeId,
-          stepId: args.stepId,
-          pluginId: args.pluginId,
-          target: args.target,
-        } satisfies PipeUnpluggableTargetMeta,
-      };
-    },
-  }),
   NON_SYNC_STEP: definePipeError({
     code: "PIP_004",
     message: "Sync pipelines can only contain sync steps.",
@@ -147,13 +123,17 @@ export const PIP_ERRORS = {
   }),
 } as const;
 
+/** Union of every built-in pipe error variant. */
 export type PipeError = InferConveeErrors<typeof PIP_ERRORS>;
+/** Stable code union for built-in pipe errors. */
 export type PipeErrorCode = PipeError["code"];
+/** Extracts a specific pipe error variant by its code. */
 export type PipeErrorOf<Code extends PipeErrorCode> = Extract<
   PipeError,
   { code: Code }
 >;
 
+/** Returns `true` when the provided error belongs to the pipe domain. */
 export function isPipeError(error: unknown): error is PipeError {
   return (
     ConveeError.is(error) &&

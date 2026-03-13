@@ -11,11 +11,13 @@ const defineStepError = createErrorFactory({
   source: "convee/step",
 });
 
+/** Metadata attached to step errors created from non-`Error` throws. */
 export type StepUnknownThrownMeta = {
   stepId: string;
   pluginId?: string;
 };
 
+/** Metadata attached to invalid step input plugin results. */
 export type StepInvalidInputPluginResultMeta = {
   stepId: string;
   pluginId: string;
@@ -23,6 +25,7 @@ export type StepInvalidInputPluginResultMeta = {
   received: unknown;
 };
 
+/** Built-in step error catalog. */
 export const STP_ERRORS = {
   UNKNOWN_THROWN: defineStepError({
     code: "STP_000",
@@ -72,13 +75,17 @@ export const STP_ERRORS = {
   }),
 } as const;
 
+/** Union of every built-in step error variant. */
 export type StepError = InferConveeErrors<typeof STP_ERRORS>;
+/** Stable code union for built-in step errors. */
 export type StepErrorCode = StepError["code"];
+/** Extracts a specific step error variant by its code. */
 export type StepErrorOf<Code extends StepErrorCode> = Extract<
   StepError,
   { code: Code }
 >;
 
+/** Returns `true` when the provided error belongs to the step domain. */
 export function isStepError(error: unknown): error is StepError {
   return (
     ConveeError.is(error) &&

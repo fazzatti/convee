@@ -1,6 +1,7 @@
 import type { ContextValues, PluginThis } from "@/context/types.ts";
 import type { Args, MaybePromise, RequireAtLeastOne } from "@/core/types.ts";
 
+/** Raw argument tuple handled by plugin input hooks. */
 export type PluginArgs = Args;
 
 export type CompactPluginArgs<I extends PluginArgs> = I extends []
@@ -30,6 +31,7 @@ export type PluginInputResult<I extends PluginArgs> = I extends []
     ? Value | I
     : I;
 
+/** Async input hook signature used by plugins. */
 export type PluginInputHook<I extends PluginArgs> = (
   ...args: I
 ) => MaybePromise<PluginInputResult<I>>;
@@ -41,6 +43,7 @@ export type SyncPluginInputHook<I extends PluginArgs> = (
   ...args: I
 ) => PluginInputResult<I>;
 
+/** Async output hook signature used by plugins. */
 export type PluginOutputHook<I extends PluginArgs, O> = (
   output: O,
 ) => MaybePromise<O>;
@@ -50,6 +53,7 @@ export type PluginOutputHook<I extends PluginArgs, O> = (
  */
 export type SyncPluginOutputHook<I extends PluginArgs, O> = (output: O) => O;
 
+/** Async error hook signature used by plugins. */
 export type PluginErrorHook<
   I extends PluginArgs,
   O,
@@ -65,6 +69,7 @@ export type SyncPluginErrorHook<
   E extends Error = Error,
 > = (error: E, input: I) => O | E;
 
+/** Shape of the async hooks that can be implemented by a plugin. */
 export type PluginHooks<I extends PluginArgs, O, E extends Error = Error> = {
   input?: PluginInputHook<I>;
   output?: PluginOutputHook<I, O>;
@@ -84,6 +89,7 @@ export type SyncPluginHooks<
   error?: SyncPluginErrorHook<I, O, E>;
 };
 
+/** Async plugin definition object consumed by the plugin factories. */
 export type PluginDefinition<
   I extends PluginArgs,
   O,
@@ -101,6 +107,7 @@ export type SyncPluginDefinition<
   Shared extends ContextValues = ContextValues,
 > = RequireAtLeastOne<SyncPluginHooks<I, O, E>> & ThisType<PluginThis<Shared>>;
 
+/** Public hook names that a plugin can implement. */
 export type PluginCapability = "input" | "output" | "error";
 
 type HasDefinitionHooks<Definition extends object> = [
@@ -274,6 +281,7 @@ type PublicPluginFluentMembers<
             }
           : Record<never, never>);
 
+/** Public runtime contract returned by async plugin builders. */
 export type Plugin<
   I = PluginArgs,
   O = unknown,
@@ -286,6 +294,7 @@ export type Plugin<
   PublicPluginRuntimeMembers<I, O, E, Definition> &
   PublicPluginFluentMembers<I, O, E, Shared, Target, Definition>;
 
+/** Structural async plugin type accepted by steps and pipes. */
 export type AnyPlugin<
   I extends PluginArgs,
   O,
@@ -349,6 +358,7 @@ export type AnySyncPlugin<
       }
   );
 
+/** Async plugin alias that guarantees an input hook. */
 export type InputPlugin<
   I extends PluginArgs,
   O,
@@ -359,6 +369,7 @@ export type InputPlugin<
   input: PluginInputHook<I>;
 };
 
+/** Async plugin alias that guarantees an output hook. */
 export type OutputPlugin<
   I extends PluginArgs,
   O,
@@ -369,6 +380,7 @@ export type OutputPlugin<
   output: PluginOutputHook<I, O>;
 };
 
+/** Async plugin alias that guarantees an error hook. */
 export type ErrorPlugin<
   I extends PluginArgs,
   O,
@@ -379,6 +391,7 @@ export type ErrorPlugin<
   error: PluginErrorHook<I, O, E>;
 };
 
+/** Public runtime contract returned by synchronous plugin builders. */
 export type SyncPlugin<
   I = PluginArgs,
   O = unknown,
@@ -401,6 +414,7 @@ export type SyncPlugin<
     ? { error: SyncPluginErrorHook<NormalizePublicPluginArgs<I>, O, E> }
     : Record<never, never>);
 
+/** Sync plugin alias that guarantees an input hook. */
 export type SyncInputPlugin<
   I extends PluginArgs,
   O,
@@ -411,6 +425,7 @@ export type SyncInputPlugin<
   input: SyncPluginInputHook<I>;
 };
 
+/** Sync plugin alias that guarantees an output hook. */
 export type SyncOutputPlugin<
   I extends PluginArgs,
   O,
@@ -421,6 +436,7 @@ export type SyncOutputPlugin<
   output: SyncPluginOutputHook<I, O>;
 };
 
+/** Sync plugin alias that guarantees an error hook. */
 export type SyncErrorPlugin<
   I extends PluginArgs,
   O,
@@ -553,37 +569,37 @@ type RuntimeSyncDefinitionFromRaw<
     : Record<never, never>) &
   ThisType<PluginThis<Shared>>;
 
-type HookArgs<Hook extends (...args: any[]) => any> = Parameters<Hook>;
+type HookArgs<Hook extends (...args: never[]) => unknown> = Parameters<Hook>;
 
-type OutputHookOutput<Hook extends (...args: any[]) => any> =
+type OutputHookOutput<Hook extends (...args: never[]) => unknown> =
   HookArgs<Hook> extends [infer O, ...unknown[]]
     ? O
     : Awaited<ReturnType<Hook>>;
 
-type ErrorHookInputArgs<Hook extends (...args: any[]) => any> =
+type ErrorHookInputArgs<Hook extends (...args: never[]) => unknown> =
   HookArgs<Hook> extends [unknown, infer I]
     ? I extends PluginArgs
       ? I
       : PluginArgs
     : PluginArgs;
 
-type ErrorHookError<Hook extends (...args: any[]) => any> =
+type ErrorHookError<Hook extends (...args: never[]) => unknown> =
   HookArgs<Hook> extends [infer E, ...unknown[]]
     ? E extends Error
       ? E
       : Error
     : Error;
 
-type ErrorHookRecoveredOutput<Hook extends (...args: any[]) => any> =
+type ErrorHookRecoveredOutput<Hook extends (...args: never[]) => unknown> =
   Exclude<Awaited<ReturnType<Hook>>, ErrorHookError<Hook>> extends never
     ? unknown
     : Exclude<Awaited<ReturnType<Hook>>, ErrorHookError<Hook>>;
 
 type RawPluginDefinition<Shared extends ContextValues = ContextValues> =
   RequireAtLeastOne<{
-    input?: (...args: any[]) => any;
-    output?: (...args: any[]) => any;
-    error?: (...args: any[]) => any;
+    input?: (...args: never[]) => unknown;
+    output?: (...args: never[]) => unknown;
+    error?: (...args: never[]) => unknown;
   }> &
     ThisType<PluginThis<Shared>>;
 
@@ -711,6 +727,7 @@ type CompactBuilderArgs<I extends BuilderArgsState> = [I] extends [
   ? never
   : CompactPluginArgs<NormalizeBuilderArgs<I>>;
 
+/** Fluent plugin builder state returned by `plugin()` before hooks are added. */
 export type PluginBuilder<
   I = never,
   O = never,
@@ -735,11 +752,13 @@ export type FluentPluginStart<
   Target extends string | undefined = undefined,
 > = Plugin<never, never, never, Record<never, never>, Shared, Target>;
 
+/** Factory options shared by the fluent and typed plugin builders. */
 export type PluginFactoryOptions = {
   id?: string;
   target?: string;
 };
 
+/** Stable identity fields exposed by plugin runtimes. */
 export type PluginIdentity<
   Id extends string = string,
   Target extends string | undefined = undefined,

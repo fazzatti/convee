@@ -3,7 +3,6 @@ import { describe, it } from "@std/testing/bdd";
 import { ConveeError, isConveeErrorOf } from "@/error/index.ts";
 import { pipe } from "@/pipe/index.ts";
 import { PIP_ERRORS, isPipeError, type PipeErrorOf } from "@/pipe/error.ts";
-import type { AnyPipeStep } from "@/pipe/types.ts";
 import { plugin } from "@/plugin/index.ts";
 import { step } from "@/step/index.ts";
 
@@ -23,21 +22,6 @@ describe("PipeError", () => {
       assertEquals(
         error.message,
         'Plugin "logger" targets "missing-step", but only "main-pipe" or one of [main-pipe, add-step] can be used.',
-      );
-    });
-
-    it("creates unpluggable target errors", () => {
-      const error = PIP_ERRORS.UNPLUGGABLE_TARGET({
-        pipeId: "number-pipe",
-        stepId: "plain-step",
-        pluginId: "inner-plugin",
-        target: "plain-step",
-      });
-
-      assertEquals(error.code, PIP_ERRORS.UNPLUGGABLE_TARGET.code);
-      assertEquals(
-        error.message,
-        'Plugin "inner-plugin" targets "plain-step", but that inner step does not accept plugins.',
       );
     });
 
@@ -105,32 +89,6 @@ describe("PipeError", () => {
           ),
         ConveeError,
         'Plugin "unknown-target-plugin" targets "missing-step"',
-      );
-    });
-
-    it("throws PipeError for unpluggable async inner targets", () => {
-      const plainStep = {
-        id: "plain-step",
-        isSync: false,
-        runWith: (_options: object, value: number) =>
-          Promise.resolve(value + 1),
-      } as const satisfies AnyPipeStep;
-      const numberPipe = pipe([plainStep], { id: "number-pipe" } as const);
-
-      const innerPlugin = plugin.for<[value: number], number>()(
-        {
-          output: (output: number) => output + 10,
-        },
-        {
-          id: "plain-step-plugin",
-          target: "plain-step",
-        } as const,
-      );
-
-      assertThrows(
-        () => numberPipe.use(innerPlugin),
-        ConveeError,
-        'Plugin "plain-step-plugin" targets "plain-step", but that inner step does not accept plugins.',
       );
     });
 

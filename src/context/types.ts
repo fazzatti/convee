@@ -1,6 +1,10 @@
+/** Shared values carried across steps and plugins during a run. */
 export type ContextValues = Record<string, unknown>;
+
+/** Controls how much step state is captured in the run context snapshots. */
 export type RunContextCapture = "none" | "outputs" | "all";
 
+/** Mutable key-value store exposed on the run, step, and plugin context APIs. */
 export interface ContextStore<Shape extends ContextValues = ContextValues> {
   get<K extends keyof Shape>(key: K): Shape[K] | undefined;
   set<K extends keyof Shape>(key: K, value: Shape[K]): void;
@@ -10,6 +14,7 @@ export interface ContextStore<Shape extends ContextValues = ContextValues> {
   entries(): ReadonlyMap<string, unknown>;
 }
 
+/** Captured snapshot for a step that ran within the current execution context. */
 export interface StepSnapshot {
   readonly id: string;
   readonly state: ContextStore;
@@ -18,6 +23,7 @@ export interface StepSnapshot {
   readonly error?: Error;
 }
 
+/** Captured snapshot for a plugin that ran within the current execution context. */
 export interface PluginSnapshot {
   readonly id: string;
   readonly target?: string;
@@ -37,6 +43,7 @@ export interface PluginContextApi {
   all(): readonly PluginSnapshot[];
 }
 
+/** Shared execution context exposed to steps and plugins during a run. */
 export interface RunContext<Shared extends ContextValues = ContextValues> {
   readonly runId: string;
   readonly rootRunId: string;
@@ -46,6 +53,7 @@ export interface RunContext<Shared extends ContextValues = ContextValues> {
   readonly plugin: PluginContextApi;
 }
 
+/** Options used to create a new run context or to reuse an existing parent run. */
 export interface RunContextOptions<
   Shared extends ContextValues = ContextValues,
 > {
@@ -54,10 +62,12 @@ export interface RunContextOptions<
   capture?: RunContextCapture;
 }
 
+/** `this` context available inside step functions. */
 export interface StepThis<Shared extends ContextValues = ContextValues> {
   context(): RunContext<Shared>;
 }
 
+/** `this` context available inside plugin hooks. */
 export interface PluginThis<Shared extends ContextValues = ContextValues> {
   context(): RunContext<Shared>;
 }

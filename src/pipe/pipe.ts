@@ -90,20 +90,6 @@ const getActivePlugins = <Plugin extends { targets(stepId: string): boolean }>(
     plugin.targets(pipelineId),
   );
 
-type PluginHost = {
-  use(plugin: unknown): unknown;
-  remove(pluginId: string): unknown;
-};
-
-const isPluginHost = (value: unknown): value is PluginHost => {
-  return (
-    value !== null &&
-    (typeof value === "object" || typeof value === "function") &&
-    typeof Reflect.get(value, "use") === "function" &&
-    typeof Reflect.get(value, "remove") === "function"
-  );
-};
-
 const createUnknownPluginTargetError = (
   pluginId: string,
   target: string,
@@ -115,18 +101,6 @@ const createUnknownPluginTargetError = (
     pluginId,
     target,
     allowedTargets: [pipelineId, ...steps.map((step) => step.id)],
-  });
-
-const createUnpluggableStepError = (
-  pipelineId: string,
-  pluginId: string,
-  target: string,
-): ConveePipeError =>
-  PIP_ERRORS.UNPLUGGABLE_TARGET({
-    pipeId: pipelineId,
-    stepId: target,
-    pluginId,
-    target,
   });
 
 const resolvePluginTarget = <Step extends { id: string }>(
@@ -150,26 +124,6 @@ const resolvePluginTarget = <Step extends { id: string }>(
   return { kind: "step", step };
 };
 
-const addPluginToStep = (
-  step: unknown,
-  plugin: unknown,
-  pipelineId: string,
-  pluginId: string,
-  target: string,
-): void => {
-  if (!isPluginHost(step)) {
-    throw createUnpluggableStepError(pipelineId, pluginId, target);
-  }
-
-  Reflect.apply(step.use, step, [plugin]);
-};
-
-const removePluginFromStep = (step: unknown, pluginId: string): void => {
-  if (!isPluginHost(step)) return;
-
-  Reflect.apply(step.remove, step, [pluginId]);
-};
-
 export class PipeEngine<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -180,6 +134,10 @@ export class PipeEngine<
   private readonly _steps: Steps;
   private _plugins: PipeAttachablePlugin<Steps, E, Shared, Id>[];
   private _pipelinePlugins: PipePlugin<Steps, E, Shared>[];
+  private readonly _stepPlugins = new Map<
+    string,
+    PipeAttachablePlugin<Steps, E, Shared, Id>[]
+  >();
 
   private constructor(
     steps: Steps,
@@ -248,8 +206,15 @@ export class PipeEngine<
       (plugin) => plugin.id !== pluginId,
     );
 
-    for (const step of this._steps) {
-      removePluginFromStep(step, pluginId);
+    for (const [stepId, plugins] of this._stepPlugins.entries()) {
+      const nextPlugins = plugins.filter((plugin) => plugin.id !== pluginId);
+
+      if (nextPlugins.length === 0) {
+        this._stepPlugins.delete(stepId);
+        continue;
+      }
+
+      this._stepPlugins.set(stepId, nextPlugins);
     }
 
     return this;
@@ -327,13 +292,16 @@ export class PipeEngine<
     let currentResult: unknown;
 
     for (const step of this._steps) {
-      const executionPlugins = stepPlugins.get(step.id);
+      const persistentPlugins = this._stepPlugins.get(step.id) ?? [];
+      const executionPlugins = stepPlugins.get(step.id) ?? [];
+      const plugins = [...persistentPlugins, ...executionPlugins];
+
       currentResult = await Reflect.apply(step.runWith, step, [
         {
           context: {
             parent: context,
           },
-          ...(executionPlugins ? { plugins: executionPlugins } : {}),
+          ...(plugins.length > 0 ? { plugins } : {}),
         },
         ...currentArgs,
       ]);
@@ -476,13 +444,8 @@ export class PipeEngine<
       return;
     }
 
-    addPluginToStep(
-      resolution.step,
-      plugin,
-      this._id,
-      plugin.id,
-      resolution.step.id,
-    );
+    const currentPlugins = this._stepPlugins.get(resolution.step.id) ?? [];
+    this._stepPlugins.set(resolution.step.id, [...currentPlugins, plugin]);
   }
 
   private splitExecutionPlugins(
@@ -532,6 +495,10 @@ export class SyncPipeEngine<
   private readonly _steps: Steps;
   private _plugins: SyncPipeAttachablePlugin<Steps, E, Shared, Id>[];
   private _pipelinePlugins: SyncPipePlugin<Steps, E, Shared>[];
+  private readonly _stepPlugins = new Map<
+    string,
+    SyncPipeAttachablePlugin<Steps, E, Shared, Id>[]
+  >();
 
   private constructor(
     steps: Steps,
@@ -608,8 +575,15 @@ export class SyncPipeEngine<
       (plugin) => plugin.id !== pluginId,
     );
 
-    for (const step of this._steps) {
-      removePluginFromStep(step, pluginId);
+    for (const [stepId, plugins] of this._stepPlugins.entries()) {
+      const nextPlugins = plugins.filter((plugin) => plugin.id !== pluginId);
+
+      if (nextPlugins.length === 0) {
+        this._stepPlugins.delete(stepId);
+        continue;
+      }
+
+      this._stepPlugins.set(stepId, nextPlugins);
     }
 
     return this;
@@ -685,13 +659,16 @@ export class SyncPipeEngine<
     let currentResult: unknown;
 
     for (const step of this._steps) {
-      const executionPlugins = stepPlugins.get(step.id);
+      const persistentPlugins = this._stepPlugins.get(step.id) ?? [];
+      const executionPlugins = stepPlugins.get(step.id) ?? [];
+      const plugins = [...persistentPlugins, ...executionPlugins];
+
       currentResult = Reflect.apply(step.runWith, step, [
         {
           context: {
             parent: context,
           },
-          ...(executionPlugins ? { plugins: executionPlugins } : {}),
+          ...(plugins.length > 0 ? { plugins } : {}),
         },
         ...currentArgs,
       ]);
@@ -833,13 +810,8 @@ export class SyncPipeEngine<
       return;
     }
 
-    addPluginToStep(
-      resolution.step,
-      plugin,
-      this._id,
-      plugin.id,
-      resolution.step.id,
-    );
+    const currentPlugins = this._stepPlugins.get(resolution.step.id) ?? [];
+    this._stepPlugins.set(resolution.step.id, [...currentPlugins, plugin]);
   }
 
   private splitExecutionPlugins(

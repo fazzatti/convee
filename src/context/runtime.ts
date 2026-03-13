@@ -365,4 +365,10 @@ export class RunContextController<
   }
 }
 
+/**
+ * Creates a run context that can be shared across steps, pipes, and plugins.
+ *
+ * Pass `parent` to reuse an existing execution context, or `seed` to preload
+ * shared state for a new run.
+ */
 export const createRunContext = RunContextController.create;

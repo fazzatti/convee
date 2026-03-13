@@ -12,8 +12,10 @@ import type {
   SyncStepFromFunction,
 } from "@/step/types.ts";
 
+/** Raw argument tuple accepted by the first step in a pipe. */
 export type PipeArgs = StepArgs;
 
+/** Structural contract for a step-like runtime that can participate in a pipe. */
 export type PipeCompatibleStep<
   I extends PipeArgs = PipeArgs,
   O = unknown,
@@ -30,6 +32,7 @@ export type PipeCompatibleStep<
   ): MaybePromise<O>;
 };
 
+/** Structural contract for a sync step-like runtime that can participate in a sync pipe. */
 export type SyncPipeCompatibleStep<
   I extends PipeArgs = PipeArgs,
   O = unknown,
@@ -55,8 +58,8 @@ type BarePipeFunction = {
   runWith?: never;
 };
 
-type RawPipeFn = ((...args: any[]) => unknown) & BarePipeFunction;
-type RawSyncPipeFn = ((...args: any[]) => unknown) & BarePipeFunction;
+type RawPipeFn = ((...args: never[]) => unknown) & BarePipeFunction;
+type RawSyncPipeFn = ((...args: never[]) => unknown) & BarePipeFunction;
 
 export type PipeInputStep = AnyPipeStep | RawPipeFn;
 
@@ -130,6 +133,7 @@ export type ValidateSyncPipeSteps<
     : never
   : Steps;
 
+/** Input tuple accepted by a normalized pipe. */
 export type PipeInput<Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]]> =
   PipeStepArgs<Steps[0]>;
 
@@ -139,9 +143,11 @@ export type LastPipeStep<
   ? Last
   : never;
 
+/** Final resolved output produced by a normalized pipe. */
 export type PipeResult<Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]]> =
   PipeStepOutput<LastPipeStep<Steps>>;
 
+/** Shared context shape inferred from every step in the pipe. */
 export type PipeContext<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
 > =
@@ -168,6 +174,7 @@ export type PipeStepTargetIds<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
 > = LiteralString<Steps[number]["id"]>;
 
+/** Valid literal targets for plugins attached to a pipe. */
 export type PipeTargetIds<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   Id extends string,
@@ -185,6 +192,7 @@ export type PipeStepContext<Step extends AnyPipeStep> = Step extends {
   ? Shared
   : ContextValues;
 
+/** Plugin contract for a single targeted inner step. */
 export type PipeStepPlugin<
   Step extends AnyPipeStep,
   E extends Error = Error,
@@ -259,6 +267,7 @@ export type PipeStepPlugin<
     >
 );
 
+/** Plugin contract for a pipe-level plugin that wraps the full run. */
 export type PipeLevelPlugin<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -275,6 +284,7 @@ type PipeStepPluginUnion<
   E extends Error,
 > = DistributePipeStepPlugin<Steps[number], E>;
 
+/** Any plugin that can be attached to a pipe or one of its direct steps. */
 export type PipeAttachablePlugin<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -290,6 +300,7 @@ export type AllowedPipePlugin<
   Id extends string = string,
 > = Plugin extends PipeAttachablePlugin<Steps, E, Shared, Id> ? Plugin : never;
 
+/** Runtime plugin contract evaluated at the pipe level. */
 export type PipePlugin<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -346,6 +357,7 @@ export type PipePlugin<
     >
 );
 
+/** Sync plugin contract for a single targeted inner step. */
 export type SyncPipeStepPlugin<
   Step extends AnySyncPipeStep,
   E extends Error = Error,
@@ -353,10 +365,11 @@ export type SyncPipeStepPlugin<
   PipeStepArgs<Step>,
   PipeStepOutput<Step>,
   E,
-  any,
+  PipeStepContext<Step & AnyPipeStep>,
   LiteralString<Step["id"]>
 >;
 
+/** Sync plugin contract for a pipe-level plugin. */
 export type SyncPipeLevelPlugin<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -388,6 +401,7 @@ type SyncPipeStepPluginUnion<
   E extends Error,
 > = DistributeSyncPipeStepPlugin<Steps[number], E>;
 
+/** Any sync plugin that can be attached to a sync pipe or direct sync step. */
 export type SyncPipeAttachablePlugin<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -436,6 +450,7 @@ export type AllowedSyncPipePlugin<
     ? Plugin
     : never;
 
+/** Runtime plugin contract evaluated at the sync pipe level. */
 export type SyncPipePlugin<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -454,6 +469,7 @@ export type SyncPipePlugin<
   Target extends string | undefined = string | undefined,
 > = AnySyncPlugin<PipeInput<Steps>, PipeResult<Steps>, E, Shared, Target>;
 
+/** Construction options accepted by `pipe(...)`. */
 export type PipeOptions<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -465,6 +481,7 @@ export type PipeOptions<
   plugins?: ValidatePipePlugins<Plugins, Steps, E, Shared, Id>;
 };
 
+/** Per-run overrides accepted by `pipe.runWith(...)`. */
 export type PipeRunOptions<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -475,6 +492,7 @@ export type PipeRunOptions<
   context?: RunContextOptions<Shared>;
 };
 
+/** Construction options accepted by `pipe.sync(...)`. */
 export type SyncPipeOptions<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -497,6 +515,7 @@ export type SyncPipeOptions<
   plugins?: ValidateSyncPipePlugins<Plugins, Steps, E, Shared, Id>;
 };
 
+/** Per-run overrides accepted by `pipe.sync.runWith(...)`. */
 export type SyncPipeRunOptions<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -586,6 +605,7 @@ type SyncPipePluginList<
   Id extends string,
 > = readonly PluginWithId[];
 
+/** Public runtime surface shared by async pipes. */
 export interface PipeInstance<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -604,6 +624,7 @@ export interface PipeInstance<
   ): Promise<PipeResult<Steps>>;
 }
 
+/** Public runtime surface shared by sync pipes. */
 export interface SyncPipeInstance<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -633,6 +654,7 @@ export interface SyncPipeInstance<
   ): PipeResult<Steps>;
 }
 
+/** Callable async pipe type returned by `pipe(...)`. */
 export type Pipe<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -650,6 +672,7 @@ export type Pipe<
     ): Pipe<Steps, E, Shared, Id, RemovePluginsById<Plugins, PluginId>>;
   };
 
+/** Callable sync pipe type returned by `pipe.sync(...)`. */
 export type SyncPipe<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -678,8 +701,10 @@ export type SyncPipe<
     ): SyncPipe<Steps, E, Shared, Id, RemovePluginsById<Plugins, PluginId>>;
   };
 
+/** Stable identity fields exposed by pipe runtimes. */
 export type PipeIdentity<Id extends string = string> = StepIdentity<Id>;
 
+/** Context-aware sync pipe factory for a fixed shared context shape. */
 export type ContextualSyncPipeFactory<
   Shared extends ContextValues = ContextValues,
 > = {
@@ -714,6 +739,7 @@ export type ContextualSyncPipeFactory<
   ): SyncPipe<NormalizeSyncPipeSteps<Steps>, E, Shared, Id, Plugins>;
 };
 
+/** Context-aware async pipe factory for a fixed shared context shape. */
 export type ContextualPipeFactory<
   Shared extends ContextValues = ContextValues,
 > = {
@@ -739,12 +765,14 @@ export type ContextualPipeFactory<
   sync: ContextualSyncPipeFactory<Shared>;
 };
 
+/** Public sync pipe factory type, including `withContext(...)`. */
 export type SyncPipeFactory = ContextualSyncPipeFactory & {
   withContext<
     Shared extends ContextValues,
   >(): ContextualSyncPipeFactory<Shared>;
 };
 
+/** Public async pipe factory type, including sync and context-aware variants. */
 export type PipeFactory = ContextualPipeFactory & {
   sync: SyncPipeFactory;
   withContext<Shared extends ContextValues>(): ContextualPipeFactory<Shared>;

@@ -102,6 +102,12 @@ const sync = Object.assign(createContextualSyncPipeFactory(), {
   },
 }) as SyncPipeFactory;
 
+/**
+ * Creates a pipeline from steps, nested pipes, or raw functions.
+ *
+ * Raw functions are wrapped as steps automatically, and `pipe.sync(...)`
+ * provides the synchronous counterpart when every inner step is synchronous.
+ */
 export const pipe = Object.assign(createContextualPipeFactory(), {
   sync,
   withContext<Shared extends ContextValues>() {

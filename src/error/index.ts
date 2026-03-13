@@ -166,6 +166,7 @@ export class ConveeError<
   }
 }
 
+/** Creates a `ConveeError` instance from a fully defined error shape. */
 export function conveeError<
   Code extends string = string,
   Meta extends BaseMeta = BaseMeta,
@@ -176,12 +177,14 @@ export function conveeError<
   return new ConveeError(shape);
 }
 
+/** Returns `true` when the provided value is a Convee error instance. */
 export function isConveeError(
   error: unknown,
 ): error is ConveeError<string, BaseMeta> {
   return ConveeError.is(error);
 }
 
+/** Creates a fallback unexpected Convee error with optional overrides. */
 export function unexpectedConveeError(args?: {
   domain?: ConveeErrorDomain;
   source?: string;
@@ -196,6 +199,7 @@ export function unexpectedConveeError(args?: {
   return ConveeError.unexpected(args);
 }
 
+/** Wraps an unknown thrown value in a normalized `ConveeError`. */
 export function conveeErrorFromUnknown(
   error: unknown,
   ctx?: ConveeErrorContext<string, BaseMeta>,
@@ -203,6 +207,7 @@ export function conveeErrorFromUnknown(
   return ConveeError.fromUnknown(error, ctx);
 }
 
+/** Narrows a Convee error to the creator that produced it. */
 export function isConveeErrorOf<TCreator extends AnyConveeErrorCreator>(
   error: unknown,
   creator: TCreator,
@@ -240,7 +245,7 @@ export type ConveeErrorCreator<
 };
 
 type AnyConveeErrorCreator = ((
-  args: any,
+  args: never,
 ) => DefinedConveeError<string, BaseMeta, ConveeErrorDomain>) & {
   readonly code: string;
   readonly domain: ConveeErrorDomain;

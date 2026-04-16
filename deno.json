@@ -1,6 +1,6 @@
 {
   "name": "@fifo/convee",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "exports": "./src/index.ts",
   "imports": {
     "@/": "./src/",
@@ -19,6 +19,10 @@
     "test:unit": "deno test -A --parallel --clean --ignore='_*/,src/v1,**/*.integration.test.ts' --coverage=coverage src",
     "test:integration": "deno test -A --parallel --clean --ignore='_*/,src/v1,**/*.unit.test.ts' --coverage=coverage test",
     "test:file": "deno test -A --parallel --clean --ignore='_*/,src/v1' src test"
+  },
+  "publish": {
+    "include": ["src/**/*.ts", "./README.md", "./LICENSE", "./deno.json"],
+    "exclude": ["./**/*.test.ts"]
   },
   "lint": {
     "include": ["src/", "test/"],

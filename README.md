@@ -1,6 +1,6 @@
 # Convee
 
-Typed functions, pipelines and lifecycle plugins for Deno. No runtime
+Typed functions, pipelines and lifecycle plugins for TypeScript. No runtime
 dependencies, network access, implicit scheduling or workflow service.
 
 The common API is five building blocks: `step`, `pipe`, `plugin`,
@@ -24,10 +24,7 @@ receipt.use(plugin().onOutput((text: string) => "$" + text));
 console.log(await receipt([10, 2.5])); // $12.50
 ```
 
-This branch prepares **2.0.0**, a breaking release. Until it is published, use
-this checkout rather than expecting the registry to serve the new behavior. CI
-covers Deno **2.6.0 and 2.9.6**. Browser/Node distribution is not a support
-promise made by this release.
+Upgrading from 1.x? See the [migration guide](#migrating-from-1x).
 
 ## Arguments and composition
 
@@ -66,8 +63,6 @@ children cannot share an ID or collide with their parent's ID. Repeating the
 The `steps` getter returns a defensive array copy. Nested children expose a
 shallow invocation type to avoid recursively expanding entire graph types. Keep
 the original nested pipe variable when configuring or inspecting its internals.
-Flat and nested graphs of 10, 25, 50 and 100 children/levels are checked in CI;
-larger graphs have no unlimited-depth guarantee.
 
 ## Plugins and lifecycle
 
@@ -217,19 +212,8 @@ all unit/integration/regression/property fixtures, JSDoc, README examples, AST
 module boundaries, deep type graphs, isolated package consumption, coverage and
 a normal JSR dry run **without** `--allow-slow-types`.
 
-Runtime tests run without blanket `-A` permissions. Source-analysis tools have
-scoped read/write/process permissions and an explicit list of TypeScript's
-startup environment reads. Mutation tests work in disposable copies below
-`.artifacts`, never by modifying the checkout.
+CI also runs property stress tests, mutation testing, garbage-collection
+retention checks and benchmarks. Reports are attached to each run.
 
-CI runs 60000 seeded property cases, controlled concurrency scenarios, actual
-garbage-collection retention tests and the mutation campaign on every PR.
-Coverage gates require at least 98% source lines and 95% branches. Mutation
-gates require all named critical mutants and at least 90% of the generated
-campaign to be killed; timeouts are not counted as kills. The
-[testing guide](TESTING.md) explains the measurement limits.
-
-Benchmark JSON, mutation logs, HTML/LCOV coverage, type-depth timing and
-complexity/CRAP-proxy reports are attached to CI. Benchmarks are trend evidence,
-not a machine-dependent latency gate. Complexity metrics guide review and do not
-prove financial, concurrency or business correctness.
+See the [testing guide](TESTING.md) for the CI runtime matrix, coverage and
+mutation thresholds, permissions, failure replay and performance measurements.

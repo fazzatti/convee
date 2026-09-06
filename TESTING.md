@@ -1,26 +1,25 @@
 # Testing and quality contracts
 
-Convee keeps the runtime dependency-free and spends its complexity budget on
-development-time checks. A green coverage badge is not evidence that the
-assertions would detect changed behavior. Run the complementary checks below.
+Convee's test suites cover runtime behavior, public types, composition,
+concurrency and resource retention. Property and mutation tests complement
+coverage by checking generated scenarios and whether assertions detect changed
+behavior.
 
-## Supported environments
+## CI environments
 
 PR checks pin Deno 2.6.0 and 2.9.6. Both must pass consumer type contracts,
 runtime tests, isolated package consumption, garbage-collection retention and
 graphs up to 100 nodes. Deno 2.9.6 runs the quality, mutation, stress and
-benchmark jobs. Node and browsers are not part of the supported-runtime matrix
-yet.
+benchmark jobs.
 
 Install one of these Deno versions and run commands from the repository root.
 The first run resolves pinned development dependencies from the lockfile. No
-wallets, credentials, servers, real funds or network services are needed by the
-test cases. JSR publish validation can contact the registry but does not
-publish.
+credentials or external services are needed by the test cases. JSR publish
+validation contacts the registry but does not publish.
 
 ## Local workflow
 
-| Command                      | What it proves                                                                                                                            |
+| Command                      | What it checks                                                                                                                            |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `deno task verify`           | Formatting, lint, unused declarations, types, docs, runtime suites, architecture, type depth, coverage, isolated consumer and JSR dry run |
 | `deno task test:unit`        | Existing module-level behavior                                                                                                            |
@@ -60,9 +59,9 @@ run a modified contributor branch without reviewing it.
 
 ## Property replay and larger campaigns
 
-The PR seed is `20260905`. A normal runtime test run executes 1000 cases for
-each property, and `test:stress` executes 10000 each, or 60000 generated cases.
-These are generated cases, not 60000 separately maintained tests.
+The default seed is `20260905`. A normal runtime test run executes 1000 cases
+for each property, and `test:stress` executes 10000 each, or 60000 generated
+cases. These are generated cases, not 60000 separately maintained tests.
 
 Fast-check reports the seed, shrink path and minimized counterexample on
 failure. Run the individual test with
@@ -71,8 +70,7 @@ temporarily set the reported `seed` and `path` in the settings of
 `test/properties/models.test.ts`, keeping the failing test's generators intact.
 Restore those temporary settings after reducing the case into a permanent
 regression. For an intentional new campaign, change the seed or case budget
-explicitly and record them with the result. There is no scheduled background
-job.
+explicitly and record them with the result.
 
 Generators are bounded by graph length, command count and value ranges. They do
 not exhaust JavaScript programs or all asynchronous schedules. Deterministic
@@ -83,7 +81,7 @@ shared-parent interleavings remain necessary alongside generated tests.
 `tools/mutation.ts` negates all `if` conditions in the invocation/context,
 step/pipe engines and plugin descriptor runtime. It also applies named mutations
 to copies, ordering, cleanup, callable identity and completion history. It does
-not claim to mutate every expression, every error message or TypeScript types.
+not mutate every expression, error message or TypeScript type.
 
 `deno task test:tooling`, included in `verify`, tests the result parser against
 plain and ANSI-colored CI output, real failed-test summaries, infrastructure
@@ -103,9 +101,9 @@ be explained and removed from the operator or the redundant production code, not
 disguised as an assertion success. Inspect the per-mutant logs to distinguish
 behavioral test failures from infrastructure or module-loading errors.
 
-The baseline campaign contains 49 mutants. This count changes with runtime code;
-the report, not this number, is authoritative. A 100% score applies only to this
-bounded operator set. Add targeted mutants when a new invariant is introduced.
+The mutant count changes with runtime code and is recorded in the report. A 100%
+score applies only to this bounded operator set. Add targeted mutants when a new
+invariant is introduced.
 
 Reports: `.artifacts/mutation/report.json` and individual logs. They are
 uploaded even when the mutation job fails.
@@ -132,18 +130,18 @@ cycles are distinct from runtime cycles.
 
 The isolated consumer copies production sources into a separate package and
 rewrites internal aliases to relative imports, then checks and executes against
-its own configuration. This catches repository-alias dependence; it is not a
-claim that a new version has already been installed from JSR. The separate real
-`deno publish --dry-run` validates publishability without `--allow-slow-types`.
+its own configuration. This checks local package consumption independently of
+repository aliases. It does not install from JSR. Separately,
+`deno task package:check` validates publishability with a JSR dry run, without
+`--allow-slow-types`.
 
 ## Retention, type depth and performance
 
 Retention tests use weak references and explicitly exposed V8 garbage
-collection, not a private method stub or one noisy heap-byte reading. Each
-capture mode runs 5000 distinct payloads through a reused parent and one fixed
-step ID. Older inputs must be collected; only `all` may retain the last input.
-Per-ID state is intentionally persistent: creating unlimited unique IDs or
-storing every payload yourself can still grow memory.
+collection. Each capture mode runs 5000 distinct payloads through a reused
+parent and one fixed step ID. Older inputs must be collected; only `all` may
+retain the last input. Per-ID state is intentionally persistent: creating
+unlimited unique IDs or storing every payload yourself can still grow memory.
 
 Type-depth fixtures generate flat and nested graphs of 10, 25, 50 and 100 nodes
 in sync and async modes and assert their actual output types. Nested metadata
@@ -157,9 +155,12 @@ arbitrary latency thresholds from shared runners.
 
 ## Releases
 
-The 2.0.0 candidate intentionally changes ambiguous 1.x tuple, recovery, capture
-and mutable-configuration behavior. Read the README migration section before
-upgrading. Publishing runs only after the full reusable quality workflow passes,
-is serialized, and does not use the slow-types escape hatch. Merging an untagged
-version into `main` triggers the existing automatic publication workflow.
-Opening or pushing a PR does not publish it.
+Document breaking changes in the README's
+[migration guide](README.md#migrating-from-1x) and update the version in
+`deno.json` before releasing.
+
+On pushes to `main`, the publication workflow checks whether the version's
+`v<version>` tag exists. A new version is published to JSR only after the full
+reusable CI workflow passes. The workflow then creates the version tag and a
+GitHub release. Publication runs are serialized and use normal JSR validation
+without `--allow-slow-types`.

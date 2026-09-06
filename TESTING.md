@@ -36,6 +36,25 @@ examples use `@ts-expect-error`, which becomes a compiler failure if an invalid
 call starts being accepted. Deliberately unsafe runtime inputs are separately
 constructed in the regression fixtures.
 
+## README example checks
+
+`deno task docs:examples` runs `tools/docs-examples.ts`, a development-only
+helper included in `verify`. It extracts each `ts` or `typescript` fenced block
+from the README and writes an independent temporary module under
+`.artifacts/docs`. In those generated copies, the package import points to the
+local source so the examples are checked against the code being changed.
+
+The helper runs `deno check`, not `deno run`: it validates imports and types,
+but does not execute examples or assert the displayed results. Each example
+includes its own imports and setup. Import-only examples and unused teaching
+declarations are allowed by disabling only the two unused-declaration compiler
+options in the generated config. Production and test compiler settings remain
+unchanged. Failures report the original README line.
+
+Generated files are ignored by Git. The helper is not part of the published
+library or its runtime dependencies. Its extraction/configuration regression
+tests run in `deno task test:tooling`.
+
 ## Behavioral coverage
 
 - `src/**/*.unit.test.ts` and `test/*.integration.test.ts` retain the original

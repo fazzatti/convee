@@ -19,7 +19,7 @@ jobs:
       matrix:
         deno: ["2.6.0", "2.9.6"]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: ${{ matrix.deno }}
@@ -30,7 +30,7 @@ jobs:
     name: Formatting, lint, docs, architecture, coverage and JSR
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: "2.9.6"
@@ -43,7 +43,7 @@ jobs:
           if [ -f .artifacts/quality.json ]; then
             jq '{linePercent, branchPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: quality-coverage-and-package
@@ -54,7 +54,7 @@ jobs:
             .artifacts/type-depth/report.json
             .artifacts/package-consumer/report.json
           if-no-files-found: error
-      - uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
         if: success()
         with:
           files: coverage.lcov
@@ -64,7 +64,7 @@ jobs:
     name: 60000 seeded property and state-model cases
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: "2.9.6"
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: "2.9.6"
@@ -87,7 +87,7 @@ jobs:
           if [ -f .artifacts/mutation/report.json ]; then
             jq '{score,killed,total,methodology,survivors:[.results[]|select(.status!="killed")]}' .artifacts/mutation/report.json >> "$GITHUB_STEP_SUMMARY"
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
           name: mutation-results
@@ -103,13 +103,13 @@ jobs:
       matrix:
         deno: ["2.6.0", "2.9.6"]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: ${{ matrix.deno }}
       - run: deno task test:resources
       - run: deno task test:depth
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: type-depth-${{ matrix.deno }}
           path: .artifacts/type-depth/report.json
@@ -117,12 +117,12 @@ jobs:
     name: Runtime benchmark trends
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: "2.9.6"
       - run: deno task bench
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: benchmark-trends
           path: .artifacts/bench.json

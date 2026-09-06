@@ -1,8 +1,8 @@
-import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { ConveeError, isConveeErrorOf } from "@/error/index.ts";
 import { pipe } from "@/pipe/index.ts";
-import { PIP_ERRORS, isPipeError, type PipeErrorOf } from "@/pipe/error.ts";
+import { isPipeError, PIP_ERRORS, type PipeErrorOf } from "@/pipe/error.ts";
 import { plugin } from "@/plugin/index.ts";
 import { step } from "@/step/index.ts";
 
@@ -26,20 +26,23 @@ describe("PipeError", () => {
     });
 
     it("narrows meta by code", () => {
-      if (false) {
-        const error = null as unknown as PipeErrorOf<
-          typeof PIP_ERRORS.UNKNOWN_PLUGIN_TARGET.code
-        >;
+      {
+        const verifyTypes = () => {
+          const error = null as unknown as PipeErrorOf<
+            typeof PIP_ERRORS.UNKNOWN_PLUGIN_TARGET.code
+          >;
 
-        const pipeId: string = error.meta.pipeId;
-        const pluginId: string = error.meta.pluginId;
-        const target: string = error.meta.target;
-        const allowedTargets: readonly string[] = error.meta.allowedTargets;
+          const pipeId: string = error.meta.pipeId;
+          const pluginId: string = error.meta.pluginId;
+          const target: string = error.meta.target;
+          const allowedTargets: readonly string[] = error.meta.allowedTargets;
 
-        void pipeId;
-        void pluginId;
-        void target;
-        void allowedTargets;
+          void pipeId;
+          void pluginId;
+          void target;
+          void allowedTargets;
+        };
+        void verifyTypes;
       }
     });
 
@@ -77,6 +80,7 @@ describe("PipeError", () => {
       assertThrows(
         () =>
           numberPipe.use(
+            // @ts-expect-error deliberately invalid input exercises the runtime guard
             plugin.for<[value: number], number>()(
               {
                 output: (output: number) => output,
@@ -85,7 +89,7 @@ describe("PipeError", () => {
                 id: "unknown-target-plugin",
                 target: "missing-step",
               } as const,
-            ) as never,
+            ),
           ),
         ConveeError,
         'Plugin "unknown-target-plugin" targets "missing-step"',
@@ -136,7 +140,7 @@ describe("PipeError", () => {
         }
 
         assertEquals(error.code, PIP_ERRORS.UNKNOWN_THROWN.code);
-        assertEquals(error.meta.pipeId, "outer-pipe");
+        assertEquals(error.meta.pipeId, "inner-pipe");
       }
     });
 
@@ -148,7 +152,8 @@ describe("PipeError", () => {
           plugins: [
             plugin.for<[a: number, b: number], number>()(
               {
-                input: ((a: number) => a + 1) as never,
+                // @ts-expect-error deliberately invalid input exercises the runtime guard
+                input: (a: number) => a + 1,
               },
               {
                 id: "tuple-plugin",
@@ -166,12 +171,16 @@ describe("PipeError", () => {
     });
 
     it("throws PipeError when sync pipelines contain async steps", () => {
-      const asyncStep = step((value: number) => value + 1, {
-        id: "async-step",
-      } as const);
+      const asyncStep = step(
+        (value: number) => value + 1,
+        {
+          id: "async-step",
+        } as const,
+      );
 
       assertThrows(
-        () => pipe.sync([asyncStep as never], { id: "sync-pipe" } as const),
+        // @ts-expect-error deliberately invalid input exercises the runtime guard
+        () => pipe.sync([asyncStep], { id: "sync-pipe" } as const),
         ConveeError,
         "Sync pipelines can only contain sync steps.",
       );

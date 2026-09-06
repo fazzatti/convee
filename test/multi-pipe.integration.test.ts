@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { createRunContext, pipe, plugin, step } from "@convee";
@@ -9,7 +9,7 @@ describe("Integration: Multi Pipe", () => {
       plugin.for<[value: number], number>()(
         { output: (output: number) => output + 4 },
         { id: `nested-${target}-plus-four`, target },
-      ) as never;
+      );
     const minusFiveOutputPlugin = () =>
       plugin().onOutput((output: number) => output - 5);
     const timesTwoOutputPlugin = () =>
@@ -28,32 +28,45 @@ describe("Integration: Multi Pipe", () => {
       const middle = options?.middleMode ?? "double";
       const preOuter = options?.rawPreOuter
         ? (input: number) => (pre === "plus-two" ? input + 2 : input)
-        : step((input: number) => (pre === "plus-two" ? input + 2 : input), {
+        : step(
+          (input: number) => (pre === "plus-two" ? input + 2 : input),
+          {
             id: `${options?.id ?? "nested"}-outer-pre`,
-          } as const);
-      const innerA = options?.rawInnerA
-        ? (input: number) => input + 1
-        : step((input: number) => input + 1, {
-            id: `${options?.id ?? "nested"}-inner-a`,
-          } as const);
+          } as const,
+        );
+      const innerA = options?.rawInnerA ? (input: number) => input + 1 : step(
+        (input: number) => input + 1,
+        {
+          id: `${options?.id ?? "nested"}-inner-a`,
+        } as const,
+      );
       const innerB = options?.rawInnerB
         ? (input: number) => (middle === "triple" ? input * 3 : input * 2)
         : step(
-            (input: number) => (middle === "triple" ? input * 3 : input * 2),
-            { id: `${options?.id ?? "nested"}-inner-b` } as const,
-          );
-      const innerPipe = pipe([innerA, innerB], {
-        id: `${options?.id ?? "nested"}-inner-pipe`,
-      } as const);
+          (input: number) => (middle === "triple" ? input * 3 : input * 2),
+          { id: `${options?.id ?? "nested"}-inner-b` } as const,
+        );
+      const innerPipe = pipe(
+        [innerA, innerB],
+        {
+          id: `${options?.id ?? "nested"}-inner-pipe`,
+        } as const,
+      );
       const finalize = options?.rawFinalize
         ? (input: number) => input - 3
-        : step((input: number) => input - 3, {
+        : step(
+          (input: number) => input - 3,
+          {
             id: `${options?.id ?? "nested"}-finalize`,
-          } as const);
+          } as const,
+        );
 
-      const outerPipe = pipe([preOuter, innerPipe, finalize], {
-        id: `${options?.id ?? "nested"}-outer-pipe`,
-      } as const);
+      const outerPipe = pipe(
+        [preOuter, innerPipe, finalize],
+        {
+          id: `${options?.id ?? "nested"}-outer-pipe`,
+        } as const,
+      );
 
       return { outerPipe, innerPipe };
     }

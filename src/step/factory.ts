@@ -1,15 +1,15 @@
 import type { ContextValues } from "@/context/types.ts";
 import { StepEngine, SyncStepEngine } from "@/step/step.ts";
 import type {
-  AnySyncStepFn,
   AnyStepFn,
+  AnySyncStepFn,
   ContextualStepFactory,
   ContextualSyncStepFactory,
-  StepFromFunction,
   StepFactory,
+  StepFromFunction,
   StepOptions,
-  SyncStepFromFunction,
   SyncStepFactory,
+  SyncStepFromFunction,
 } from "@/step/types.ts";
 
 /**
@@ -33,7 +33,7 @@ const createSyncStep = <
   E extends Error = Error,
   Id extends string = string,
 >(
-  fn: ReturnType<Fn> extends Promise<unknown> ? never : Fn,
+  fn: ReturnType<Fn> extends PromiseLike<unknown> ? never : Fn,
   options?: {
     id?: Id;
     plugins?: import("@/step/types.ts").SyncStepPlugin<Fn, E>[];

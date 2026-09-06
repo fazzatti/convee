@@ -1,6 +1,6 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
-import { pipe, Pipe, plugin, step } from "@convee";
+import { pipe, plugin, step } from "@convee";
 
 const sortInput = step(function (unparsed: string, targetProp: string) {
   this.context().state.set("targetProp", targetProp);

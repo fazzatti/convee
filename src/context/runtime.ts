@@ -84,7 +84,7 @@ export class RunContextController<
 
   private readonly stepSnapshots = new Map<string, MutableStepSnapshot>();
   private readonly pluginSnapshots = new Map<string, MutablePluginSnapshot>();
-  private readonly stepVisits: StepFrame[] = [];
+  private readonly history: { previous?: MutableStepSnapshot };
   private readonly stepStack: StepFrame[] = [];
   private readonly pluginStack: MutablePluginSnapshot[] = [];
 
@@ -93,11 +93,17 @@ export class RunContextController<
     rootRunId?: string;
     seed?: Partial<Shared>;
     capture?: RunContextCapture;
+    root?: RunContextController<Shared>;
   }) {
-    this.runId = options?.runId ?? crypto.randomUUID();
-    this.rootRunId = options?.rootRunId ?? this.runId;
-    this.capture = options?.capture ?? "outputs";
-    this.state = new MemoryContextStore<Shared>(options?.seed);
+    this.runId = options?.root?.runId ?? options?.runId ?? crypto.randomUUID();
+    this.rootRunId = options?.root?.rootRunId ?? options?.rootRunId ??
+      this.runId;
+    this.capture = options?.root?.capture ?? options?.capture ?? "outputs";
+    this.state = options?.root?.state ??
+      new MemoryContextStore<Shared>(options?.seed);
+    this.stepSnapshots = options?.root?.stepSnapshots ?? new Map();
+    this.pluginSnapshots = options?.root?.pluginSnapshots ?? new Map();
+    this.history = options?.root?.history ?? {};
     this.context = {
       runId: this.runId,
       rootRunId: this.rootRunId,
@@ -155,6 +161,10 @@ export class RunContextController<
     return controller;
   }
 
+  fork(): RunContextController<Shared> {
+    return new RunContextController<Shared>({ root: this });
+  }
+
   enterStep(stepId: string, input: readonly unknown[]): void {
     const snapshot = this.ensureStepSnapshot(stepId);
     const frame: StepFrame = {
@@ -163,7 +173,6 @@ export class RunContextController<
     };
 
     this.stepStack.push(frame);
-    this.stepVisits.push(frame);
   }
 
   updateCurrentStepInput(input: readonly unknown[]): void {
@@ -194,19 +203,16 @@ export class RunContextController<
       snapshot.input = cloneArray(frame.input);
       snapshot.output = frame.output;
       snapshot.error = frame.error;
-      return;
-    }
-
-    if (this.capture === "outputs") {
+    } else if (this.capture === "outputs") {
       snapshot.input = undefined;
       snapshot.output = frame.output;
       snapshot.error = undefined;
-      return;
+    } else {
+      snapshot.input = undefined;
+      snapshot.output = undefined;
+      snapshot.error = undefined;
     }
-
-    snapshot.input = undefined;
-    snapshot.output = undefined;
-    snapshot.error = undefined;
+    this.history.previous = { ...snapshot };
   }
 
   enterPlugin(pluginId: string, target?: string): void {
@@ -290,37 +296,32 @@ export class RunContextController<
     return {
       id: snapshot.id,
       state: snapshot.state,
-      input: snapshot.input,
+      input: snapshot.input === undefined
+        ? undefined
+        : cloneArray(snapshot.input),
       output: snapshot.output,
       error: snapshot.error,
     };
   }
 
   private getPreviousStepSnapshot(): StepSnapshot | undefined {
-    if (this.stepVisits.length < 2) {
-      return undefined;
-    }
-
-    const frame = this.stepVisits.at(-2);
-
-    if (!frame) {
-      return undefined;
-    }
-
-    return {
-      id: frame.snapshot.id,
-      state: frame.snapshot.state,
-      input: cloneArray(frame.input),
-      output: frame.output,
-      error: frame.error,
-    };
+    const snapshot = this.history.previous;
+    return snapshot &&
+      {
+        ...snapshot,
+        input: snapshot.input === undefined
+          ? undefined
+          : cloneArray(snapshot.input),
+      };
   }
 
   private getAllStepSnapshots(): readonly StepSnapshot[] {
     return Array.from(this.stepSnapshots.values(), (snapshot) => ({
       id: snapshot.id,
       state: snapshot.state,
-      input: snapshot.input,
+      input: snapshot.input === undefined
+        ? undefined
+        : cloneArray(snapshot.input),
       output: snapshot.output,
       error: snapshot.error,
     }));

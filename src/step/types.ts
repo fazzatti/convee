@@ -4,25 +4,21 @@ import type {
   StepThis,
 } from "@/context/types.ts";
 import type { Args, MaybePromise, NoInfer } from "@/core/types.ts";
-import type { AnyPlugin, AnySyncPlugin, Plugin } from "@/plugin/types.ts";
+import type { AnyPlugin, AnySyncPlugin } from "@/plugin/types.ts";
 
 /** Raw argument tuple accepted by a step. */
 export type StepArgs = Args;
-export type NonPromise<T> = T extends Promise<unknown> ? never : T;
+/** Removes PromiseLike branches from a synchronous result type. */
+export type NonPromise<T> = T extends PromiseLike<unknown> ? never : T;
 
-export type CompactStepArgs<I extends StepArgs> = I extends []
-  ? void
-  : I extends [infer Value]
-    ? Value
-    : I;
+/** Preserves the complete argument tuple, including a single array-valued argument. */
+export type CompactStepArgs<I extends StepArgs> = I;
 
-type NormalizePublicStepArgs<I> = [I] extends [never]
-  ? never
-  : [I] extends [void]
-    ? []
-    : I extends StepArgs
-      ? I
-      : [I];
+/** Converts legacy scalar step generics to a tuple while preserving tuple generics. */
+export type NormalizePublicStepArgs<I> = [I] extends [never] ? never
+  : [I] extends [void] ? []
+  : I extends StepArgs ? I
+  : [I];
 
 /** Function signature accepted by `step(...)`. */
 export type StepFn<
@@ -46,86 +42,27 @@ export type SyncStepFn<
   ...args: NormalizePublicStepArgs<I>
 ) => NonPromise<O>;
 
+/** Broad contextual callback constraint for asynchronous step inference. */
 export type AnyStepFn<Shared extends ContextValues = ContextValues> = (
   this: StepThis<Shared>,
   ...args: unknown[]
 ) => unknown;
+/** Broad contextual callback constraint for synchronous step inference. */
 export type AnySyncStepFn<Shared extends ContextValues = ContextValues> = (
   this: StepThis<Shared>,
   ...args: unknown[]
 ) => unknown;
 
+/** Infers shared state from a callback's explicit this context. */
 export type ExtractStepContext<Fn extends (...args: never[]) => unknown> =
   ThisParameterType<Fn> extends StepThis<infer Shared> ? Shared : ContextValues;
-
-type FluentStepPluginContract<
-  I extends StepArgs,
-  O,
-  E extends Error,
-  Shared extends ContextValues,
-> = {
-  readonly id: string;
-  readonly target: string | undefined;
-  supports(capability: string): boolean;
-  targets(stepId: string): boolean;
-} & (
-  | Plugin<
-      CompactStepArgs<I>,
-      never,
-      never,
-      { input: true },
-      Shared,
-      string | undefined
-    >
-  | Plugin<never, O, never, { output: true }, Shared, string | undefined>
-  | Plugin<
-      CompactStepArgs<I>,
-      O,
-      never,
-      { input: true; output: true },
-      Shared,
-      string | undefined
-    >
-  | Plugin<
-      CompactStepArgs<I>,
-      O,
-      E,
-      { input: true; error: true },
-      Shared,
-      string | undefined
-    >
-  | Plugin<never, O, E, { error: true }, Shared, string | undefined>
-  | Plugin<
-      never,
-      O,
-      E,
-      { output: true; error: true },
-      Shared,
-      string | undefined
-    >
-  | Plugin<
-      CompactStepArgs<I>,
-      O,
-      E,
-      { input: true; output: true; error: true },
-      Shared,
-      string | undefined
-    >
-);
 
 /** Plugin contract accepted by async steps. */
 export type StepPlugin<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
   Shared extends ContextValues = ExtractStepContext<Fn>,
-> =
-  | AnyPlugin<Parameters<Fn>, Awaited<ReturnType<Fn>>, E, Shared>
-  | FluentStepPluginContract<
-      Parameters<Fn>,
-      Awaited<ReturnType<Fn>>,
-      E,
-      Shared
-    >;
+> = AnyPlugin<Parameters<Fn>, Awaited<ReturnType<Fn>>, E, Shared>;
 
 /**
  * Plugin contract accepted by `step.sync(...)`.
@@ -136,6 +73,7 @@ export type SyncStepPlugin<
   Shared extends ContextValues = ExtractStepContext<Fn>,
 > = AnySyncPlugin<Parameters<Fn>, ReturnType<Fn>, E, Shared>;
 
+/** Identity and persistent plugins supplied when constructing a step. */
 export type StepOptions<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
@@ -207,15 +145,22 @@ export interface StepInstance<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
 > {
+  /** Stable identity used for routing and per-identity state. */
   readonly id: string;
+  /** Whether invocation completes synchronously without accepting thenables. */
   readonly isSync: false;
+  /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly StepPlugin<Fn, E>[];
+  /** Invokes the callable with its exact argument tuple. */
   run(...args: Parameters<Fn>): Promise<Awaited<ReturnType<Fn>>>;
+  /** Invokes with per-call context and plugins without persisting those plugins. */
   runWith(
     options: StepRunOptions<Fn, E>,
     ...args: Parameters<Fn>
   ): Promise<Awaited<ReturnType<Fn>>>;
+  /** Appends a persistent plugin and returns the same callable. */
   use(plugin: StepPlugin<Fn, E>): this;
+  /** Removes registrations matching an ID and returns the same callable. */
   remove(pluginId: string): this;
 }
 
@@ -226,25 +171,34 @@ export interface SyncStepInstance<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
 > {
+  /** Stable identity used for routing and per-identity state. */
   readonly id: string;
+  /** Whether invocation completes synchronously without accepting thenables. */
   readonly isSync: true;
+  /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly SyncStepPlugin<Fn, E>[];
+  /** Invokes the callable with its exact argument tuple. */
   run(...args: Parameters<Fn>): ReturnType<Fn>;
+  /** Invokes with per-call context and plugins without persisting those plugins. */
   runWith(
     options: SyncStepRunOptions<Fn, E>,
     ...args: Parameters<Fn>
   ): ReturnType<Fn>;
+  /** Appends a persistent plugin and returns the same callable. */
   use(plugin: SyncStepPlugin<Fn, E>): this;
+  /** Removes registrations matching an ID and returns the same callable. */
   remove(pluginId: string): this;
 }
 
+/** Method and identity surface attached to an asynchronous callable step. */
 export type StepRuntime<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
   Id extends string = string,
-> = ((...args: Parameters<Fn>) => Promise<Awaited<ReturnType<Fn>>>) &
-  StepIdentity<Id> &
-  StepInstance<Fn, E>;
+> =
+  & ((...args: Parameters<Fn>) => Promise<Awaited<ReturnType<Fn>>>)
+  & StepIdentity<Id>
+  & StepInstance<Fn, E>;
 
 /**
  * Public callable surface returned by `step.sync(...)`.
@@ -253,9 +207,10 @@ export type SyncStepRuntime<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
   Id extends string = string,
-> = ((...args: Parameters<Fn>) => ReturnType<Fn>) &
-  StepIdentity<Id> &
-  SyncStepInstance<Fn, E>;
+> =
+  & ((...args: Parameters<Fn>) => ReturnType<Fn>)
+  & StepIdentity<Id>
+  & SyncStepInstance<Fn, E>;
 
 /** Callable step type returned by `step(...)`. */
 export type Step<
@@ -310,12 +265,12 @@ export type ContextualSyncStepFactory<
   Shared extends ContextValues = ContextValues,
 > = {
   <I extends StepArgs, O, E extends Error = Error, Id extends string = string>(
-    fn: SyncStepFn<I, O, Shared>,
+    fn: (this: StepThis<Shared>, ...args: I) => NonPromise<O>,
     options?: {
       id?: Id;
       plugins?: AnySyncPlugin<I, O, E, Shared>[];
     },
-  ): SyncStep<CompactStepArgs<I>, O, E, Id, Shared>;
+  ): SyncStep<I, O, E, Id, Shared>;
 };
 
 /**
@@ -325,15 +280,12 @@ export type ContextualStepFactory<
   Shared extends ContextValues = ContextValues,
 > = {
   <I extends StepArgs, O, E extends Error = Error, Id extends string = string>(
-    fn: StepFn<I, O, Shared>,
+    fn: (this: StepThis<Shared>, ...args: I) => MaybePromise<O>,
     options?: {
       id?: Id;
-      plugins?: (
-        | AnyPlugin<NoInfer<I>, Awaited<NoInfer<O>>, E, Shared>
-        | FluentStepPluginContract<NoInfer<I>, Awaited<NoInfer<O>>, E, Shared>
-      )[];
+      plugins?: AnyPlugin<NoInfer<I>, Awaited<NoInfer<O>>, E, Shared>[];
     },
-  ): Step<CompactStepArgs<I>, O, E, Id, Shared>;
+  ): Step<I, Awaited<O>, E, Id, Shared>;
   sync: ContextualSyncStepFactory<Shared>;
 };
 

@@ -1,44 +1,128 @@
 name: CI
-
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-
+    branches: [main]
+  workflow_call:
 permissions:
   contents: read
-
+concurrency:
+  group: convee-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  test:
+  tests:
+    name: Runtime and consumer types (Deno ${{ matrix.deno }})
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        deno: ["2.6.0", "2.9.6"]
     steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
-          deno-version: v2.x
-
-      - name: Run linter
-        run: deno lint
-
-      - name: Run type check
-        run: deno check src/index.ts
-
-      - name: Run tests
-        run: deno task test
-
-      - name: Generate coverage report
-        run: deno coverage --lcov coverage > coverage.lcov
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+          deno-version: ${{ matrix.deno }}
+      - run: deno task test:types
+      - run: deno task test
+      - run: deno task test:consumer
+  quality:
+    name: Formatting, lint, docs, architecture, coverage and JSR
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
-          files: ./coverage.lcov
-          fail_ci_if_error: true
+          deno-version: "2.9.6"
+      - run: deno task verify
+      - run: deno coverage --html coverage
+      - name: Publish quality summary
+        if: always()
+        run: |
+          echo '## Convee quality evidence' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .artifacts/quality.json ]; then
+            jq '{linePercent, branchPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: quality-coverage-and-package
+          path: |
+            coverage/html/
+            coverage.lcov
+            .artifacts/quality.json
+            .artifacts/type-depth/report.json
+            .artifacts/package-consumer/report.json
+          if-no-files-found: error
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f
+        if: success()
+        with:
+          files: coverage.lcov
+          fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
+  stress:
+    name: 60000 seeded property and state-model cases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - run: deno task test:stress
+  mutation:
+    name: Runtime mutation campaign
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - run: deno task test
+      - run: deno task test:mutation
+      - name: Publish mutation summary
+        if: always()
+        run: |
+          echo '## Mutation evidence' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f .artifacts/mutation/report.json ]; then
+            jq '{score,killed,total,methodology,survivors:[.results[]|select(.status!="killed")]}' .artifacts/mutation/report.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: mutation-results
+          path: |
+            .artifacts/mutation/report.json
+            .artifacts/mutation/*.log
+          if-no-files-found: error
+  resources:
+    name: Garbage-collection retention and type depth budgets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        deno: ["2.6.0", "2.9.6"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: ${{ matrix.deno }}
+      - run: deno task test:resources
+      - run: deno task test:depth
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: type-depth-${{ matrix.deno }}
+          path: .artifacts/type-depth/report.json
+  benchmarks:
+    name: Runtime benchmark trends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - run: deno task bench
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: benchmark-trends
+          path: .artifacts/bench.json

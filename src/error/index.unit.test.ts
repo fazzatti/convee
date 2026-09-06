@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert";
+import { assert, assertEquals, assertNotEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import {
   ConveeError,
@@ -226,7 +226,7 @@ describe("ConveeError", () => {
       assertEquals(isConveeError({ message: "nope" }), false);
     });
 
-    it("accepts branded Convee-like objects and rejects non-objects", () => {
+    it("rejects incomplete branded shapes and non-objects", () => {
       const branded = {
         [Symbol.for("convee/ConveeError")]: true,
         message: "Branded",
@@ -235,8 +235,8 @@ describe("ConveeError", () => {
         source: "convee/core",
       };
 
-      assertEquals(ConveeError.is(branded), true);
-      assertEquals(isConveeError(branded), true);
+      assertEquals(ConveeError.is(branded), false);
+      assertEquals(isConveeError(branded), false);
       assertEquals(ConveeError.is(null), false);
       assertEquals(ConveeError.is(123), false);
     });

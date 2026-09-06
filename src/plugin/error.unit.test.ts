@@ -1,8 +1,8 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import {
-  PLG_ERRORS,
   isPluginError,
+  PLG_ERRORS,
   type PluginErrorOf,
 } from "@/plugin/index.ts";
 import { ConveeError } from "@/error/index.ts";
@@ -68,16 +68,19 @@ describe("PluginError", () => {
   });
 
   it("narrows meta by code", () => {
-    if (false) {
-      const error = null as unknown as PluginErrorOf<
-        typeof PLG_ERRORS.INVALID_DEFINITION.code
-      >;
+    {
+      const verifyTypes = () => {
+        const error = null as unknown as PluginErrorOf<
+          typeof PLG_ERRORS.INVALID_DEFINITION.code
+        >;
 
-      const capability: string = error.meta.capability;
-      const received: unknown = error.meta.received;
+        const capability: string = error.meta.capability;
+        const received: unknown = error.meta.received;
 
-      void capability;
-      void received;
+        void capability;
+        void received;
+      };
+      void verifyTypes;
     }
   });
 

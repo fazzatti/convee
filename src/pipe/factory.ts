@@ -2,18 +2,16 @@ import type { ContextValues } from "@/context/types.ts";
 import { PipeEngine, SyncPipeEngine } from "@/pipe/pipe.ts";
 import type {
   AnyPipeStep,
-  NormalizePipeSteps,
-  NormalizeSyncPipeSteps,
-  PipeInputStep,
   AnySyncPipeStep,
   ContextualPipeFactory,
   ContextualSyncPipeFactory,
+  NormalizePipeSteps,
+  NormalizeSyncPipeSteps,
   Pipe,
-  PipeAttachablePlugin,
   PipeFactory,
+  PipeInputStep,
   PipeOptions,
   SyncPipe,
-  SyncPipeAttachablePlugin,
   SyncPipeFactory,
   SyncPipeInputStep,
   SyncPipeOptions,
@@ -36,7 +34,7 @@ const normalizePipeSteps = <
   steps: Steps,
 ): NormalizePipeSteps<Steps> => {
   return steps.map((pipeStep) =>
-    isPipeStep(pipeStep) ? pipeStep : step(pipeStep),
+    isPipeStep(pipeStep) ? pipeStep : step(pipeStep)
   ) as NormalizePipeSteps<Steps>;
 };
 
@@ -46,14 +44,15 @@ const normalizeSyncPipeSteps = <
   steps: Steps,
 ): NormalizeSyncPipeSteps<Steps> => {
   return steps.map((pipeStep) =>
-    isPipeStep(pipeStep) ? pipeStep : step.sync(pipeStep),
+    isPipeStep(pipeStep) ? pipeStep : step.sync(pipeStep)
   ) as NormalizeSyncPipeSteps<Steps>;
 };
 
 const createPipe = <
   Steps extends readonly [PipeInputStep, ...PipeInputStep[]],
   NormalizedSteps extends readonly [AnyPipeStep, ...AnyPipeStep[]] =
-    NormalizePipeSteps<Steps> & readonly [AnyPipeStep, ...AnyPipeStep[]],
+    & NormalizePipeSteps<Steps>
+    & readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
   Shared extends ContextValues = ContextValues,
   Id extends string = string,
@@ -67,8 +66,8 @@ const createPipe = <
 const createSyncPipe = <
   Steps extends readonly [SyncPipeInputStep, ...SyncPipeInputStep[]],
   NormalizedSteps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]] =
-    NormalizeSyncPipeSteps<Steps> &
-      readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
+    & NormalizeSyncPipeSteps<Steps>
+    & readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
   Shared extends ContextValues = ContextValues,
   Id extends string = string,
@@ -87,12 +86,12 @@ const createSyncPipe = <
 const createContextualSyncPipeFactory = <
   Shared extends ContextValues = ContextValues,
 >(): ContextualSyncPipeFactory<Shared> =>
-  createSyncPipe as ContextualSyncPipeFactory<Shared>;
+  createSyncPipe as unknown as ContextualSyncPipeFactory<Shared>;
 
 const createContextualPipeFactory = <
   Shared extends ContextValues = ContextValues,
 >(): ContextualPipeFactory<Shared> =>
-  Object.assign(createPipe as ContextualPipeFactory<Shared>, {
+  Object.assign(createPipe as unknown as ContextualPipeFactory<Shared>, {
     sync: createContextualSyncPipeFactory<Shared>(),
   });
 

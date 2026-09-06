@@ -1,14 +1,14 @@
-import { assert, assertEquals, assertThrows } from "jsr:@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import type { ContextValues } from "@/context/index.ts";
 import {
   hasError,
   hasInput,
   hasOutput,
-  plugin,
-  PluginEngine,
   type Plugin,
+  plugin,
   type PluginBuilder,
+  PluginEngine,
 } from "@/plugin/index.ts";
 import { step } from "@/step/index.ts";
 
@@ -168,9 +168,12 @@ describe("Plugin", () => {
         output: (output: number) => output,
       });
 
-      if (false) {
-        // @ts-expect-error output-only plugins should not expose input directly
-        generatedPlugin.input;
+      {
+        const verifyTypes = () => {
+          // @ts-expect-error output-only plugins should not expose input directly
+          generatedPlugin.input;
+        };
+        void verifyTypes;
       }
 
       assert(generatedPlugin.id.length > 0);
@@ -226,13 +229,13 @@ describe("Plugin", () => {
       const contextualPlugin = plugin
         .withContext<{ requestId: string }>()
         .for<[value: number], number>()(
-        {
-          output: (output: number) => output,
-        },
-        {
-          id: "contextual-plugin",
-        } as const,
-      );
+          {
+            output: (output: number) => output,
+          },
+          {
+            id: "contextual-plugin",
+          } as const,
+        );
 
       assertEquals(contextualPlugin.id, "contextual-plugin");
       assertEquals(contextualPlugin.supports("output"), true);
@@ -379,28 +382,28 @@ describe("Plugin", () => {
         },
       };
 
-      assertEquals(hasInput(supportObject as unknown as never), true);
-      assertEquals(hasOutput(supportObject as unknown as never), false);
-      assertEquals(hasError(supportObject as unknown as never), true);
+      assertEquals(hasInput(supportObject), false);
+      assertEquals(hasOutput(supportObject), false);
+      assertEquals(hasError(supportObject), false);
 
       assertEquals(
-        hasInput({ input: (value: number) => value + 1 } as unknown as never),
+        hasInput({ input: (value: number) => value + 1 }),
         true,
       );
       assertEquals(
         hasOutput({
           output: (output: number) => output + 1,
-        } as unknown as never),
+        }),
         true,
       );
       assertEquals(
-        hasError({ error: (error: Error) => error } as unknown as never),
+        hasError({ error: (error: Error) => error }),
         true,
       );
 
-      assertEquals(hasInput(null as unknown as never), false);
-      assertEquals(hasOutput("nope" as unknown as never), false);
-      assertEquals(hasError(42 as unknown as never), false);
+      assertEquals(hasInput(null), false);
+      assertEquals(hasOutput("nope"), false);
+      assertEquals(hasError(42), false);
     });
   });
 
@@ -546,111 +549,114 @@ describe("Plugin", () => {
 
   describe("typing", () => {
     it("enforces plugin hook typing", () => {
-      if (false) {
-        // @ts-expect-error a plugin needs at least one lifecycle hook
-        plugin.for<[value: number], number>()({});
+      {
+        const verifyTypes = () => {
+          // @ts-expect-error a plugin needs at least one lifecycle hook
+          plugin.for<[value: number], number>()({});
 
-        plugin()
-          .onInput((value: number) => value + 1)
-          // @ts-expect-error fluent builders should not allow duplicate input hooks
-          .onInput((value: number) => value + 2);
+          plugin()
+            .onInput((value: number) => value + 1)
+            // @ts-expect-error fluent builders should not allow duplicate input hooks
+            .onInput((value: number) => value + 2);
 
-        const compactUnaryPlugin: PluginBuilder<number, never, never> =
-          plugin().onInput((value: number) => value + 1);
+          const compactUnaryPlugin: PluginBuilder<number, never, never> =
+            plugin().onInput((value: number) => value + 1);
 
-        const compactNullaryPlugin: PluginBuilder<void, never, never> =
-          plugin().onInput((): [] => []);
+          const compactNullaryPlugin: PluginBuilder<void, never, never> =
+            plugin().onInput((): [] => []);
 
-        const tuplePlugin: PluginBuilder<[number, number], never, never> =
-          plugin().onInput((left: number, right: number) => [left, right]);
+          const tuplePlugin: PluginBuilder<[number, number], never, never> =
+            plugin().onInput((left: number, right: number) => [left, right]);
 
-        void compactUnaryPlugin;
-        void compactNullaryPlugin;
-        void tuplePlugin;
+          void compactUnaryPlugin;
+          void compactNullaryPlugin;
+          void tuplePlugin;
 
-        const inferredInputPlugin = plugin().onInput(
-          (value: number) => value + 1,
-        );
+          const inferredInputPlugin = plugin().onInput(
+            (value: number) => value + 1,
+          );
 
-        step((value: number) => value * 2, {
-          plugins: [inferredInputPlugin],
-        });
+          step((value: number) => value * 2, {
+            plugins: [inferredInputPlugin],
+          });
 
-        step((value: string) => value.toUpperCase(), {
-          // @ts-expect-error inferred convenience plugins must reject incompatible step inputs
-          plugins: [inferredInputPlugin],
-        });
+          step((value: string) => value.toUpperCase(), {
+            // @ts-expect-error inferred convenience plugins must reject incompatible step inputs
+            plugins: [inferredInputPlugin],
+          });
 
-        const inferredOutputPlugin = plugin().onOutput(
-          (output: number) => output + 1,
-        );
+          const inferredOutputPlugin = plugin().onOutput(
+            (output: number) => output + 1,
+          );
 
-        step((value: number) => value * 2, {
-          plugins: [inferredOutputPlugin],
-        });
+          step((value: number) => value * 2, {
+            plugins: [inferredOutputPlugin],
+          });
 
-        const inferredErrorPlugin = plugin().onError(
-          (error: Error, input: [value: number]) => input[0] ?? error,
-        );
+          const inferredErrorPlugin = plugin().onError(
+            (error: Error, input: [value: number]) => input[0] ?? error,
+          );
 
-        const inferredOutputThenErrorPlugin: Plugin<
-          never,
-          number,
-          Error,
-          { output: true; error: true },
-          ContextValues,
-          undefined
-        > = plugin()
-          .onOutput((output: number) => output + 1)
-          .onError((error: Error) => error);
+          const inferredOutputThenErrorPlugin: Plugin<
+            never,
+            number,
+            Error,
+            { output: true; error: true },
+            ContextValues,
+            undefined
+          > = plugin()
+            .onOutput((output: number) => output + 1)
+            .onError((error: Error) => error);
 
-        step((value: number) => value * 2, {
-          plugins: [inferredErrorPlugin],
-        });
+          step((value: number) => value * 2, {
+            plugins: [inferredErrorPlugin],
+          });
 
-        step((value: number) => value * 2, {
-          plugins: [inferredOutputThenErrorPlugin],
-        });
+          step((value: number) => value * 2, {
+            plugins: [inferredOutputThenErrorPlugin],
+          });
 
-        step((value: string) => value.toUpperCase(), {
-          // @ts-expect-error inferred convenience plugins must reject incompatible error input tuples
-          plugins: [inferredErrorPlugin],
-        });
+          step((value: string) => value.toUpperCase(), {
+            // @ts-expect-error inferred convenience plugins must reject incompatible error input tuples
+            plugins: [inferredErrorPlugin],
+          });
 
-        plugin.for<[value: number], number>()({
-          // @ts-expect-error input hooks must accept the typed input arguments
-          input: (value: string) => value,
-        });
+          plugin.for<[value: number], number>()({
+            // @ts-expect-error input hooks must accept the typed input arguments
+            input: (value: string) => value,
+          });
 
-        plugin.for<[value: number, offset: number], number>()({
-          // @ts-expect-error multi-input hooks must return the full typed input tuple
-          input: (value: number, offset: number) => value + offset,
-        });
+          plugin.for<[value: number, offset: number], number>()({
+            // @ts-expect-error multi-input hooks must return the full typed input tuple
+            input: (value: number, offset: number) => value + offset,
+          });
 
-        plugin.for<[value: number], number>()({
-          // @ts-expect-error output hooks must accept the step output type
-          output: (output: string) => output,
-        });
+          plugin.for<[value: number], number>()({
+            // @ts-expect-error output hooks must accept the step output type
+            output: (output: string) => output,
+          });
 
-        plugin.for<[value: number], number>()({
-          // @ts-expect-error error hooks must accept the typed input tuple
-          error: (_error: Error, input: [string]) => input[0],
-        });
+          plugin.for<[value: number], number>()({
+            // @ts-expect-error error hooks must accept the typed input tuple
+            error: (_error: Error, input: [string]) => input[0],
+          });
 
-        plugin.sync.for<[value: number], number>()({
-          // @ts-expect-error sync plugins cannot return promises from input hooks
-          input: async (value: number) => value + 1,
-        });
+          plugin.sync.for<[value: number], number>()({
+            // @ts-expect-error sync plugins cannot return promises from input hooks
+            input: async (value: number) => await value + 1,
+          });
 
-        plugin.sync.for<[value: number], number>()({
-          // @ts-expect-error sync plugins cannot return promises from output hooks
-          output: async (output: number) => output,
-        });
+          plugin.sync.for<[value: number], number>()({
+            // @ts-expect-error sync plugins cannot return promises from output hooks
+            output: async (output: number) => await output,
+          });
 
-        plugin.sync.for<[value: number], number>()({
-          // @ts-expect-error sync plugins cannot return promises from error hooks
-          error: async (error: Error) => error,
-        });
+          plugin.sync.for<[value: number], number>()({
+            // @ts-expect-error sync plugins cannot return promises from error hooks
+            error: async (error: Error) => await error,
+          });
+        };
+        void verifyTypes;
       }
     });
   });

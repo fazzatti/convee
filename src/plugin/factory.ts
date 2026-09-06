@@ -8,16 +8,15 @@ import type {
   FluentPluginStart,
   Plugin,
   PluginArgs,
-  PluginCapability,
   PluginDefinition,
   PluginFactory,
   PluginFactoryOptions,
   PluginIdentity,
   PluginSyncFactory,
-  TypedPluginFactory,
   SyncPlugin,
   SyncPluginDefinition,
   SyncTypedPluginFactory,
+  TypedPluginFactory,
 } from "@/plugin/types.ts";
 
 const PLUGIN_HOOK_REGISTRATIONS = [
@@ -52,13 +51,12 @@ function createFluentPluginBuilder<Shared extends ContextValues>(
   definition: HookDefinition = {},
 ): FluentPluginStart<Shared> {
   const normalized = normalizePluginOptions(options);
-  const pluginInstance =
-    Object.keys(definition).length === 0
-      ? undefined
-      : create(definition, {
-          id: normalized.id as string,
-          target: normalized.target,
-        });
+  const pluginInstance = Object.keys(definition).length === 0
+    ? undefined
+    : create(definition, {
+      id: normalized.id as string,
+      target: normalized.target,
+    });
 
   const hookSetters = Object.fromEntries(
     PLUGIN_HOOK_REGISTRATIONS.filter(({ hook }) => !(hook in definition)).map(
@@ -126,13 +124,15 @@ export function pluginFor<
   >(
     definition: Definition,
     options?: { id?: Id; target?: Target },
-  ): Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target> &
-    PluginIdentity<Id, Target> {
+  ):
+    & Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
+    & PluginIdentity<Id, Target> {
     return PluginEngine.create<I, O, E, Shared, Definition, Id, Target>(
       definition,
       options,
-    ) as Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target> &
-      PluginIdentity<Id, Target>;
+    ) as
+      & Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
+      & PluginIdentity<Id, Target>;
   }
 
   return createTypedPlugin as TypedPluginFactory<I, O, E, Shared>;
@@ -154,34 +154,42 @@ export function syncPluginFor<
   >(
     definition: Definition,
     options?: { id?: Id; target?: Target },
-  ): SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target> &
-    PluginIdentity<Id, Target> {
-    return PluginEngine.create<I, O, E, Shared, never, Id, Target>(
-      definition as never,
+  ):
+    & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
+    & PluginIdentity<Id, Target> {
+    return PluginEngine.create<I, O, E, Shared, Definition, Id, Target>(
+      definition,
       options,
-    ) as unknown as SyncPlugin<
-      CompactPluginArgs<I>,
-      O,
-      E,
-      Definition,
-      Shared,
-      Target
-    > &
-      PluginIdentity<Id, Target>;
+    ) as unknown as
+      & SyncPlugin<
+        CompactPluginArgs<I>,
+        O,
+        E,
+        Definition,
+        Shared,
+        Target
+      >
+      & PluginIdentity<Id, Target>;
   }
 
   return createTypedSyncPlugin as SyncTypedPluginFactory<I, O, E, Shared>;
 }
 
 function createPlugin(definition: object, options?: PluginFactoryOptions) {
-  return PluginEngine.create(definition as never, options);
+  return PluginEngine.create(
+    definition as PluginDefinition<PluginArgs, unknown>,
+    options,
+  );
 }
 
 /**
  * Internal implementation used by `plugin.sync(...)`.
  */
 function createSyncPlugin(definition: object, options?: PluginFactoryOptions) {
-  return PluginEngine.create(definition as never, options);
+  return PluginEngine.create(
+    definition as PluginDefinition<PluginArgs, unknown>,
+    options,
+  );
 }
 
 const createContextualSyncPluginFactory = <
@@ -193,7 +201,7 @@ const createContextualSyncPluginFactory = <
   function fluentSyncPlugin(options?: PluginFactoryOptions) {
     return createFluentPluginBuilder<Shared>(
       (definition, normalizedOptions) =>
-        createSyncPlugin(definition as never, normalizedOptions),
+        createSyncPlugin(definition, normalizedOptions),
       options,
     );
   }
@@ -223,7 +231,7 @@ const createContextualPluginFactory = <
   function fluentPlugin(options?: PluginFactoryOptions) {
     return createFluentPluginBuilder<Shared>(
       (definition, normalizedOptions) =>
-        createPlugin(definition as never, normalizedOptions),
+        createPlugin(definition, normalizedOptions),
       options,
     );
   }
@@ -256,7 +264,6 @@ const createContextualPluginFactory = <
  * `.onOutput(...)`, and/or `.onError(...)`.
  */
 const basePluginFactory = createContextualPluginFactory();
-const sync = basePluginFactory.sync as PluginSyncFactory;
 
 /**
  * Creates a plugin builder with optional metadata.

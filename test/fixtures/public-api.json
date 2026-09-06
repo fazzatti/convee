@@ -1,0 +1,958 @@
+[
+  {
+    "name": "AllowedPipePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "AllowedSyncPipePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "AllSync",
+    "typeOnly": true
+  },
+  {
+    "name": "AnyConveeErrorCreator",
+    "typeOnly": true
+  },
+  {
+    "name": "AnyPipeStep",
+    "typeOnly": true
+  },
+  {
+    "name": "AnyPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "AnyStepFn",
+    "typeOnly": true
+  },
+  {
+    "name": "AnySyncPipeStep",
+    "typeOnly": true
+  },
+  {
+    "name": "AnySyncPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "AnySyncStepFn",
+    "typeOnly": true
+  },
+  {
+    "name": "Args",
+    "typeOnly": true
+  },
+  {
+    "name": "BarePipeFunction",
+    "typeOnly": true
+  },
+  {
+    "name": "BaseMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "CompactPluginArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "CompactStepArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextStore",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualPipeFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualPluginFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualPluginSyncFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualStepFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualSyncPipeFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextualSyncStepFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ContextValues",
+    "typeOnly": true
+  },
+  {
+    "name": "conveeError",
+    "typeOnly": false
+  },
+  {
+    "name": "ConveeError",
+    "typeOnly": false
+  },
+  {
+    "name": "ConveeErrorBuild",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeErrorContext",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeErrorCreator",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeErrorDomain",
+    "typeOnly": true
+  },
+  {
+    "name": "conveeErrorFromUnknown",
+    "typeOnly": false
+  },
+  {
+    "name": "ConveeErrorShape",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeErrorTrace",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeTraceFrame",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeTraceFrameKind",
+    "typeOnly": true
+  },
+  {
+    "name": "ConveeTracePhase",
+    "typeOnly": true
+  },
+  {
+    "name": "createErrorFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "createRunContext",
+    "typeOnly": false
+  },
+  {
+    "name": "DefinedConveeError",
+    "typeOnly": true
+  },
+  {
+    "name": "DefinitionPluginRuntimeMembers",
+    "typeOnly": true
+  },
+  {
+    "name": "Diagnostic",
+    "typeOnly": true
+  },
+  {
+    "name": "DistributePipeStepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "DistributeSyncPipeStepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "ErrorFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ErrorPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "ExtractStepContext",
+    "typeOnly": true
+  },
+  {
+    "name": "FluentMembers",
+    "typeOnly": true
+  },
+  {
+    "name": "FluentPluginStart",
+    "typeOnly": true
+  },
+  {
+    "name": "FluentState",
+    "typeOnly": true
+  },
+  {
+    "name": "HasDefinitionHooks",
+    "typeOnly": true
+  },
+  {
+    "name": "hasError",
+    "typeOnly": false
+  },
+  {
+    "name": "HasExplicitPluginDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "hasInput",
+    "typeOnly": false
+  },
+  {
+    "name": "hasOutput",
+    "typeOnly": false
+  },
+  {
+    "name": "HasPluginRuntimeState",
+    "typeOnly": true
+  },
+  {
+    "name": "HasRegisteredPluginHooks",
+    "typeOnly": true
+  },
+  {
+    "name": "HookArguments",
+    "typeOnly": true
+  },
+  {
+    "name": "HookResult",
+    "typeOnly": true
+  },
+  {
+    "name": "InferConveeError",
+    "typeOnly": true
+  },
+  {
+    "name": "InferConveeErrors",
+    "typeOnly": true
+  },
+  {
+    "name": "InferErrorHookArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "InferErrorHookRecoveredValue",
+    "typeOnly": true
+  },
+  {
+    "name": "InferInputHookArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "InferOutputHookValue",
+    "typeOnly": true
+  },
+  {
+    "name": "InferPluginArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "InferPluginErrorType",
+    "typeOnly": true
+  },
+  {
+    "name": "InferPluginOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "InferredPluginDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "InferredSyncPluginDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "InputPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "isConveeError",
+    "typeOnly": false
+  },
+  {
+    "name": "isConveeErrorOf",
+    "typeOnly": false
+  },
+  {
+    "name": "isPipeError",
+    "typeOnly": false
+  },
+  {
+    "name": "IsPipeLinkValid",
+    "typeOnly": true
+  },
+  {
+    "name": "isPluginError",
+    "typeOnly": false
+  },
+  {
+    "name": "isStepError",
+    "typeOnly": false
+  },
+  {
+    "name": "LastPipeStep",
+    "typeOnly": true
+  },
+  {
+    "name": "LiteralString",
+    "typeOnly": true
+  },
+  {
+    "name": "MaybePromise",
+    "typeOnly": true
+  },
+  {
+    "name": "NestedStepView",
+    "typeOnly": true
+  },
+  {
+    "name": "NextOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "NoInfer",
+    "typeOnly": true
+  },
+  {
+    "name": "NonPromise",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizeBuilderArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizeBuilderOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizePipeOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizePipeStep",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizePipeSteps",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizePublicPluginArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizePublicStepArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizeSyncPipeStep",
+    "typeOnly": true
+  },
+  {
+    "name": "NormalizeSyncPipeSteps",
+    "typeOnly": true
+  },
+  {
+    "name": "OutputPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PIP_ERRORS",
+    "typeOnly": false
+  },
+  {
+    "name": "pipe",
+    "typeOnly": false
+  },
+  {
+    "name": "Pipe",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeAttachablePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeCompatibleStep",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeContext",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeError",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeErrorCatalog",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeErrorOf",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeIdentity",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeInput",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeInputStep",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeInstance",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeInvalidInputPluginResultArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeInvalidInputPluginResultMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeLevelPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeNonSyncStepArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeNonSyncStepMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "PipePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeResult",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeRunOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepContext",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepPluginUnion",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeStepTargetIds",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeTargetIds",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeUnknownPluginTargetArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeUnknownPluginTargetMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeUnknownThrownArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PipeUnknownThrownMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PLG_ERRORS",
+    "typeOnly": false
+  },
+  {
+    "name": "plugin",
+    "typeOnly": false
+  },
+  {
+    "name": "Plugin",
+    "typeOnly": true
+  },
+  {
+    "name": "PLUGIN_BUILDER_UNSET",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginBuilder",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginBuilderUnset",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginCapability",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginContextApi",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginEngine",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginError",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginErrorCatalog",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginErrorHook",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginErrorOf",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginFactoryOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "pluginFor",
+    "typeOnly": false
+  },
+  {
+    "name": "PluginHooks",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginIdentity",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginInputHook",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginInputResult",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginInvalidDefinitionArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginInvalidDefinitionMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginOutputHook",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginSnapshot",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginState",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginSyncFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginThis",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginUnknownThrownArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginUnknownThrownMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "PluginWithId",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicBuilderArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicBuilderDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicBuilderOutput",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicMissingHooks",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicPluginBaseMembers",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicPluginFluentMembers",
+    "typeOnly": true
+  },
+  {
+    "name": "PublicPluginRuntimeMembers",
+    "typeOnly": true
+  },
+  {
+    "name": "RawPipeFn",
+    "typeOnly": true
+  },
+  {
+    "name": "RawSyncPipeFn",
+    "typeOnly": true
+  },
+  {
+    "name": "RequireAtLeastOne",
+    "typeOnly": true
+  },
+  {
+    "name": "RunContext",
+    "typeOnly": true
+  },
+  {
+    "name": "RunContextCapture",
+    "typeOnly": true
+  },
+  {
+    "name": "RunContextOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "SerializedErrorLike",
+    "typeOnly": true
+  },
+  {
+    "name": "step",
+    "typeOnly": false
+  },
+  {
+    "name": "Step",
+    "typeOnly": true
+  },
+  {
+    "name": "StepArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "StepContextApi",
+    "typeOnly": true
+  },
+  {
+    "name": "StepError",
+    "typeOnly": true
+  },
+  {
+    "name": "StepErrorCatalog",
+    "typeOnly": true
+  },
+  {
+    "name": "StepErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "StepErrorOf",
+    "typeOnly": true
+  },
+  {
+    "name": "StepFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "StepFn",
+    "typeOnly": true
+  },
+  {
+    "name": "StepFromFunction",
+    "typeOnly": true
+  },
+  {
+    "name": "StepIdentity",
+    "typeOnly": true
+  },
+  {
+    "name": "StepInstance",
+    "typeOnly": true
+  },
+  {
+    "name": "StepInvalidInputPluginResultArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "StepInvalidInputPluginResultMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "StepOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "StepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "StepRunOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "StepRuntime",
+    "typeOnly": true
+  },
+  {
+    "name": "StepSnapshot",
+    "typeOnly": true
+  },
+  {
+    "name": "StepThis",
+    "typeOnly": true
+  },
+  {
+    "name": "StepUnknownThrownArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "StepUnknownThrownMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "STP_ERRORS",
+    "typeOnly": false
+  },
+  {
+    "name": "SyncErrorPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncInputPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncOutputPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipe",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeAttachablePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeCompatibleStep",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeInputStep",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeInstance",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeLevelPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipePlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeRunOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeStepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPipeStepPluginUnion",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPluginDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPluginErrorHook",
+    "typeOnly": true
+  },
+  {
+    "name": "syncPluginFor",
+    "typeOnly": false
+  },
+  {
+    "name": "SyncPluginHooks",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPluginInputHook",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPluginOutputHook",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStep",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepFn",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepFromFunction",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepInstance",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepPlugin",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepRunOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncStepRuntime",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncTypedPluginFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "TypedPluginFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "unexpectedConveeError",
+    "typeOnly": false
+  },
+  {
+    "name": "UnionToIntersection",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidatePipePlugins",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidatePipeSteps",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateSyncPipePlugins",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateSyncPipeSteps",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidLinks",
+    "typeOnly": true
+  }
+]

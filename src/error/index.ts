@@ -5,32 +5,14 @@ import type {
   ConveeErrorDomain,
   ConveeErrorShape,
   Diagnostic,
-  SerializedErrorLike,
 } from "@/error/types.ts";
+
+import { diagnosticValue } from "@/error/serialize.ts";
 
 const CONVEE_ERROR_BRAND = Symbol.for("convee/ConveeError");
 
 function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-function toSerializableCause(cause: unknown): unknown {
-  if (cause === undefined) {
-    return undefined;
-  }
-
-  if (ConveeError.is(cause)) {
-    return cause.toJSON();
-  }
-
-  if (cause instanceof Error) {
-    return {
-      name: cause.name,
-      message: cause.message,
-    } satisfies SerializedErrorLike;
-  }
-
-  return cause;
 }
 
 /**
@@ -47,16 +29,25 @@ export class ConveeError<
   Meta extends BaseMeta = BaseMeta,
   Domain extends ConveeErrorDomain = ConveeErrorDomain,
 > extends Error {
+  /** In-process interoperability marker, not proof that an untrusted object is safe. */
   readonly [CONVEE_ERROR_BRAND] = true;
 
+  /** Logical namespace responsible for the error. */
   readonly domain: Domain;
+  /** Stable programmatic error identifier. */
   readonly code: Code;
+  /** Package or component identifier that emitted the error. */
   readonly source: string;
+  /** Optional human-readable diagnostic detail. */
   readonly details?: string;
+  /** Optional root-cause guidance and remediation resources. */
   readonly diagnostic?: Diagnostic;
+  /** Original structured metadata; values are not deep-frozen or redacted. */
   readonly meta?: Meta;
+  /** Optional execution frames identifying where the failure originated. */
   readonly trace?: ConveeErrorShape<Code, Meta, Domain>["trace"];
 
+  /** function Object() { [native code] } */
   constructor(shape: ConveeErrorShape<Code, Meta, Domain>) {
     super(
       shape.message,
@@ -73,8 +64,9 @@ export class ConveeError<
     this.trace = shape.trace;
   }
 
+  /** Returns a bounded, cycle-safe diagnostic projection; this is not redaction or a lossless wire format. */
   toJSON(): Record<string, unknown> {
-    return {
+    return diagnosticValue({
       name: this.name,
       domain: this.domain,
       code: this.code,
@@ -84,21 +76,20 @@ export class ConveeError<
       diagnostic: this.diagnostic,
       meta: this.meta,
       trace: this.trace,
-      cause: toSerializableCause(this.cause),
-    };
+      cause: this.cause,
+    }) as Record<string, unknown>;
   }
 
+  /** Checks in-process error shape and methods; does not authenticate the object or validate catalog metadata. */
   static is(error: unknown): error is ConveeError<string, BaseMeta> {
-    if (error instanceof ConveeError) {
-      return true;
-    }
-
     if (!isObjectLike(error)) {
       return false;
     }
 
     return (
       error[CONVEE_ERROR_BRAND] === true &&
+      error instanceof Error &&
+      typeof error.toJSON === "function" &&
       typeof error.message === "string" &&
       typeof error.domain === "string" &&
       typeof error.code === "string" &&
@@ -106,6 +97,7 @@ export class ConveeError<
     );
   }
 
+  /** Creates a generic unexpected failure with optional diagnostic overrides. */
   static unexpected(args?: {
     domain?: ConveeErrorDomain;
     source?: string;
@@ -130,6 +122,7 @@ export class ConveeError<
     });
   }
 
+  /** Preserves existing Convee errors and wraps other failures with their original cause. */
   static fromUnknown(
     error: unknown,
     ctx?: ConveeErrorContext<string, BaseMeta>,
@@ -220,6 +213,7 @@ export function isConveeErrorOf<TCreator extends AnyConveeErrorCreator>(
   );
 }
 
+/** Error instance with a literal message and source from its catalog definition. */
 export type DefinedConveeError<
   Code extends string,
   Meta extends BaseMeta,
@@ -230,6 +224,7 @@ export type DefinedConveeError<
   readonly meta: Meta;
 };
 
+/** Callable error constructor with immutable code, source and domain identifiers. */
 export type ConveeErrorCreator<
   Code extends string,
   Meta extends BaseMeta,
@@ -244,28 +239,45 @@ export type ConveeErrorCreator<
   readonly message: Message;
 };
 
-type AnyConveeErrorCreator = ((
-  args: never,
-) => DefinedConveeError<string, BaseMeta, ConveeErrorDomain>) & {
-  readonly code: string;
-  readonly domain: ConveeErrorDomain;
-  readonly source: string;
-};
+/** Structural constructor signature accepted by catalog inference helpers. */
+export type AnyConveeErrorCreator =
+  & ((
+    args: never,
+  ) => DefinedConveeError<string, BaseMeta, ConveeErrorDomain>)
+  & {
+    readonly code: string;
+    readonly domain: ConveeErrorDomain;
+    readonly source: string;
+  };
 
+/** Infers the error instance produced by one catalog constructor. */
 export type InferConveeError<TCreator> = TCreator extends {
   (...args: infer _Args): infer ErrorT;
-}
-  ? ErrorT
+} ? ErrorT
   : never;
 
+/** Produces the discriminated union of errors in a catalog. */
 export type InferConveeErrors<TCatalog> = {
   [K in keyof TCatalog]: InferConveeError<TCatalog[K]>;
 }[keyof TCatalog];
 
+/** Typed definition function returned by createErrorFactory. */
+export type ErrorFactory<
+  Domain extends ConveeErrorDomain,
+  Source extends string,
+> = <Code extends string, Message extends string, Meta extends BaseMeta, Args>(
+  definition: {
+    code: Code;
+    message: Message;
+    build(args: Args): ConveeErrorBuild<Meta>;
+  },
+) => ConveeErrorCreator<Code, Meta, Domain, Source, Message, Args>;
+
+/** Bind a domain and source to a family of typed error creators. */
 export function createErrorFactory<
   Domain extends ConveeErrorDomain,
   Source extends string,
->(base: { domain: Domain; source: Source }) {
+>(base: { domain: Domain; source: Source }): ErrorFactory<Domain, Source> {
   return function defineError<
     Code extends string,
     Message extends string,

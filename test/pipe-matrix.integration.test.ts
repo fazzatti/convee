@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { pipe, plugin, step } from "@convee";
@@ -21,12 +21,12 @@ describe("Integration: Pipe Matrix", () => {
       plugin.for<[value: number], number>()(
         { output: (output: number) => output + 11 },
         { id: `inner-${target}-plus-eleven`, target },
-      ) as never;
+      );
     const doubleInnerPlugin = (target: string) =>
       plugin.for<[value: number], number>()(
         { output: (output: number) => output * 2 },
         { id: `inner-${target}-double`, target },
-      ) as never;
+      );
 
     function createNumberPipe(options?: {
       rawFirst?: boolean;
@@ -34,25 +34,33 @@ describe("Integration: Pipe Matrix", () => {
       rawThird?: boolean;
       id?: string;
     }) {
-      const firstStep = options?.rawFirst
-        ? (input: number) => input + 1
-        : step((input: number) => input + 1, {
-            id: `${options?.id ?? "pipe"}-first`,
-          } as const);
+      const firstStep = options?.rawFirst ? (input: number) => input + 1 : step(
+        (input: number) => input + 1,
+        {
+          id: `${options?.id ?? "pipe"}-first`,
+        } as const,
+      );
       const secondStep = options?.rawSecond
         ? (input: number) => input * 2
-        : step((input: number) => input * 2, {
+        : step(
+          (input: number) => input * 2,
+          {
             id: `${options?.id ?? "pipe"}-second`,
-          } as const);
-      const thirdStep = options?.rawThird
-        ? (input: number) => input - 3
-        : step((input: number) => input - 3, {
-            id: `${options?.id ?? "pipe"}-third`,
-          } as const);
+          } as const,
+        );
+      const thirdStep = options?.rawThird ? (input: number) => input - 3 : step(
+        (input: number) => input - 3,
+        {
+          id: `${options?.id ?? "pipe"}-third`,
+        } as const,
+      );
 
-      return pipe([firstStep, secondStep, thirdStep], {
-        id: options?.id ?? "number-pipe",
-      } as const);
+      return pipe(
+        [firstStep, secondStep, thirdStep],
+        {
+          id: options?.id ?? "number-pipe",
+        } as const,
+      );
     }
 
     it("runs a fully explicit numeric pipe", async () => {

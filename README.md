@@ -1,437 +1,235 @@
-<div align="center">
-  <h1>convee</h1>
-</div>
+# Convee
 
-<p align="center">
-  A composable TypeScript library for building typed pipelines with plugins, shared run context, and structured errors.
-</p>
+Typed functions, pipelines and lifecycle plugins for Deno. No runtime
+dependencies, network access, implicit scheduling or workflow service.
 
-<p align="center">
-  <a href="https://jsr.io/@fifo/convee">JSR Package</a>
-</p>
+The common API is five building blocks: `step`, `pipe`, `plugin`,
+`createRunContext` and `ConveeError`. A callable remains a real function,
+including `bind`, `call` and `apply`.
 
-<div align="center">
-  <a href="https://github.com/fazzatti/convee/actions/workflows/ci.yml">
-    <img alt="CI" src="https://github.com/fazzatti/convee/actions/workflows/ci.yml/badge.svg?branch=main" />
-  </a>
-  <a href="https://codecov.io/gh/fazzatti/convee">
-    <img alt="codecov" src="https://codecov.io/gh/fazzatti/convee/graph/badge.svg?token=PBCJC39LSA" />
-  </a>
-  <a href="https://github.com/fazzatti/convee/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/github/license/fazzatti/convee" />
-  </a>
-  <a href="https://github.com/fazzatti/convee">
-    <img alt="Open Source" src="https://img.shields.io/badge/open%20source-yes-brightgreen" />
-  </a>
-</div>
+## Install and run
 
-<br />
-
-The runtime model is intentionally simple:
-
-- `plugin` defines lifecycle hooks for `input`, `output`, and `error`
-- `step` wraps one callable and owns step-level plugins
-- `pipe` composes steps or nested pipes into a typed execution chain
-- `createRunContext` carries shared state and execution snapshots
-- `ConveeError` and the built-in error catalogs normalize failures
-
-## Installation
-
-```bash
+```sh
 deno add jsr:@fifo/convee
 ```
 
 ```ts
-import {
-  ConveeError,
-  createRunContext,
-  pipe,
-  plugin,
-  step,
-} from "jsr:@fifo/convee";
-```
-
-## Architecture
-
-### Plugins
-
-Plugins are lifecycle wrappers. They do not execute by themselves. A plugin becomes useful when you attach it to a step or a pipe.
-
-Plugin capabilities:
-
-- `input` transforms the incoming arguments before the wrapped unit runs
-- `output` transforms the produced result after the wrapped unit finishes
-- `error` recovers from a failure or replaces it with another error
-- `id` gives the plugin a stable identity for inspection and removal
-- `target` scopes the plugin to a specific direct step when used in a pipe
-- `supports(...)` checks whether a plugin implements a given lifecycle hook
-- `targets(...)` checks whether a plugin applies to a given step id
-
-```ts
-import { plugin } from "jsr:@fifo/convee";
-
-const plusOne = plugin.for<[value: number], number>()(
-  {
-    output: (value) => value + 1,
-  },
-  { id: "plus-one" },
-);
-```
-
-You can also build plugins fluently:
-
-```ts
-const audit = plugin({ id: "audit" })
-  .onInput((value: number) => value)
-  .onOutput((value: number) => value);
-```
-
-### Steps
-
-A step wraps one function but still behaves like a callable function. The returned value is both:
-
-- a callable runtime you can invoke directly
-- a step object with execution and plugin-management capabilities
-
-Step capabilities:
-
-- direct invocation: `await stepInstance(args...)`
-- `run(...)` for explicit invocation with the same behavior as direct calls
-- `runWith(...)` for one-off plugins or explicit context overrides
-- `use(...)` to attach persistent plugins
-- `remove(...)` to detach persistent plugins by `id`
-- `id` for stable targeting and trace inspection
-- `plugins` to inspect the persistent plugins attached to the step
-- `isSync` to distinguish async and sync step runtimes
-
-```ts
-import { step } from "jsr:@fifo/convee";
-
-const sum = step((left: number, right: number) => left + right, {
-  id: "sum-step",
-});
-
-await sum(2, 3); // 5
-await sum.run(2, 3); // 5
-```
-
-That direct-call shape is intentional: steps compose like normal functions, but they keep the runtime controls needed for plugins and context-aware execution.
-
-Attach persistent plugins with `use(...)`:
-
-```ts
-sum.use(
-  plugin.for<[left: number, right: number], number>()(
-    {
-      output: (value) => value * 2,
-    },
-    { id: "double-output" },
-  ),
-);
-
-await sum(2, 3); // 10
-```
-
-Or attach one-off plugins with `runWith(...)`:
-
-```ts
-const result = await sum.runWith(
-  {
-    plugins: [
-      plugin.for<[left: number, right: number], number>()(
-        {
-          output: (value) => value + 10,
-        },
-        { id: "single-use" },
-      ),
-    ],
-  },
-  2,
-  3,
-);
-```
-
-### Pipes
-
-A pipe also stays callable after composition. The returned value is both:
-
-- a callable runtime for the whole chain
-- a pipe object with step inspection, plugin management, and advanced run controls
-
-Pipe capabilities:
-
-- direct invocation: `await pipeInstance(args...)`
-- `run(...)` for explicit invocation with the same behavior as direct calls
-- `runWith(...)` for one-off plugins or explicit context overrides
-- `use(...)` to attach persistent pipe-level or direct-step plugins
-- `remove(...)` to detach persistent plugins by `id`
-- `steps` to inspect the normalized inner step list
-- `plugins` to inspect the persistent plugins attached to the pipe
-- `id` for stable targeting and trace inspection
-- `isSync` to distinguish async and sync pipe runtimes
-
-A pipe composes steps, nested pipes, or raw functions. Raw functions are wrapped as steps automatically, so the pipeline always runs over step-like units internally.
-
-```ts
-import { pipe, step } from "jsr:@fifo/convee";
-
-const add = step((value: number) => value + 1, { id: "add" });
-const double = (value: number) => value * 2;
-
-const numberPipe = pipe([add, double], {
-  id: "number-pipe",
-});
-
-await numberPipe(2); // 6
-```
-
-That means you keep function-style composition at the edges while still getting step ids, plugin targets, and typed execution controls inside the pipe.
-
-Pipes accept pipe-level plugins and plugins targeted at direct inner steps:
-
-```ts
 import { pipe, plugin, step } from "jsr:@fifo/convee";
 
-const add = step((value: number) => value + 1, { id: "add" } as const);
-const double = step((value: number) => value * 2, { id: "double" } as const);
-
-const numberPipe = pipe([add, double], {
-  id: "number-pipe",
-} as const);
-
-numberPipe.use(
-  plugin.for<[value: number], number>()(
-    {
-      output: (value) => value + 3,
-    },
-    {
-      id: "boost-add",
-      target: "add",
-    } as const,
-  ),
+const total = step((prices: number[]) =>
+  prices.reduce((sum, price) => sum + price, 0)
 );
-
-await numberPipe(2); // 12
+const receipt = pipe([total, (amount: number) => amount.toFixed(2)]);
+receipt.use(plugin().onOutput((text: string) => "$" + text));
+console.log(await receipt([10, 2.5])); // $12.50
 ```
 
-Targeted inner-step plugins are scoped to the pipe that owns them. Reusing the same step in another pipe does not leak plugins across pipelines.
+This branch prepares **2.0.0**, a breaking release. Until it is published, use
+this checkout rather than expecting the registry to serve the new behavior. CI
+covers Deno **2.6.0 and 2.9.6**. Browser/Node distribution is not a support
+promise made by this release.
 
-### Run Context
+## Arguments and composition
 
-Every run can carry shared state plus captured snapshots for steps and plugins.
+Callbacks keep their exact parameter tuple. One array argument stays one
+argument. Optional, rest, nullable, union and explicit `undefined` parameters
+retain their TypeScript meaning. Callback arity is never guessed from
+`function.length`.
 
-Context capabilities:
-
-- `state` stores shared mutable values for the current run tree
-- `step.current()` reads the step that is executing right now
-- `step.get(id)` reads the captured snapshot for a specific step
-- `step.all()` reads every captured step snapshot for the run
-- `plugin.current()` reads the plugin that is executing right now
-- `plugin.get(id)` reads the captured snapshot for a specific plugin
-- `plugin.all()` reads every captured plugin snapshot for the run
-- `runId` identifies the current run
-- `rootRunId` identifies the root run when execution is nested
-- `capture` controls whether snapshots store only outputs or full input/output/error data
+Between pipe children, **an array result is spread into the next child's
+arguments**. Return a one-element outer tuple to pass an array as one argument:
 
 ```ts
-import {
-  createRunContext,
-  step,
-  type StepThis,
-} from "jsr:@fifo/convee";
+import { pipe } from "jsr:@fifo/convee";
 
-type Shared = {
-  requestId: string;
-  trace: string[];
-};
-
-const contextualStep = step.withContext<Shared>()(function (
-  this: StepThis<Shared>,
-  value: number,
-) {
-  const trace = [...(this.context().state.get("trace") ?? [])];
-  trace.push(`step:${value}`);
-  this.context().state.set("trace", trace);
-  return `${this.context().state.get("requestId")}:${value}`;
-});
-
-const context = createRunContext<Shared>({
-  capture: "all",
-  seed: {
-    requestId: "req-42",
-    trace: [],
-  },
-});
-
-const result = await contextualStep.runWith(
-  {
-    context: { parent: context },
-  },
-  7,
-);
-
-result; // "req-42:7"
-context.state.get("trace"); // ["step:7"]
-context.step.get(contextualStep.id)?.output; // "req-42:7"
-```
-
-Use `withContext<Shared>()` on `plugin`, `step`, or `pipe` when you want `this.context()` to expose a typed shared state shape.
-
-## Sync APIs
-
-Every runtime primitive has an explicit sync variant:
-
-- `plugin.sync(...)`
-- `step.sync(...)`
-- `pipe.sync(...)`
-
-Use them when the entire execution graph must stay synchronous.
-
-```ts
-import { pipe, step } from "jsr:@fifo/convee";
-
-const syncPipe = pipe.sync([
-  step.sync((value: number) => value + 1),
-  step.sync((value: number) => value * 2),
+const join = pipe([
+  (text: string): [string, number] => [text, text.length],
+  (text: string, length: number) => text + ":" + length,
 ]);
-
-syncPipe(2); // 6
+const sum = pipe([
+  (value: number): [number[]] => [[value, value + 1]],
+  (values: number[]) => values.reduce((total, value) => total + value, 0),
+]);
+console.log(await join("hello"), await sum(2));
 ```
 
-## Error Model
+An input hook returns the full outer argument tuple. For exactly one non-array
+argument, returning the replacement scalar is also supported. For one
+array-valued argument, return `[array]`, not `array`. Empty input and
+multi-input hooks must return a tuple, not a scalar.
 
-Convee normalizes runtime failures into structured errors.
+Pipes accept raw functions, steps, nested pipes and structural adapters
+implementing `id`, `isSync` and `runWith`. Empty pipes are rejected. Distinct
+children cannot share an ID or collide with their parent's ID. Repeating the
+**same child object** is allowed and shares its per-ID state.
 
-- `ConveeError` is the common error type
-- `PLG_ERRORS` contains plugin-domain creators
-- `STP_ERRORS` contains step-domain creators
-- `PIP_ERRORS` contains pipe-domain creators
+The `steps` getter returns a defensive array copy. Nested children expose a
+shallow invocation type to avoid recursively expanding entire graph types. Keep
+the original nested pipe variable when configuring or inspecting its internals.
+Flat and nested graphs of 10, 25, 50 and 100 children/levels are checked in CI;
+larger graphs have no unlimited-depth guarantee.
 
-Error hooks can recover:
+## Plugins and lifecycle
 
 ```ts
 import { plugin, step } from "jsr:@fifo/convee";
 
-const safeDivide = step((value: number) => {
-  if (value === 0) throw new Error("division by zero");
-  return 100 / value;
-});
+const normalize = plugin.sync({ id: "normalize" })
+  .onError((_failure: Error, _input: [string]) => "fallback")
+  .onInput((text: string) => text.trim())
+  .onOutput((text: string) => text.toUpperCase());
 
-safeDivide.use(
-  plugin.for<[value: number], number>()(
-    {
-      error: (error) => {
-        console.error(error.message);
-        return 0;
-      },
-    },
-    { id: "recover-zero" },
-  ),
-);
-
-await safeDivide(0); // 0
+const label = step.sync((text: string) => text, { plugins: [normalize] });
+console.log(label(" hello "));
 ```
 
-And consumers can narrow failures:
+All six fluent hook-registration orders are supported.
+`plugin.for<InputTuple,
+Output, Error>()(definition)` provides an explicit
+contract when inference is not enough. Hook identity comes from factory options.
+Undefined optional hooks are omitted; defined non-functions and empty
+definitions are rejected. Hook descriptors are immutable and copy only supported
+fields.
+
+Execution order is input hooks, body, then output hooks. Within each phase,
+persistent registrations run before `runWith` plugins, in registration order.
+
+- Only **body failures** reach error hooks. The first non-`Error` return
+  recovers.
+- Returning an `Error` passes failure to the next error hook. An `Error` object
+  cannot represent successful recovery; wrap it in an object instead.
+- Input-hook, output-hook and error-hook failures propagate. Completed output
+  hooks are never replayed.
+- A normal body may return an `Error` as data. Recovery has the separate rule
+  above.
+- `use` and `remove` mutate the same runtime and return the original callable.
+  Duplicate plugin IDs execute all registrations; `remove(id)` removes all
+  matches.
+- Registration and routing plans are captured at invocation start. Changes while
+  awaiting apply to later runs. A child's own registrations are captured when
+  that child starts, not when its parent starts.
+- A pipe plugin with no target wraps the whole pipe. A target selects the pipe
+  itself or a direct child, never an arbitrary descendant. Known literal IDs are
+  checked statically; runtime-generated strings are validated at runtime.
+
+`step.sync` and `pipe.sync` reject thenables from bodies, hooks and structural
+adapters. They never silently turn a Promise into downstream data. Accidentally
+starting asynchronous work is not cancellable by Convee, so do not put async
+callbacks into a sync runtime through unsafe casts.
+
+## Shared context and concurrent work
 
 ```ts
-import { STP_ERRORS, isConveeErrorOf, step } from "jsr:@fifo/convee";
+import { createRunContext, step } from "jsr:@fifo/convee";
 
-const failingStep = step(() => {
-  throw { reason: "boom" };
-}, {
-  id: "failing-step",
-});
-
-try {
-  await failingStep();
-} catch (error) {
-  if (isConveeErrorOf(error, STP_ERRORS.UNKNOWN_THROWN)) {
-    console.error(error.meta.stepId);
-  }
-}
-```
-
-## Design Notes
-
-### Pipes compose plain values
-
-Convee does not need a container, decorator system, or framework lifecycle. A pipe is a typed chain from one output shape to the next input shape, and the final runtime is still callable like a normal function.
-
-```ts
-const pricePipe = pipe([
-  (value: number) => value * 100,
-  (value: number) => `${value} cents`,
-]);
-
-await pricePipe(12.5); // "1250 cents"
-await pricePipe.run(12.5); // "1250 cents"
-```
-
-### Plugins stay explicit
-
-Plugins do nothing until you attach them. That makes behavior visible at the call site and avoids hidden global middleware.
-
-```ts
-const format = step((value: string) => value.trim());
-
-await format("  hello  "); // "hello"
-
-format.use(
-  plugin.for<[value: string], string>()(
-    {
-      output: (value) => value.toUpperCase(),
-    },
-    { id: "uppercase" },
-  ),
-);
-
-await format("  hello  "); // "HELLO"
-```
-
-### Context flows through parent runs
-
-Nested steps and nested pipes share state by receiving a parent run context. That gives you one place to keep trace data, request-scoped values, or step snapshots without relying on globals.
-
-```ts
-const traceStep = step.withContext<{ trace: string[] }>()(function (value: number) {
-  this.context().state.set("trace", [
-    ...(this.context().state.get("trace") ?? []),
-    `value:${value}`,
-  ]);
-
-  return value * 2;
-});
-
-const requestContext = createRunContext({
-  seed: {
-    trace: [] as string[],
+const read = step.withContext<{ requestId: string }>()(
+  function (value: number) {
+    console.log(this.context().state.get("requestId"));
+    return value + 1;
   },
-});
-
-await traceStep.runWith(
-  {
-    context: { parent: requestContext },
-  },
-  2,
 );
-
-requestContext.state.get("trace"); // ["value:2"]
+const context = createRunContext({
+  seed: { requestId: "request-1" },
+  capture: "outputs",
+});
+console.log(await read.runWith({ context: { parent: context } }, 2));
 ```
 
-### Public API stays intentional
+Each invocation owns its live step/plugin frames, including simultaneous calls
+sharing a parent. `this.context()` is scoped to that invocation. Root state and
+per-ID stores are deliberately shared. Convee does **not** make
+application-level read/await/write sequences atomic; serialize conflicting
+updates yourself.
 
-The package root focuses on the runtime primitives and the types that directly support them. Internal inference helpers can still exist inside the library, but the main entrypoint stays centered on the surface consumers should actually build against.
+Completed snapshots follow the same policy through `get`, `all` and `previous`:
 
-```ts
-import {
-  createRunContext,
-  pipe,
-  plugin,
-  step,
-} from "jsr:@fifo/convee";
+| Capture             | Completed input | Completed output | Completed error |
+| ------------------- | --------------- | ---------------- | --------------- |
+| `none`              | no              | no               | no              |
+| `outputs` (default) | no              | yes              | no              |
+| `all`               | yes             | yes              | yes             |
+
+Live invocation data is available while its body or hooks execute in every mode.
+`current()` throws outside its scope. `previous()` means **the last invocation
+that completed in the shared run**, including nested children and concurrent
+siblings. It is not necessarily the preceding child in your pipeline.
+
+Only the latest snapshot/state per unique ID and one completion-history entry
+are retained. Repeating one ID does not retain every invocation. Introducing
+unbounded new IDs or keeping large values in shared stores can still consume
+unbounded memory. Use a fresh context for an independent request.
+
+Snapshot arrays, registration arrays, child arrays and store `entries()` protect
+their structure. Payload objects are not cloned, deep-frozen, sanitized or
+redacted.
+
+## Errors and diagnostics
+
+Native errors propagate by identity. Thrown strings become native errors. Other
+thrown values become catalog errors such as `STP_000` and `PIP_000`, preserving
+the original cause and the first failure's trace.
+
+`ConveeError.toJSON()` provides bounded diagnostic output for cycles, bigint,
+symbols, functions and hostile objects. It limits depth to 8, visited objects to
+1000, and array/object width to 100. It is intentionally lossy and **not a
+secure redaction policy** or a format for reconstructing trusted errors.
+
+Domain guards check known catalog codes and required metadata fields. General
+branding/catalog-matching helpers are in-process typing conveniences, not an
+authentication boundary for JSON from untrusted parties. An earlier failure can
+remain in an all-capture snapshot after successful recovery.
+
+## Migrating from 1.x
+
+- Single array inputs now preserve their outer argument tuple. Update input
+  hooks to return `[array]` and review array-producing pipe links.
+- Sync APIs reject thenables rather than allowing Promise-derived corruption.
+  Native promise rejections are observed to avoid a second unhandled rejection;
+  custom thenables are not executed. Already-started async work cannot be
+  cancelled.
+- Recovery is body-only, without output-hook replay.
+- Per-invocation context views replace shared live stacks. Retain shared
+  `state`, not an assumption that every invocation has the same context object.
+- Completed capture policies and `previous()` now agree and discard old payload
+  history. Do not depend on previous-entered behavior.
+- `use/remove` return the callable. Registration getters are copies, not
+  writable engine state. Plugin list types no longer pretend mutation creates an
+  immutable history that stays correct through aliases.
+- Duplicate distinct child IDs, reserved plugin-definition fields and fabricated
+  branded error objects no longer behave as permissive inputs.
+
+The core runtime vocabulary remains the same. Additional type-only exports make
+supporting public signatures navigable in JSR documentation; most consumers only
+need the five main building blocks.
+
+## Contributing and verification
+
+```sh
+deno task verify
+deno task test:stress
+deno task test:mutation
+deno task test:resources
+deno task bench
 ```
 
-## License
+`verify` checks formatting, lint, unused declarations, public consumer types,
+all unit/integration/regression/property fixtures, JSDoc, README examples, AST
+module boundaries, deep type graphs, isolated package consumption, coverage and
+a normal JSR dry run **without** `--allow-slow-types`.
 
-MIT. See [LICENSE](LICENSE).
+Runtime tests run without blanket `-A` permissions. Source-analysis tools have
+scoped read/write/process permissions and an explicit list of TypeScript's
+startup environment reads. Mutation tests work in disposable copies below
+`.artifacts`, never by modifying the checkout.
+
+CI runs 60000 seeded property cases, controlled concurrency scenarios, actual
+garbage-collection retention tests and the mutation campaign on every PR.
+Coverage gates require at least 98% source lines and 95% branches. Mutation
+gates require all named critical mutants and at least 90% of the generated
+campaign to be killed; timeouts are not counted as kills. The
+[testing guide](TESTING.md) explains the measurement limits.
+
+Benchmark JSON, mutation logs, HTML/LCOV coverage, type-depth timing and
+complexity/CRAP-proxy reports are attached to CI. Benchmarks are trend evidence,
+not a machine-dependent latency gate. Complexity metrics guide review and do not
+prove financial, concurrency or business correctness.

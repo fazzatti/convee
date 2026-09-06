@@ -1,22 +1,20 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { createRunContext } from "@/context/index.ts";
 import { ConveeError } from "@/error/index.ts";
 import type { PluginThis } from "@/context/index.ts";
 import { plugin } from "@/plugin/index.ts";
-import { step, type Step, type StepFn } from "@/step/index.ts";
+import { type Step, step } from "@/step/index.ts";
 
 describe("Step", () => {
   describe("creation", () => {
     it("creates a callable step with an explicit id", async () => {
-      const sumStep = step((a: number, b: number) => a + b, {
-        id: "sum-step",
-      } as const);
+      const sumStep = step(
+        (a: number, b: number) => a + b,
+        {
+          id: "sum-step",
+        } as const,
+      );
 
       assertEquals(sumStep.id, "sum-step");
       assertEquals(sumStep.isSync, false);
@@ -52,9 +50,12 @@ describe("Step", () => {
     });
 
     it("rejects mutation of proxied public properties", () => {
-      const immutableStep = step((value: number) => value * 2, {
-        id: "immutable-step",
-      } as const);
+      const immutableStep = step(
+        (value: number) => value * 2,
+        {
+          id: "immutable-step",
+        } as const,
+      );
 
       assertThrows(() => {
         (immutableStep as { id: string }).id = "changed";
@@ -64,9 +65,12 @@ describe("Step", () => {
     });
 
     it("exposes runtime members through the proxy", () => {
-      const proxiedStep = step((value: number) => value * 2, {
-        id: "proxied-step",
-      } as const);
+      const proxiedStep = step(
+        (value: number) => value * 2,
+        {
+          id: "proxied-step",
+        } as const,
+      );
 
       assertEquals("id" in proxiedStep, true);
       assertEquals("plugins" in proxiedStep, true);
@@ -188,36 +192,40 @@ describe("Step", () => {
           requestSeen?: string;
         }>()
         .for<[value: number], number>()(
-        {
-          input: function (
-            this: PluginThis<{ requestId: string; requestSeen?: string }>,
-            value: number,
-          ) {
-            const context = this.context();
+          {
+            input: function (
+              this: PluginThis<{ requestId: string; requestSeen?: string }>,
+              value: number,
+            ) {
+              const context = this.context();
 
-            assertEquals(context.state.get("requestId"), "req-1");
-            context.state.set("requestSeen", context.state.get("requestId"));
-            context.plugin.current().state.set("inputSeen", true);
+              assertEquals(context.state.get("requestId"), "req-1");
+              context.state.set("requestSeen", context.state.get("requestId"));
+              context.plugin.current().state.set("inputSeen", true);
 
-            return value + 1;
+              return value + 1;
+            },
+            output: function (
+              this: PluginThis<{ requestId: string; requestSeen?: string }>,
+              output: number,
+            ) {
+              const context = this.context();
+
+              assertEquals(
+                context.plugin.current().state.get("inputSeen"),
+                true,
+              );
+              assertEquals(context.step.current().state.get("tripled"), 9);
+              assertEquals(context.step.current().output, 6);
+
+              return output +
+                Number(context.step.current().state.get("tripled"));
+            },
           },
-          output: function (
-            this: PluginThis<{ requestId: string; requestSeen?: string }>,
-            output: number,
-          ) {
-            const context = this.context();
-
-            assertEquals(context.plugin.current().state.get("inputSeen"), true);
-            assertEquals(context.step.current().state.get("tripled"), 9);
-            assertEquals(context.step.current().output, 6);
-
-            return output + Number(context.step.current().state.get("tripled"));
-          },
-        },
-        {
-          id: "context-plugin",
-        } as const,
-      );
+          {
+            id: "context-plugin",
+          } as const,
+        );
 
       const contextualStep = step.withContext<{
         requestId: string;
@@ -320,9 +328,12 @@ describe("Step", () => {
     });
 
     it("applies targeted single-use plugins through runWith()", async () => {
-      const sumStep = step((a: number, b: number) => a + b, {
-        id: "sum-step",
-      } as const);
+      const sumStep = step(
+        (a: number, b: number) => a + b,
+        {
+          id: "sum-step",
+        } as const,
+      );
 
       const result = await sumStep.runWith(
         {
@@ -366,7 +377,8 @@ describe("Step", () => {
         plugins: [
           plugin.for<[a: number, b: number], number>()(
             {
-              input: ((a: number, b: number) => a + b) as never,
+              // @ts-expect-error deliberately invalid input exercises the runtime guard
+              input: (a: number, b: number) => a + b,
             },
             {
               id: "invalid-input",
@@ -589,78 +601,82 @@ describe("Step", () => {
     it("enforces plugin types", async () => {
       const typedStep = step((value: number) => value * 2);
 
-      if (false) {
-        const compactUnaryStep: Step<number, number> = typedStep;
-        const compactNullaryStep: Step<void, number> = step(() => 1);
-        const tupleStep: Step<[number, number], number> = step(
-          (left: number, right: number) => left + right,
-        );
+      {
+        const verifyTypes = () => {
+          const compactUnaryStep: Step<number, number> = typedStep;
+          const compactNullaryStep: Step<void, number> = step(() => 1);
+          const tupleStep: Step<[number, number], number> = step(
+            (left: number, right: number) => left + right,
+          );
 
-        void compactUnaryStep;
-        void compactNullaryStep;
-        void tupleStep;
+          void compactUnaryStep;
+          void compactNullaryStep;
+          void tupleStep;
 
-        typedStep.runWith(
-          {
-            plugins: [
-              // @ts-expect-error single-use plugins must match the step input tuple
-              plugin.for<[value: string], number>()({
-                input: (value: string) => [value],
-              }),
-            ],
-          },
-          2,
-        );
-
-        typedStep.use(
-          // @ts-expect-error plugin input must match the step input tuple
-          plugin.for<[value: string], number>()({
-            input: (value: string) => [value],
-          }),
-        );
-
-        typedStep.use(
-          // @ts-expect-error plugin output must match the step output type
-          plugin.for<[value: number], string>()({
-            output: (output: string) => output,
-          }),
-        );
-
-        typedStep.use(
-          plugin.for<[value: number], number>()({
-            // @ts-expect-error input hooks must accept the typed step input arguments
-            input: (value: string) => value,
-          }),
-        );
-
-        const contextualStep = step.withContext<{
-          requestId: string;
-          total?: number;
-        }>()(function (value: number) {
-          const requestId = this.context().state.get("requestId");
-
-          this.context().state.set("total", value);
-
-          // @ts-expect-error context keys are checked
-          this.context().state.get("missing");
-          // @ts-expect-error context values are checked
-          this.context().state.set("total", "wrong");
-
-          return Number(requestId ?? 0) + value;
-        });
-
-        contextualStep.use(
-          plugin
-            .withContext<{ requestId: string; total?: number }>()
-            .for<[value: number], number>()({
-            output: function (
-              this: PluginThis<{ requestId: string; total?: number }>,
-              output: number,
-            ) {
-              return output + Number(this.context().state.get("total") ?? 0);
+          typedStep.runWith(
+            {
+              plugins: [
+                // @ts-expect-error single-use plugins must match the step input tuple
+                plugin.for<[value: string], number>()({
+                  input: (value: string) => [value],
+                }),
+              ],
             },
-          }),
-        );
+            2,
+          );
+
+          typedStep.use(
+            // @ts-expect-error plugin input must match the step input tuple
+            plugin.for<[value: string], number>()({
+              input: (value: string) => [value],
+            }),
+          );
+
+          typedStep.use(
+            // @ts-expect-error plugin output must match the step output type
+            plugin.for<[value: number], string>()({
+              output: (output: string) => output,
+            }),
+          );
+
+          typedStep.use(
+            plugin.for<[value: number], number>()({
+              // @ts-expect-error input hooks must accept the typed step input arguments
+              input: (value: string) => value,
+            }),
+          );
+
+          const contextualStep = step.withContext<{
+            requestId: string;
+            total?: number;
+          }>()(function (value: number) {
+            const requestId = this.context().state.get("requestId");
+
+            this.context().state.set("total", value);
+
+            // @ts-expect-error context keys are checked
+            this.context().state.get("missing");
+            // @ts-expect-error context values are checked
+            this.context().state.set("total", "wrong");
+
+            return Number(requestId ?? 0) + value;
+          });
+
+          contextualStep.use(
+            plugin
+              .withContext<{ requestId: string; total?: number }>()
+              .for<[value: number], number>()({
+                output: function (
+                  this: PluginThis<{ requestId: string; total?: number }>,
+                  output: number,
+                ) {
+                  return output +
+                    Number(this.context().state.get("total") ?? 0);
+                },
+              }),
+          );
+        };
+        void verifyTypes;
       }
 
       typedStep.use(
@@ -682,9 +698,12 @@ describe("Step", () => {
   describe("sync", () => {
     describe("creation", () => {
       it("creates a synchronous step with an explicit id", () => {
-        const sumStep = step.sync((a: number, b: number) => a + b, {
-          id: "sync-sum-step",
-        } as const);
+        const sumStep = step.sync(
+          (a: number, b: number) => a + b,
+          {
+            id: "sync-sum-step",
+          } as const,
+        );
 
         const result: number = sumStep(2, 3);
 
@@ -722,9 +741,12 @@ describe("Step", () => {
       });
 
       it("exposes synchronous runtime members through the proxy", () => {
-        const proxiedStep = step.sync((value: number) => value * 2, {
-          id: "sync-proxied-step",
-        } as const);
+        const proxiedStep = step.sync(
+          (value: number) => value * 2,
+          {
+            id: "sync-proxied-step",
+          } as const,
+        );
 
         assertEquals("id" in proxiedStep, true);
         assertEquals("plugins" in proxiedStep, true);
@@ -784,29 +806,29 @@ describe("Step", () => {
         const syncContextPlugin = plugin.sync
           .withContext<{ count: number }>()
           .for<[value: number], number>()(
-          {
-            input: function (
-              this: PluginThis<{ count: number }>,
-              value: number,
-            ) {
-              this.context().plugin.current().state.set("seen", true);
-              return value + 1;
+            {
+              input: function (
+                this: PluginThis<{ count: number }>,
+                value: number,
+              ) {
+                this.context().plugin.current().state.set("seen", true);
+                return value + 1;
+              },
+              output: function (
+                this: PluginThis<{ count: number }>,
+                output: number,
+              ) {
+                assertEquals(
+                  this.context().plugin.current().state.get("seen"),
+                  true,
+                );
+                return output + Number(this.context().state.get("count") ?? 0);
+              },
             },
-            output: function (
-              this: PluginThis<{ count: number }>,
-              output: number,
-            ) {
-              assertEquals(
-                this.context().plugin.current().state.get("seen"),
-                true,
-              );
-              return output + Number(this.context().state.get("count") ?? 0);
-            },
-          },
-          {
-            id: "sync-context-plugin",
-          } as const,
-        );
+            {
+              id: "sync-context-plugin",
+            } as const,
+          );
 
         const syncContextStep = step.sync.withContext<{ count: number }>()(
           function (value: number) {
@@ -866,9 +888,12 @@ describe("Step", () => {
       });
 
       it("applies targeted single-use sync plugins through runWith()", () => {
-        const sumStep = step.sync((a: number, b: number) => a + b, {
-          id: "sync-sum-step",
-        } as const);
+        const sumStep = step.sync(
+          (a: number, b: number) => a + b,
+          {
+            id: "sync-sum-step",
+          } as const,
+        );
 
         const result = sumStep.runWith(
           {
@@ -912,7 +937,8 @@ describe("Step", () => {
           plugins: [
             plugin.sync.for<[a: number, b: number], number>()(
               {
-                input: ((a: number, b: number) => a + b) as never,
+                // @ts-expect-error deliberately invalid input exercises the runtime guard
+                input: (a: number, b: number) => a + b,
               },
               {
                 id: "sync-invalid-input",
@@ -1126,35 +1152,38 @@ describe("Step", () => {
       it("enforces sync step typing", () => {
         const typedSyncStep = step.sync((value: number) => value * 2);
 
-        if (false) {
-          // @ts-expect-error sync steps cannot wrap async functions
-          step.sync(async (value: number) => value * 2);
+        {
+          const verifyTypes = () => {
+            // @ts-expect-error sync steps cannot wrap async functions
+            step.sync(async (value: number) => await value * 2);
 
-          typedSyncStep.runWith(
-            {
-              plugins: [
-                // @ts-expect-error sync single-use plugins reject async-capable plugins
-                plugin.for<[value: number], number>()({
-                  output: async (output: number) => output,
-                }),
-              ],
-            },
-            2,
-          );
+            typedSyncStep.runWith(
+              {
+                plugins: [
+                  // @ts-expect-error sync single-use plugins reject async-capable plugins
+                  plugin.for<[value: number], number>()({
+                    output: async (output: number) => await output,
+                  }),
+                ],
+              },
+              2,
+            );
 
-          typedSyncStep.use(
-            // @ts-expect-error sync steps reject async-capable plugins
-            plugin.for<[value: number], number>()({
-              output: async (output: number) => output,
-            }),
-          );
+            typedSyncStep.use(
+              // @ts-expect-error sync steps reject async-capable plugins
+              plugin.for<[value: number], number>()({
+                output: async (output: number) => await output,
+              }),
+            );
 
-          typedSyncStep.use(
-            plugin.sync.for<[value: number], number>()({
-              // @ts-expect-error sync input hooks must accept the typed step input arguments
-              input: (value: string) => value,
-            }),
-          );
+            typedSyncStep.use(
+              plugin.sync.for<[value: number], number>()({
+                // @ts-expect-error sync input hooks must accept the typed step input arguments
+                input: (value: string) => value,
+              }),
+            );
+          };
+          void verifyTypes;
         }
 
         typedSyncStep.use(

@@ -85,6 +85,10 @@ step/pipe engines and plugin descriptor runtime. It also applies named mutations
 to copies, ordering, cleanup, callable identity and completion history. It does
 not claim to mutate every expression, every error message or TypeScript types.
 
+`deno task test:tooling`, included in `verify`, tests the result parser against
+plain and ANSI-colored CI output, real failed-test summaries, infrastructure
+errors, timeouts and successful survivors.
+
 The tool requires a passing runtime baseline and copies sources into four
 disposable workers. Each mutant gets a 20-second deadline. Original checkout
 files are never overwritten. CI runs a typed baseline first; mutant executions

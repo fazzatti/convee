@@ -1,4 +1,5 @@
 import { parse, sourceFiles, ts } from "./source.ts";
+import { mutationStatus } from "./mutation-result.ts";
 
 interface Mutant {
   id: string;
@@ -227,13 +228,7 @@ await Promise.all(Array.from({ length: 4 }, async (_, worker) => {
     );
     try {
       const result = await run(workspace);
-      const status = result.timedOut
-        ? "timeout"
-        : result.passed
-        ? "survived"
-        : /FAILED \| .*\| [1-9]\d* failed/.test(result.output)
-        ? "killed"
-        : "invalid";
+      const status = mutationStatus(result);
       results.push({
         id: mutant.id,
         file: mutant.file,

@@ -1,5 +1,5 @@
 import type { ContextValues } from "@/context/types.ts";
-import { hasError, hasInput, hasOutput } from "@/plugin/guards.ts";
+import { hasError, hasFinally, hasInput, hasOutput } from "@/plugin/guards.ts";
 import { PluginEngine } from "@/plugin/plugin.ts";
 import type {
   CompactPluginArgs,
@@ -23,6 +23,7 @@ const PLUGIN_HOOK_REGISTRATIONS = [
   { method: "onInput", hook: "input" },
   { method: "onOutput", hook: "output" },
   { method: "onError", hook: "error" },
+  { method: "onFinally", hook: "finally" },
 ] as const;
 
 type HookName = (typeof PLUGIN_HOOK_REGISTRATIONS)[number]["hook"];
@@ -211,6 +212,7 @@ const createContextualSyncPluginFactory = <
     hasInput,
     hasOutput,
     hasError,
+    hasFinally,
   }) as unknown as ContextualPluginSyncFactory<Shared>;
 };
 
@@ -243,6 +245,7 @@ const createContextualPluginFactory = <
     hasInput,
     hasOutput,
     hasError,
+    hasFinally,
   }) as unknown as ContextualPluginFactory<Shared>;
 };
 
@@ -259,16 +262,17 @@ const createContextualPluginFactory = <
  * - `plugin.sync.hasInput(...)` to narrow plugins with an input hook
  * - `plugin.sync.hasOutput(...)` to narrow plugins with an output hook
  * - `plugin.sync.hasError(...)` to narrow plugins with an error hook
+ * - `plugin.sync.hasFinally(...)` to narrow plugins with a cleanup hook
  *
  * Start with `plugin.sync({ id, target })` and then chain `.onInput(...)`,
- * `.onOutput(...)`, and/or `.onError(...)`.
+ * `.onOutput(...)`, `.onError(...)`, and/or `.onFinally(...)`.
  */
 const basePluginFactory = createContextualPluginFactory();
 
 /**
  * Creates a plugin builder with optional metadata.
  *
- * This is the main plugin factory for v1.
+ * This is the main asynchronous plugin factory.
  *
  * Use `plugin(...)` to start a fluent plugin definition.
  *
@@ -286,6 +290,13 @@ const basePluginFactory = createContextualPluginFactory();
  *   Runs when execution fails.
  *   It receives the thrown error and the original input tuple, and may either
  *   return a recovered output or return an error to continue the error flow.
+ *
+ * - `.onFinally()`
+ *   Runs once per selected registration after all phases, including hook
+ *   failures. Async cleanup is awaited. No arguments are passed; use
+ *   `this.context()` for invocation state. Return values are ignored.
+ *   A failure does not stop other finalizers; all failures are retained in
+ *   `RT_ERRORS.FINALIZATION_FAILED` without re-entering error hooks.
  *
  * At least one hook must be chained before the plugin is materialized.
  *

@@ -62,6 +62,11 @@ tests run in `deno task test:tooling`.
 - `test/regressions` covers every sync/async step/pipe mode, exact argument
   tuples, native callable methods, registration order, phase failures, recovery,
   thenables, normalized descriptors, hostile diagnostics and snapshot ownership.
+- Finalization regressions cover all four execution modes, every failure phase,
+  recovery, one-slot resource reuse, accumulated cleanup failures, async
+  waiting, nested targeting and concurrent invocation state. Type tests reject
+  hidden async cleanup in sync APIs and ensure finalizers do not weaken input
+  typing.
 - `test/concurrency` uses explicit promise gates, not elapsed-time guesses, to
   vary hook phase, capture mode and completion order with a shared parent.
 - `test/fixtures` contains a realistic parse/validate/enrich workflow and the

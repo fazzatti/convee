@@ -1,4 +1,12 @@
 export { createRunContext } from "@/context/runtime.ts";
+export { RT_ERRORS } from "@/runtime/error.ts";
+export type {
+  FinalizationErrorArgs,
+  FinalizationErrorMeta,
+  FinalizationFailure,
+  RuntimeError,
+  RuntimeErrorCatalog,
+} from "@/runtime/error.ts";
 export type {
   ContextStore,
   ContextValues,
@@ -31,7 +39,7 @@ export type {
   Diagnostic,
 } from "@/error/index.ts";
 
-export { hasError, hasInput, hasOutput } from "@/plugin/guards.ts";
+export { hasError, hasFinally, hasInput, hasOutput } from "@/plugin/guards.ts";
 export { isPluginError, PLG_ERRORS } from "@/plugin/error.ts";
 export { plugin, pluginFor, syncPluginFor } from "@/plugin/factory.ts";
 export type {

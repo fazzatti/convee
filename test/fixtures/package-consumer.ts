@@ -13,12 +13,21 @@ const numbers = step(
 const graph = pipe([numbers, (value: number) => String(value)], {
   id: "graph",
 });
+let finalized = 0;
+graph.use(
+  plugin().onFinally(() => {
+    finalized++;
+  }),
+);
 const context = createRunContext({ capture: "none" });
 const result: string = await graph.runWith({ context: { parent: context } }, [
   2,
   3,
 ]);
-if (result !== "5" || context.step.previous()?.input !== undefined) {
+if (
+  result !== "5" || context.step.previous()?.input !== undefined ||
+  finalized !== 1
+) {
   throw new Error("Package runtime mismatch");
 }
 const sync = step.sync((value: number) => value, {

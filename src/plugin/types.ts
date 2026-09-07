@@ -64,11 +64,18 @@ export type SyncPluginErrorHook<
   E extends Error = Error,
 > = (error: E, input: I) => O | E;
 
+/** Cleanup hook awaited after all execution phases; it cannot replace the outcome. */
+export type PluginFinallyHook = () => MaybePromise<void>;
+
+/** Synchronous cleanup hook; undefined prevents accepting async functions as void callbacks. */
+export type SyncPluginFinallyHook = () => undefined;
+
 /** Shape of the async hooks that can be implemented by a plugin. */
 export type PluginHooks<I extends PluginArgs, O, E extends Error = Error> = {
   input?: PluginInputHook<I>;
   output?: PluginOutputHook<I, O>;
   error?: PluginErrorHook<I, O, E>;
+  finally?: PluginFinallyHook;
 };
 
 /**
@@ -82,7 +89,14 @@ export type SyncPluginHooks<
   input?: SyncPluginInputHook<I>;
   output?: SyncPluginOutputHook<I, O>;
   error?: SyncPluginErrorHook<I, O, E>;
+  finally?: () => void;
 };
+
+/** Reject async finalizers inferred through TypeScript's permissive void callback assignment. */
+export type SyncFinallyConstraint<Definition> = Definition extends {
+  finally: (...args: never[]) => infer Result;
+} ? Extract<Result, PromiseLike<unknown>> extends never ? unknown : never
+  : unknown;
 
 /** Async plugin definition object consumed by the plugin factories. */
 export type PluginDefinition<
@@ -103,7 +117,7 @@ export type SyncPluginDefinition<
 > = RequireAtLeastOne<SyncPluginHooks<I, O, E>> & ThisType<PluginThis<Shared>>;
 
 /** Public hook names that a plugin can implement. */
-export type PluginCapability = "input" | "output" | "error";
+export type PluginCapability = "input" | "output" | "error" | "finally";
 
 /** Detects whether a plugin definition declares hook fields. */
 export type HasDefinitionHooks<Definition extends object> = [
@@ -145,6 +159,17 @@ export type FluentMembers<
   Sync extends boolean,
   Id extends string = string,
 > =
+  & ("finally" extends Keys ? Record<never, never> : {
+    /** Release resources after success, recovery, or any hook/body failure. */
+    onFinally<Result extends void | Promise<void>>(
+      hook:
+        & ((this: PluginThis<Shared>) => Result)
+        & (Sync extends true
+          ? Extract<Result, PromiseLike<unknown>> extends never ? unknown
+          : never
+          : unknown),
+    ): FluentState<I, O, E, Shared, Target, Keys | "finally", Sync, Id>;
+  })
   & ("input" extends Keys ? Record<never, never> : {
     onInput<NextI extends HookArguments<I>>(
       hook: (
@@ -225,6 +250,9 @@ export type FluentState<
   & ("error" extends Keys
     ? { error: (error: E, input: HookArguments<I>) => HookResult<O | E, Sync> }
     : Record<never, never>)
+  & ("finally" extends Keys
+    ? { finally: Sync extends true ? SyncPluginFinallyHook : PluginFinallyHook }
+    : Record<never, never>)
   & FluentMembers<I, O, E, Shared, Target, Keys, Sync, Id>;
 
 /** Determines whether the fluent state has inferred any hook contract. */
@@ -254,6 +282,8 @@ export type DefinitionPluginRuntimeMembers<
     : Record<never, never>)
   & ("error" extends keyof Definition
     ? { error: PluginErrorHook<NormalizePublicPluginArgs<I>, O, E> }
+    : Record<never, never>)
+  & ("finally" extends keyof Definition ? { finally: PluginFinallyHook }
     : Record<never, never>);
 
 /** Resolves runtime hooks from either explicit or fluent definitions. */
@@ -334,6 +364,7 @@ export type AnyPlugin<
     targets(stepId: string): boolean;
   }
   & ThisType<PluginThis<Shared>>
+  & { finally?: PluginFinallyHook }
   & (
     | {
       input: PluginInputHook<I>;
@@ -349,6 +380,12 @@ export type AnyPlugin<
       input?: PluginInputHook<I>;
       output?: PluginOutputHook<I, O>;
       error: PluginErrorHook<I, O, E>;
+    }
+    | {
+      input?: PluginInputHook<I>;
+      output?: PluginOutputHook<I, O>;
+      error?: PluginErrorHook<I, O, E>;
+      finally: PluginFinallyHook;
     }
   );
 
@@ -369,6 +406,7 @@ export type AnySyncPlugin<
     targets(stepId: string): boolean;
   }
   & ThisType<PluginThis<Shared>>
+  & { finally?: SyncPluginFinallyHook }
   & (
     | {
       input: SyncPluginInputHook<I>;
@@ -384,6 +422,12 @@ export type AnySyncPlugin<
       input?: SyncPluginInputHook<I>;
       output?: SyncPluginOutputHook<I, O>;
       error: SyncPluginErrorHook<I, O, E>;
+    }
+    | {
+      input?: SyncPluginInputHook<I>;
+      output?: SyncPluginOutputHook<I, O>;
+      error?: SyncPluginErrorHook<I, O, E>;
+      finally: SyncPluginFinallyHook;
     }
   );
 
@@ -444,6 +488,8 @@ export type SyncPlugin<
     : Record<never, never>)
   & ("error" extends keyof Definition
     ? { error: SyncPluginErrorHook<NormalizePublicPluginArgs<I>, O, E> }
+    : Record<never, never>)
+  & ("finally" extends keyof Definition ? { finally: SyncPluginFinallyHook }
     : Record<never, never>);
 
 /** Sync plugin alias that guarantees an input hook. */
@@ -549,6 +595,7 @@ export type InferredSyncPluginDefinition<
   Shared extends ContextValues = ContextValues,
 > =
   & Definition
+  & SyncFinallyConstraint<Definition>
   & SyncPluginDefinition<
     InferPluginArgs<Definition>,
     InferPluginOutput<Definition>,
@@ -697,12 +744,18 @@ export type SyncTypedPluginFactory<
   Shared extends ContextValues = ContextValues,
 > = {
   <Definition extends SyncPluginDefinition<I, O, E, Shared>>(
-    definition: Definition & ThisType<PluginThis<Shared>>,
+    definition:
+      & Definition
+      & SyncFinallyConstraint<Definition>
+      & ThisType<PluginThis<Shared>>,
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
     & PluginIdentity<string, undefined>;
   <Definition extends SyncPluginDefinition<I, O, E, Shared>, Id extends string>(
-    definition: Definition & ThisType<PluginThis<Shared>>,
+    definition:
+      & Definition
+      & SyncFinallyConstraint<Definition>
+      & ThisType<PluginThis<Shared>>,
     options: { id: Id; target?: undefined },
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
@@ -711,7 +764,10 @@ export type SyncTypedPluginFactory<
     Definition extends SyncPluginDefinition<I, O, E, Shared>,
     Target extends string,
   >(
-    definition: Definition & ThisType<PluginThis<Shared>>,
+    definition:
+      & Definition
+      & SyncFinallyConstraint<Definition>
+      & ThisType<PluginThis<Shared>>,
     options: { target: Target; id?: undefined },
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
@@ -721,7 +777,10 @@ export type SyncTypedPluginFactory<
     Id extends string,
     Target extends string,
   >(
-    definition: Definition & ThisType<PluginThis<Shared>>,
+    definition:
+      & Definition
+      & SyncFinallyConstraint<Definition>
+      & ThisType<PluginThis<Shared>>,
     options: { id: Id; target: Target },
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
@@ -749,6 +808,7 @@ export type ContextualPluginSyncFactory<
   hasInput: typeof import("@/plugin/guards.ts").hasInput;
   hasOutput: typeof import("@/plugin/guards.ts").hasOutput;
   hasError: typeof import("@/plugin/guards.ts").hasError;
+  hasFinally: typeof import("@/plugin/guards.ts").hasFinally;
 };
 
 /**
@@ -774,6 +834,7 @@ export type ContextualPluginFactory<
   hasInput: typeof import("@/plugin/guards.ts").hasInput;
   hasOutput: typeof import("@/plugin/guards.ts").hasOutput;
   hasError: typeof import("@/plugin/guards.ts").hasError;
+  hasFinally: typeof import("@/plugin/guards.ts").hasFinally;
 };
 
 /**

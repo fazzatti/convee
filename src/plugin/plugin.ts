@@ -33,7 +33,7 @@ export class PluginEngine {
     const hooks: Partial<
       Record<PluginCapability, (...args: never[]) => unknown>
     > = {};
-    for (const capability of ["input", "output", "error"] as const) {
+    for (const capability of ["input", "output", "error", "finally"] as const) {
       const hook = definition == null
         ? undefined
         : Reflect.get(Object(definition), capability);
@@ -50,7 +50,7 @@ export class PluginEngine {
     }
     if (Object.keys(hooks).length === 0) {
       throw PLG_ERRORS.INVALID_DEFINITION({
-        capability: "input|output|error",
+        capability: "input|output|error|finally",
         pluginId: id,
         target,
       });

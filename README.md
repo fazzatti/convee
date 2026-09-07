@@ -29,7 +29,7 @@
 
 The runtime model is intentionally simple:
 
-- `plugin` defines lifecycle hooks for `input`, `output`, and `error`
+- `plugin` defines lifecycle hooks for `input`, `output`, `error`, and `finally`
 - `step` wraps one callable and owns step-level plugins
 - `pipe` composes steps or nested pipes into a typed execution chain
 - `createRunContext` carries shared state and execution snapshots
@@ -70,6 +70,7 @@ Plugin capabilities:
 - `input` transforms the incoming arguments before the wrapped unit runs
 - `output` transforms the produced result after the wrapped unit finishes
 - `error` recovers from a body failure or replaces it with another error
+- `finally` releases resources after success, recovery, or any hook/body failure
 - `id` gives the plugin a stable identity for inspection and removal
 - `target` scopes the plugin to a specific direct step when used in a pipe
 - `supports(...)` checks whether a plugin implements a given lifecycle hook
@@ -99,14 +100,93 @@ const audit = plugin({ id: "audit" })
   .onOutput((value: number) => value);
 ```
 
-Hook-registration order does not determine execution order. Whether you call
-`onError`, `onInput` or `onOutput` first, execution still follows input hooks,
-the body, then output hooks. All six registration orders are supported.
+Hook-registration order does not determine execution order. Regardless of the
+order in which you chain the methods, execution follows input hooks, the body
+(with error recovery if needed), output hooks, and finally cleanup hooks.
 
 At least one hook is required. Hook functions and identity are fixed when the
 descriptor is created. Pass `id` and `target` through the factory options, not
 inside the hook definition. To change behavior, attach a new plugin or remove an
 existing registration.
+
+#### Guaranteed cleanup with `onFinally`
+
+Use `onFinally` for resources whose lifetime belongs to a step or pipe
+invocation. Unlike `onError`, it also runs when another input, output, or error
+hook throws. The invocation does not settle until its asynchronous finalizers
+finish.
+
+```ts
+import { plugin, step } from "jsr:@fifo/convee";
+
+// Track a resource separately for each invocation, not in a shared scalar.
+const resources = new Map<string, { close(): void }>();
+
+const resourceLifetime = plugin({ id: "resource-lifetime" })
+  .onInput(function (value: number) {
+    const resource = {
+      close() {
+        console.log("Resource closed");
+      },
+    };
+    resources.set(this.context().runId, resource);
+    return value;
+  })
+  .onFinally(function () {
+    const runId = this.context().runId;
+    const resource = resources.get(runId);
+
+    // An earlier input hook may have failed before this plugin acquired anything.
+    if (!resource) return;
+
+    resources.delete(runId);
+    resource.close();
+  });
+
+const calculate = step((value: number) => value * 2).use(resourceLifetime);
+console.log(await calculate(4)); // Resource closes before this prints 8.
+```
+
+The object API is `plugin.for<InputTuple, Output>()({ finally() { ... } })`. A
+cleanup-only plugin is valid. `hasFinally(value)`, `plugin.hasFinally(value)`,
+and `plugin.sync.hasFinally(value)` narrow by the actual callable hook.
+`plugin.sync().onFinally(...)` rejects asynchronous callbacks; runtime checks
+also reject promises/thenables supplied through untyped code.
+
+Finalization has these rules:
+
+- Each selected registration finalizes once, in registration order. Persistent
+  plugins precede one-off plugins, just as in the other phases. Registering the
+  same plugin twice means two finalizer calls, not deduplication by ID.
+- All selected finalizers run, including those whose input hooks were skipped
+  after an earlier failure. Cleanup must tolerate resources not being acquired.
+- Child finalizers complete before execution proceeds to the next child.
+  Pipe-level finalizers run when the whole pipe finishes. Targets and captured
+  registration lists keep their existing behavior.
+- Finalizers receive no arguments. Their invocation context remains available
+  during cleanup. Return values cannot transform results or recover errors.
+- Without cleanup failures, the result or original error is unchanged. If any
+  cleanup fails, every remaining finalizer is still attempted. Convee throws
+  `RT_ERRORS.FINALIZATION_FAILED` (`RT_000`) with a native `AggregateError` as
+  its `cause`. The aggregate lists the unrecovered execution error first, when
+  present, followed by cleanup errors in registration order. Its own `cause`
+  points to the first error. Structured metadata retains each cleanup error and
+  its plugin trace, with phase `finally`.
+- A cleanup failure does not enter that unit's `onError` hooks. An enclosing
+  pipe can still observe it as a failure of its child, under normal recovery
+  rules. A successfully recovered body error remains in the context snapshot; it
+  is not counted as an unrecovered execution error in the aggregate.
+- Cleanup is not a timeout or process-crash handler. A never-settling callback
+  prevents completion; terminating the process cannot guarantee cleanup.
+  Validation before invocation starts, such as an invalid plugin target, does
+  not enter the lifecycle or run its finalizers.
+
+`runId` is shared by nested units using the same parent context. The example
+owns one resource at one attachment point; do not use `runId` alone to
+distinguish separate nested acquisitions of the same resource plugin.
+
+Upgrading from 2.0 to 2.1 requires no changes unless you opt into this hook.
+Existing `onError` recovery boundaries remain unchanged.
 
 ### Steps
 

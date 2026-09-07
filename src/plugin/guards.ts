@@ -24,3 +24,12 @@ export function hasError<Value>(
     (typeof value === "object" || typeof value === "function") &&
     typeof Reflect.get(value, "error") === "function";
 }
+
+/** Narrow by the callable finalization hook, not an untrusted supports claim. */
+export function hasFinally<Value>(
+  value: Value,
+): value is Value & { finally: () => unknown } {
+  return value !== null &&
+    (typeof value === "object" || typeof value === "function") &&
+    typeof Reflect.get(value, "finally") === "function";
+}

@@ -16,6 +16,24 @@ for (const file of await sourceFiles()) {
 }
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
+  [
+    "finalizer-invocation",
+    "src/runtime/execution.ts",
+    "yield* invoke(plugin, plugin.finally, []);",
+    "",
+  ],
+  [
+    "finalizer-continuation",
+    "src/runtime/execution.ts",
+    "failures.push({",
+    "throw failure; failures.push({",
+  ],
+  [
+    "finalizer-preserves-execution-error",
+    "src/runtime/error.ts",
+    "errors.unshift(executionError)",
+    "errors.unshift(new Error('lost execution error'))",
+  ],
   ["invocation-isolation", "src/runtime/execution.ts", ".fork()", ""],
   [
     "output-capture",

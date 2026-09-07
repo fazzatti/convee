@@ -25,7 +25,7 @@ export interface Diagnostic {
 export type ConveeTraceFrameKind = "pipe" | "step" | "plugin";
 
 /** Lifecycle phase recorded for a trace frame. */
-export type ConveeTracePhase = "input" | "run" | "output" | "error";
+export type ConveeTracePhase = "input" | "run" | "output" | "error" | "finally";
 
 /** Single frame in the execution trace attached to a Convee error. */
 export interface ConveeTraceFrame {

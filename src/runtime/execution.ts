@@ -1,6 +1,7 @@
 import { createRunContext, RunContextController } from "@/context/runtime.ts";
 import type { RunContext, RunContextOptions } from "@/context/types.ts";
 import type { ConveeErrorTrace, ConveeTracePhase } from "@/error/types.ts";
+import { type FinalizationFailure, RT_ERRORS } from "@/runtime/error.ts";
 
 export type Hook = (
   this: { context(): RunContext },
@@ -13,6 +14,7 @@ export interface RuntimePlugin {
   input?: Hook;
   output?: Hook;
   error?: Hook;
+  finally?: Hook;
   targets(id: string): boolean;
 }
 
@@ -80,7 +82,7 @@ function* lifecycle(
   }
   controller.enterStep(execution.id, args);
   let input = args;
-  try {
+  function* runPhases(): Generator<unknown, unknown, unknown> {
     for (const plugin of execution.plugins) {
       if (!plugin.input) continue;
       const result = yield* invoke(plugin, plugin.input, input);
@@ -121,10 +123,46 @@ function* lifecycle(
       controller.updateCurrentStepOutput(output);
     }
     return output;
-  } catch (failure) {
-    const error = execution.normalize(failure, trace());
-    controller.updateCurrentStepError(error);
-    throw error;
+  }
+  let output: unknown;
+  let executionError: Error | undefined;
+  try {
+    try {
+      output = yield* runPhases();
+    } catch (failure) {
+      executionError = execution.normalize(failure, trace());
+      controller.updateCurrentStepError(executionError);
+    }
+
+    // Cleanup is outside recovery and output processing. A failing finalizer
+    // must not prevent the remaining plugins from releasing their resources.
+    phase = "finally";
+    const failures: FinalizationFailure[] = [];
+    for (const plugin of execution.plugins) {
+      if (!plugin.finally) continue;
+      try {
+        yield* invoke(plugin, plugin.finally, []);
+      } catch (failure) {
+        const failureTrace = trace();
+        failures.push({
+          error: execution.normalize(failure, failureTrace),
+          trace: failureTrace,
+        });
+      }
+    }
+    if (failures.length > 0) {
+      pluginId = undefined;
+      const error = RT_ERRORS.FINALIZATION_FAILED({
+        executionId: execution.id,
+        executionError,
+        failures,
+        trace: trace(),
+      });
+      controller.updateCurrentStepError(error);
+      throw error;
+    }
+    if (executionError !== undefined) throw executionError;
+    return output;
   } finally {
     controller.leaveStep();
   }
@@ -175,13 +213,14 @@ export function activePlugins(
 }
 
 export function capturePlugin(plugin: RuntimePlugin): RuntimePlugin {
-  const { id, target, input, output, error } = plugin;
+  const { id, target, input, output, error, finally: finalizer } = plugin;
   return {
     id,
     target,
     input,
     output,
     error,
+    finally: finalizer,
     targets: (stepId) => target === undefined || target === stepId,
   };
 }

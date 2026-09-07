@@ -7,7 +7,9 @@ import {
 } from "../../src/index.ts";
 
 export type Body = (this: PluginThis, ...args: unknown[]) => unknown;
-export type Hooks = Partial<Record<"input" | "output" | "error", Body>>;
+export type Hooks = Partial<
+  Record<"input" | "output" | "error" | "finally", Body>
+>;
 export interface TestPlugin extends Hooks {
   readonly id: string;
   readonly target?: string;

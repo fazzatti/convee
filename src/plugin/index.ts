@@ -1,4 +1,4 @@
-export { hasError, hasInput, hasOutput } from "@/plugin/guards.ts";
+export { hasError, hasFinally, hasInput, hasOutput } from "@/plugin/guards.ts";
 export { isPluginError, PLG_ERRORS } from "@/plugin/error.ts";
 export type * from "@/plugin/error.ts";
 export { plugin, pluginFor, syncPluginFor } from "@/plugin/factory.ts";

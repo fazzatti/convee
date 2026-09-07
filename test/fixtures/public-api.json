@@ -180,6 +180,18 @@
     "typeOnly": true
   },
   {
+    "name": "FinalizationErrorArgs",
+    "typeOnly": true
+  },
+  {
+    "name": "FinalizationErrorMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "FinalizationFailure",
+    "typeOnly": true
+  },
+  {
     "name": "FluentMembers",
     "typeOnly": true
   },
@@ -202,6 +214,10 @@
   {
     "name": "HasExplicitPluginDefinition",
     "typeOnly": true
+  },
+  {
+    "name": "hasFinally",
+    "typeOnly": false
   },
   {
     "name": "hasInput",
@@ -584,6 +600,10 @@
     "typeOnly": true
   },
   {
+    "name": "PluginFinallyHook",
+    "typeOnly": true
+  },
+  {
     "name": "pluginFor",
     "typeOnly": false
   },
@@ -684,6 +704,10 @@
     "typeOnly": true
   },
   {
+    "name": "RT_ERRORS",
+    "typeOnly": false
+  },
+  {
     "name": "RunContext",
     "typeOnly": true
   },
@@ -693,6 +717,14 @@
   },
   {
     "name": "RunContextOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "RuntimeError",
+    "typeOnly": true
+  },
+  {
+    "name": "RuntimeErrorCatalog",
     "typeOnly": true
   },
   {
@@ -800,6 +832,10 @@
     "typeOnly": true
   },
   {
+    "name": "SyncFinallyConstraint",
+    "typeOnly": true
+  },
+  {
     "name": "SyncInputPlugin",
     "typeOnly": true
   },
@@ -865,6 +901,10 @@
   },
   {
     "name": "SyncPluginErrorHook",
+    "typeOnly": true
+  },
+  {
+    "name": "SyncPluginFinallyHook",
     "typeOnly": true
   },
   {

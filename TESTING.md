@@ -67,6 +67,13 @@ tests run in `deno task test:tooling`.
   waiting, nested targeting and concurrent invocation state. Type tests reject
   hidden async cleanup in sync APIs and ensure finalizers do not weaken input
   typing.
+- Worker tests cover configured pipelines, child/role plugins, mixed result
+  tuples, global admission limits, queue ordering, payload snapshots, startup,
+  draining, forced shutdown, timeouts and protocol/transport failures. Real Deno
+  module workers exercise package loading, error/result cloning and a two-worker
+  CPU barrier that cannot pass through sequential execution.
+  `deno task test:workers` runs the focused suites. These tests are included in
+  `test`/`verify`; local module loading uses narrowly scoped read permissions.
 - `test/concurrency` uses explicit promise gates, not elapsed-time guesses, to
   vary hook phase, capture mode and completion order with a shared parent.
 - `test/fixtures` contains a realistic parse/validate/enrich workflow and the
@@ -80,6 +87,12 @@ source/configuration and explicitly allow TypeScript's startup environment
 variables. Generators and mutation tools write only `.artifacts` and launch
 `deno` subprocesses. Those subprocesses execute trusted local test code; do not
 run a modified contributor branch without reviewing it.
+
+Worker tests allow reads only of `src` and `test/workers` so module workers can
+load the reviewed fixture registry. Scheduler tests use controlled transports
+for deterministic interleavings; the native-worker tests provide independent
+transport evidence. The isolated consumer also runs a real worker-backed mixed
+pipeline from copied package sources without repository import aliases.
 
 ## Property replay and larger campaigns
 
@@ -151,6 +164,13 @@ TypeScript AST. They enforce internal-only production dependencies, layer
 directions, runtime acyclicity, the reviewed public export fixture and packaging
 rules. Computed dynamic imports require an explicit design change. Type-only
 cycles are distinct from runtime cycles.
+
+The worker adapter adds one reviewed computed-import boundary in
+`src/workers/entry.ts`: loading the application's registry URL. All other
+computed production imports remain rejected. The optional `/workers` entrypoint
+has its own reviewed export fixture, and core imports cannot depend on the
+worker layer. Its runtime is currently verified on Deno; browser bundling and
+Node-specific transports are separate consumer targets.
 
 The isolated consumer copies production sources into a separate package and
 rewrites internal aliases to relative imports, then checks and executes against

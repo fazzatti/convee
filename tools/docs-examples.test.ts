@@ -29,6 +29,20 @@ Deno.test("README checker ignores non-TypeScript fences", () => {
   );
 });
 
+Deno.test("README checker resolves the optional workers entrypoint locally", () => {
+  assertEquals(
+    readmeExamples(
+      '```ts\nimport { parallel } from "jsr:@fifo/convee/workers";\n```',
+    ),
+    [
+      {
+        source: 'import { parallel } from "../../src/workers/index.ts";\n',
+        line: 2,
+      },
+    ],
+  );
+});
+
 Deno.test("README checker preserves imports from other packages", () => {
   assertEquals(
     readmeExamples('```ts\nimport { assert } from "jsr:@std/assert";\n```'),

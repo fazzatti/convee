@@ -498,6 +498,184 @@ other's updates. Serialize those updates when necessary. Snapshot containers are
 copied, but payload objects keep their identity and are not deep-cloned or
 automatically redacted.
 
+## Worker-backed parallel steps
+
+The optional `@fifo/convee/workers` entrypoint runs registered functions, steps
+and pipelines in reusable module workers. A `parallel` operation is an ordinary
+async Convee step: it has input/output types, supports `.use()` and
+`.runWith()`, and fits anywhere an async step fits. Its `split` and `join`
+callbacks execute in the caller; each submitted job executes in a worker.
+
+Deno module workers are the tested runtime. Browser applications must bundle the
+worker entry and application registry appropriately; `createWorker(entry, slot)`
+allows a custom Web Worker transport. A Node `worker_threads` adapter is not
+included. Importing Convee's main entrypoint does not load the worker adapter or
+start workers. Pools start lazily on `ready()` or the first nonempty submission.
+
+### Register, configure, split and join
+
+Workers load a module whose default export is a `workerRegistry`. Its factories
+provide the actual implementations; configuration refers to those factories by
+name. The following single-file example uses `import.meta.main` to run the
+application only in the caller, while allowing workers to import its registry.
+Run it with Deno and permission to read the local worker modules, for example
+`deno run --allow-read worker-example.ts`.
+
+```ts
+import { pipe, plugin, step } from "jsr:@fifo/convee";
+import { parallel, workerPool, workerRegistry } from "jsr:@fifo/convee/workers";
+
+const registry = workerRegistry({
+  tasks: {
+    length: () => (text: string) => text.length,
+    double: () => step((n: number) => n * 2),
+    label: () => pipe([(id: number) => `document:${id}`]),
+  },
+  plugins: {
+    offset: (options: { amount: number }) =>
+      plugin().onOutput((value: number) => value + options.amount),
+  },
+});
+export default registry;
+
+if (import.meta.main) {
+  const workers = workerPool.for<typeof registry>()({
+    module: new URL(import.meta.url),
+    size: 7,
+    pipelines: {
+      measure: {
+        steps: ["length", "double"],
+        plugins: [{ name: "offset", options: { amount: 1 } }],
+      },
+    },
+  });
+
+  const processDocument = parallel({
+    workers,
+    split: (text: string) =>
+      [
+        workers.job("measure", [text]),
+        workers.job("label", [42]),
+      ] as const,
+    // Inferred as a number followed by a string, even with out-of-order completion.
+    join: ([length, label]) => ({ length, label }),
+  });
+
+  const workflow = pipe([
+    step((text: string) => text.trim()),
+    processDocument,
+  ]);
+
+  try {
+    console.log(await workflow(" hello "));
+    // { length: 11, label: "document:42" }
+  } finally {
+    await workers.close();
+  }
+}
+```
+
+For a separate registry file, use a type-only import in the caller:
+`import type registry from "./worker-registry.ts"`. The curried
+`workerPool.for<typeof registry>()` binds that contract while inferring recipe
+and role literals from the following configuration. TypeScript checks task
+names, exact argument tuples, adjacent recipe links, plugin options and plugin
+input/output contracts. `workers.job()` retains each task's type in mixed
+tuples; homogeneous `.map()` batches retain their element type.
+
+The module URL and its imported type must describe the same registry. Runtime
+checks validate names, structure, routing and cloneability; TypeScript types are
+erased, so arbitrary external JSON also needs application-defined value/schema
+validation. Factories should validate externally supplied options as needed.
+
+Registered tasks can be plain functions or existing callable steps/pipelines.
+Factories must synchronously return a fresh definition for each construction;
+the actual job functions can be async. Recipes compose registered tasks,
+including registered nested pipelines, using normal Convee tuple transport. They
+cannot refer recursively to other configured recipes. Returning an object from
+`join` keeps an array-valued result together as one argument for the next
+pipeline child.
+
+### Plugin placement and worker roles
+
+Recipe `plugins` surround the complete assembled pipeline. A child can instead
+be `{ task: "double", id: "adjusted", plugins: [{ name: "increment" }] }`.
+Repeated task names need different node IDs. Plugins attached through recipes
+must be untargeted: their placement supplies the scope. Existing pipelines
+returned by factories retain their own internal targeting and lifecycle.
+
+Use `roles` instead of `size` for different worker setups. For example, this
+configuration fragment allocates seven workers with two distinct roles:
+
+```json
+{
+  "roles": {
+    "normal": { "size": 6, "tasks": ["measure", "label"] },
+    "audited": {
+      "size": 1,
+      "tasks": ["measure"],
+      "plugins": {
+        "measure": [{ "name": "offset", "options": { "amount": 10 } }]
+      }
+    }
+  }
+}
+```
+
+Jobs then select a role explicitly, such as
+`workers.job("measure", [text], { role: "audited" })`. This prevents a scheduler
+choice from changing which plugins execute. Role plugins append around the
+selected task/recipe; each role can expose a different set of registered tasks
+or configured pipelines. A single role named `default` permits omitted routing.
+
+Definitions are assembled once per worker configuration and reused. Each job
+gets a fresh local Convee run context, optionally seeded through the job's
+`context: { seed, capture }` option. Capture defaults to `none` in workers. The
+caller's live context and plugin objects are not sent across the boundary, and
+worker context writes do not merge back automatically. Mutable state captured by
+a factory or plugin remains worker-local state across jobs; use invocation
+context for temporary state.
+
+### Completion, failures and resource ownership
+
+- `ready()` awaits initialization of every worker. Invalid assembly fails before
+  any job runs. A role only constructs its selected tasks.
+- `run(job)` returns that job's value. `settle(jobs)` returns ordered
+  `{ status: "fulfilled", value }` / `{ status: "rejected", error }` outcomes.
+- `parallel` defaults to `mode: "all"`: all admitted jobs settle before `join`,
+  or a `WorkerError` with code `WRK_BATCH` reaches the outer step's error hooks.
+  Its `meta.failures` and `AggregateError` cause retain individual failures.
+- With `mode: "collect"`, `join` receives those ordered outcomes and chooses the
+  result. Admission/configuration errors still reject the whole invocation.
+  Empty submissions call `join([])` without starting workers.
+- Ordinary task errors leave the pool usable. Remote errors have explicit
+  name/message/stack/code reports in `WorkerError.meta.remote`; original Error
+  identities, prototypes and arbitrary custom properties are not reconstructed.
+- Worker crashes, malformed replies, startup failures or execution timeouts stop
+  the pool and reject outstanding jobs. Jobs are never automatically retried.
+  Create a new pool when recovering from infrastructure failure.
+- `close()` stops admission, drains accepted work, then terminates workers. If a
+  custom transport throws during cleanup, cleanup continues for the other
+  workers and `close()` rejects with `WRK_CRASH`. `terminate()` stops them
+  immediately. Hard termination cannot guarantee worker-local finalizers or undo
+  side effects. The caller's ordinary Convee finalizers still run as its step
+  settles.
+
+Pool capacity is shared across simultaneous invocations: `size: 7` creates at
+most seven workers for that pool. `maxPending` bounds accepted jobs, including
+running jobs (default 1024). A batch exceeding capacity is rejected before any
+of its jobs are admitted. Initialization and per-dispatched-job timeouts default
+to 10000 ms and 30000 ms; set `startupTimeoutMs` and `timeoutMs` explicitly for
+longer work. Queue waiting is not part of the execution timeout.
+
+Configuration and admitted arguments are snapshotted with structured cloning;
+messages/results cross a structured-clone boundary as well. Functions and
+closures must stay in modules. This version has no transfer-list API. Native
+`SharedArrayBuffer` sharing retains its normal shared-memory semantics and needs
+application synchronization. Worker reuse amortizes startup, while each worker
+still retains its JavaScript environment and every job incurs transport costs.
+No workload-independent speedup is promised.
+
 ## Sync APIs
 
 Every runtime primitive has an explicit sync variant:

@@ -6,8 +6,9 @@ export function readmeExamples(markdown: string): {
     /^```(?:ts|typescript)[ \t]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm,
   )].map((match) => ({
     source: match[1].replaceAll(
-      /(["'])jsr:@fifo\/convee\1/g,
-      '"../../src/index.ts"',
+      /(["'])jsr:@fifo\/convee(\/workers)?\1/g,
+      (_match, _quote: string, workers: string | undefined) =>
+        workers ? '"../../src/workers/index.ts"' : '"../../src/index.ts"',
     ),
     line: markdown.slice(0, match.index).split("\n").length + 1,
   }));

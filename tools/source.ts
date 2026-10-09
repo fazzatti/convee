@@ -25,6 +25,7 @@ export function parse(path: string, text: string): ts.SourceFile {
 
 export function dependencies(
   file: ts.SourceFile,
+  allowWorkerRegistryImport = false,
 ): { specifier: string; runtime: boolean }[] {
   const results: { specifier: string; runtime: boolean }[] = [];
   function visit(node: ts.Node): void {
@@ -52,7 +53,17 @@ export function dependencies(
     ) {
       if (
         node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0])
-      ) throw new Error(`Non-static runtime import: ${file.fileName}`);
+      ) {
+        // The optional worker bootstrap loads the application-owned registry URL.
+        // No other computed import is permitted in the production graph.
+        if (
+          allowWorkerRegistryImport &&
+          file.fileName === "src/workers/entry.ts" &&
+          node.arguments.length === 1 && ts.isIdentifier(node.arguments[0]) &&
+          node.arguments[0].text === "url"
+        ) return;
+        throw new Error(`Non-static runtime import: ${file.fileName}`);
+      }
       results.push({
         specifier: (node.arguments[0] as ts.StringLiteral).text,
         runtime: true,

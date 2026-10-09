@@ -1,0 +1,198 @@
+[
+  {
+    "name": "LastWorkerNode",
+    "typeOnly": true
+  },
+  {
+    "name": "parallel",
+    "typeOnly": false
+  },
+  {
+    "name": "ParallelOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "ParallelStep",
+    "typeOnly": true
+  },
+  {
+    "name": "RegisteredWorkerTask",
+    "typeOnly": true
+  },
+  {
+    "name": "RemoteWorkerError",
+    "typeOnly": true
+  },
+  {
+    "name": "TypedWorkerPoolFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateWorkerNodes",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateWorkerPlugins",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateWorkerPool",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateWorkerRecipe",
+    "typeOnly": true
+  },
+  {
+    "name": "ValidateWorkerRoles",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerCallable",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerContext",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerError",
+    "typeOnly": false
+  },
+  {
+    "name": "WorkerErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerErrorMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerJob",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerJobOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerNextArguments",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerOutcome",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerOutcomes",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginErrorFits",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginFactories",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginFits",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginInputFits",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginOutputFits",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPluginReference",
+    "typeOnly": true
+  },
+  {
+    "name": "workerPool",
+    "typeOnly": false
+  },
+  {
+    "name": "WorkerPool",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPoolFactory",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerPoolOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRecipe",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRecipeFunction",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRecipeFunctions",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerReferenceName",
+    "typeOnly": true
+  },
+  {
+    "name": "workerRegistry",
+    "typeOnly": false
+  },
+  {
+    "name": "WorkerRegistry",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerResults",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRole",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRoles",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerRoleSelection",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerSlot",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTaskFactories",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTaskMap",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTaskReference",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTasks",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTransport",
+    "typeOnly": true
+  }
+]

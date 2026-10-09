@@ -39,22 +39,33 @@ await Deno.copyFile(
   "test/fixtures/package-consumer.ts",
   destination + "/consumer.ts",
 );
-const report: { command: string; passed: boolean }[] = [];
-for (const command of ["check", "run"]) {
-  const result = await new Deno.Command("deno", {
-    args: [
-      command,
-      "--config",
-      destination + "/deno.json",
-      destination + "/consumer.ts",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  report.push({ command, passed: result.success });
-  if (!result.success) {
-    console.error(new TextDecoder().decode(result.stderr));
-    Deno.exit(1);
+for (const file of ["worker-consumer.ts", "worker-registry.ts"]) {
+  await Deno.copyFile("test/fixtures/" + file, destination + "/" + file);
+}
+const report: { consumer: string; command: string; passed: boolean }[] = [];
+for (const consumer of ["consumer.ts", "worker-consumer.ts"]) {
+  for (const command of ["check", "run"]) {
+    const result = await new Deno.Command("deno", {
+      args: [
+        command,
+        ...(command === "run" && consumer === "worker-consumer.ts"
+          ? [
+            "--allow-read=" + destination + "/package," + destination +
+            "/worker-registry.ts",
+          ]
+          : []),
+        "--config",
+        destination + "/deno.json",
+        destination + "/" + consumer,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    report.push({ consumer, command, passed: result.success });
+    if (!result.success) {
+      console.error(new TextDecoder().decode(result.stderr));
+      Deno.exit(1);
+    }
   }
 }
 await Deno.writeTextFile(
@@ -69,4 +80,6 @@ await Deno.writeTextFile(
     2,
   ),
 );
-console.log("Isolated package consumer: type check and runtime passed.");
+console.log(
+  "Isolated core and real-worker consumers: type checks and runtime passed.",
+);

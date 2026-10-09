@@ -7,6 +7,7 @@ import {
   sourceFiles,
 } from "../../tools/source.ts";
 import * as api from "../../src/index.ts";
+import * as workersApi from "../../src/workers/index.ts";
 
 const layers: Record<string, readonly string[]> = {
   core: ["core"],
@@ -16,13 +17,26 @@ const layers: Record<string, readonly string[]> = {
   plugin: ["core", "context", "error", "plugin"],
   step: ["core", "context", "error", "runtime", "plugin", "step"],
   pipe: ["core", "context", "error", "runtime", "plugin", "step", "pipe"],
+  workers: [
+    "core",
+    "context",
+    "error",
+    "runtime",
+    "plugin",
+    "step",
+    "pipe",
+    "workers",
+  ],
 };
 
 Deno.test("production graph resolves every import and re-export within approved layers", async () => {
   const files = await sourceFiles();
   const graph = new Map<string, string[]>();
   for (const path of files) {
-    const imports = dependencies(parse(path, await Deno.readTextFile(path)));
+    const imports = dependencies(
+      parse(path, await Deno.readTextFile(path)),
+      path === "src/workers/entry.ts",
+    );
     const edges: string[] = [];
     for (const dependency of imports) {
       const destination = resolve(path, dependency.specifier);
@@ -68,7 +82,10 @@ Deno.test("public type and runtime exports match the reviewed package fixture", 
 
 Deno.test("packaging exports only production source, license and documentation", async () => {
   const config = JSON.parse(await Deno.readTextFile("deno.json"));
-  assertEquals(config.exports, "./src/index.ts");
+  assertEquals(config.exports, {
+    ".": "./src/index.ts",
+    "./workers": "./src/workers/index.ts",
+  });
   assertEquals(config.publish.include, [
     "src/**/*.ts",
     "README.md",
@@ -82,6 +99,33 @@ Deno.test("packaging exports only production source, license and documentation",
   for (const file of files) {
     assert(!/fixture|test|secret|credential|node_modules/.test(file));
   }
+});
+
+Deno.test("optional worker entrypoint has reviewed exports and no core import side effect", async () => {
+  const actual = await resolvedPublicExports("src/workers/index.ts");
+  assertEquals(
+    actual,
+    JSON.parse(await Deno.readTextFile("test/fixtures/workers-api.json")),
+  );
+  assertEquals(
+    Object.keys(workersApi).sort(),
+    actual.filter((entry) => !entry.typeOnly).map((entry) => entry.name).sort(),
+  );
+  assert(!Object.hasOwn(api, "workerPool"));
+  assertEquals(
+    dependencies(parse("src/workers/entry.ts", "import(url);"), true),
+    [],
+  );
+  assertThrows(
+    () => dependencies(parse("src/step/step.ts", "import(url);"), true),
+    Error,
+    "Non-static runtime import",
+  );
+  assertThrows(
+    () => dependencies(parse("src/workers/entry.ts", "import(other);"), true),
+    Error,
+    "Non-static runtime import",
+  );
 });
 
 Deno.test("import analysis distinguishes type-only imports and runtime re-exports", () => {

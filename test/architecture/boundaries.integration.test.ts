@@ -9,6 +9,8 @@ import {
 import * as api from "@convee";
 import * as workersApi from "@convee/workers";
 import * as viteApi from "@convee/workers/vite";
+import * as wasmApi from "@convee/wasm";
+import * as jcoApi from "@convee/wasm/jco";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Architecture boundaries", () => {
@@ -20,6 +22,7 @@ describe("Architecture boundaries", () => {
     plugin: ["core", "context", "error", "plugin"],
     step: ["core", "context", "error", "runtime", "plugin", "step"],
     pipe: ["core", "context", "error", "runtime", "plugin", "step", "pipe"],
+    wasm: ["core", "context", "error", "runtime", "plugin", "step", "wasm"],
     workers: [
       "core",
       "context",
@@ -50,6 +53,10 @@ describe("Architecture boundaries", () => {
         if (
           path === "src/workers/vite.ts" &&
           dependency.specifier === "npm:vite@8.3.4" && !dependency.runtime
+        ) continue;
+        if (
+          path === "src/wasm/jco.ts" &&
+          dependency.specifier === "node:fs/promises"
         ) continue;
         const destination = resolve(path, dependency.specifier);
         assert(
@@ -99,11 +106,14 @@ describe("Architecture boundaries", () => {
       ".": "./src/index.ts",
       "./workers": "./src/workers/index.ts",
       "./workers/vite": "./src/workers/vite.ts",
+      "./wasm": "./src/wasm/index.ts",
+      "./wasm/jco": "./src/wasm/jco.ts",
     });
     assertEquals(config.publish.include, [
       "src/**/*.ts",
       "README.md",
       "TESTING.md",
+      "WASM.md",
       "LICENSE",
       "deno.json",
     ]);
@@ -153,6 +163,28 @@ describe("Architecture boundaries", () => {
       Error,
       "Non-static runtime import",
     );
+  });
+
+  it("optional WASM entrypoints preserve the reviewed types and core independence", async () => {
+    for (
+      const [entry, actual] of [["index", wasmApi], ["jco", jcoApi]] as const
+    ) {
+      const exports = await resolvedPublicExports("src/wasm/" + entry + ".ts");
+      assertEquals(
+        exports,
+        JSON.parse(
+          await Deno.readTextFile("test/fixtures/wasm-" + entry + "-api.json"),
+        ),
+      );
+      assertEquals(
+        Object.keys(actual).sort(),
+        exports.filter((item) => !item.typeOnly).map((item) => item.name)
+          .sort(),
+      );
+    }
+    for (const name of ["wasm", "persistentWasm", "jcoBindings"]) {
+      assert(!Object.hasOwn(api, name));
+    }
   });
 
   it("import analysis distinguishes type-only imports and runtime re-exports", () => {

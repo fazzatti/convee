@@ -779,6 +779,38 @@ are stopped. Termination must settle only after actual cleanup. Runtime support
 is verified by real consumers, not by the mere existence of a global `Worker`
 constructor.
 
+## WASM-backed steps
+
+Use the optional `@fifo/convee/wasm` entrypoint to bind generated Rust component
+exports as ordinary steps. The checked-in example bindings below use this
+repository's aliases; [the WASM guide](WASM.md) covers building and deploying
+them.
+
+```ts
+import { persistentWasm, wasm } from "jsr:@fifo/convee/wasm";
+import { textBindings } from "@example/rust-text/bindings.ts";
+
+const text = wasm({ bindings: textBindings });
+await text.preload(); // Prepare code once; no live instance yet.
+const summarize = text.step("summarize");
+console.log(await summarize("Hello Rust"));
+
+await using persistent = persistentWasm({ bindings: textBindings });
+const increment = persistent.step("increment");
+console.log(await increment(), await increment()); // 1, 2
+```
+
+`wasm()` owns a fresh session for every invocation. `persistentWasm()` retains
+one exclusive session, with worker-style close, optional reopen/idle timeout,
+bounded admission and terminal disposal. Both preserve native plugin gates and
+generated input/output types. Unsafe guest failures retire state, with bounded
+replacements for future calls and no replay. Outputs are owned copies.
+
+The optional `/wasm/jco` adapter uses Jco's generated instance factories without
+adding Jco to Convee's runtime dependencies. Two real Rust examples cover rich
+values, domain errors, traps and explicit host imports. See [WASM.md](WASM.md)
+for lifecycle, binding, runtime and hard-interruption limits.
+
 ## Sync APIs
 
 Every runtime primitive has an explicit sync variant:

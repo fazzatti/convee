@@ -26,6 +26,34 @@ jobs:
       - run: deno task test:types
       - run: deno task test
       - run: deno task test:consumer
+  rust-wasm:
+    name: Rebuild Rust components and verify generated bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: "1.96.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24.1.0"
+      - run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
+      - run: deno task wasm:build
+      - run: deno task test:wasm
+      - run: deno task test:types
+      - run: deno task test:consumer
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: rebuilt-rust-components
+          path: |
+            examples/rust-text/generated/
+            examples/rust-host/generated/
+            .artifacts/package-consumer/report.json
+          if-no-files-found: error
   quality:
     name: Formatting, lint, docs, architecture, coverage and JSR
     runs-on: ubuntu-latest

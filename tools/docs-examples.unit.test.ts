@@ -48,6 +48,15 @@ describe("README example tooling", () => {
     );
   });
 
+  it("resolves both optional WASM entrypoints", () => {
+    for (const entry of ["wasm", "wasm/jco"]) {
+      const [example] = readmeExamples(
+        '```ts\nimport { example } from "jsr:@fifo/convee/' + entry + '";\n```',
+      );
+      assertEquals(example.source.includes('"@convee/' + entry + '"'), true);
+    }
+  });
+
   it("README checker preserves imports from other packages", () => {
     assertEquals(
       readmeExamples('```ts\nimport { assert } from "jsr:@std/assert";\n```'),

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "jcoBindings",
+    "typeOnly": false
+  },
+  {
+    "name": "JcoModule",
+    "typeOnly": true
+  },
+  {
+    "name": "JcoOptions",
+    "typeOnly": true
+  }
+]

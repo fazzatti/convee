@@ -157,6 +157,12 @@ mutants exercise immutable plugin copies, nested order, capacity across calls,
 capacity release and terminal disposal. It does not mutate every expression,
 error message or TypeScript type.
 
+WASM mutants exercise owned output copies, shared-memory rejection,
+unsafe-session retirement, domain-error state preservation, replacement budgets,
+admission capacity and terminal disposal while draining. Their tests use
+controlled binding sessions; separate Rust integration suites exercise the
+generated ABI.
+
 `deno task test:tooling`, included in `verify`, tests the result parser against
 plain and ANSI-colored CI output, real failed-test summaries, infrastructure
 errors, timeouts and successful survivors.
@@ -247,3 +253,20 @@ On pushes to `main`, the publication workflow checks whether the version's
 reusable CI workflow passes. The workflow then creates the version tag and a
 GitHub release. Publication runs are serialized and use normal JSR validation
 without `--allow-slow-types`.
+
+## Rust components and WASM ownership
+
+`deno task wasm:build` rebuilds both checked-in Rust examples using the locked
+wit-bindgen/Jco build profile. `deno task test:wasm` exercises actual generated
+bindings, owned value conversions, state isolation, explicit host imports,
+expected errors, panics, plugin gates, lifecycle races and worker composition.
+The fixtures are also included in the isolated package and cross-runtime
+consumers. The Rust CI job rebuilds before testing, so committed fixture output
+is not the sole evidence for the source examples.
+
+The existing exact line/branch/function coverage gate includes all authored
+`src/wasm` production code without exclusions or lower thresholds. Generated
+third-party glue is exercised by integration tests and is outside the authored
+production denominator, just like other test fixtures. Type contracts verify
+export names, generated inputs/outputs, host imports and plugin compatibility.
+See [WASM.md](WASM.md) for the tested build profile and runtime limitations.

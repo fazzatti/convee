@@ -112,8 +112,6 @@ describe("Architecture boundaries", () => {
     assertEquals(config.publish.include, [
       "src/**/*.ts",
       "README.md",
-      "TESTING.md",
-      "WASM.md",
       "LICENSE",
       "deno.json",
     ]);

@@ -15,15 +15,15 @@
     "@convee/workers": "./src/workers/index.ts"
   },
   "tasks": {
-    "check": "deno check src/index.ts src/workers/index.ts src/workers/entry.ts test/types/*.test.ts tools/*.ts",
+    "check": "deno check src/index.ts src/workers/index.ts src/workers/entry.ts test/types/*.integration.test.ts tools/*.ts",
     "lint": "deno lint",
     "fmt": "deno fmt",
     "docs": "deno doc --lint src/index.ts src/workers/index.ts",
-    "test": "deno test --allow-read=src,test/workers --clean --parallel --coverage=coverage src test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.test.ts",
-    "test:unit": "deno test src",
-    "test:integration": "deno test test/*.integration.test.ts",
-    "test:types": "deno check test/types/*.test.ts",
-    "test:tooling": "deno test tools/*.test.ts",
+    "test": "deno test --allow-read=src,test/workers --clean --parallel --coverage=coverage src test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts",
+    "test:unit": "deno test src tools/*.unit.test.ts",
+    "test:integration": "deno test --allow-read=src,test/workers test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts",
+    "test:types": "deno check test/types/*.integration.test.ts",
+    "test:tooling": "deno test tools/*.unit.test.ts",
     "test:architecture": "deno test --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,test/fixtures,deno.json test/architecture",
     "test:depth": "deno run --allow-read --allow-write=.artifacts --allow-run=deno tools/type-depth.ts",
     "test:stress": "deno test test/properties -- --stress",
@@ -35,7 +35,7 @@
     "docs:examples": "deno run --allow-read=README.md,deno.json --allow-write=.artifacts/docs --allow-run=deno tools/docs-examples.ts",
     "test:consumer": "deno run --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,test/fixtures --allow-write=.artifacts/package-consumer --allow-run=deno tools/package-consumer.ts",
     "test:resources": "deno test --v8-flags=--expose-gc test/resources",
-    "test:workers": "deno test --allow-read=src,test/workers src/workers test/workers/*.test.ts"
+    "test:workers": "deno test --allow-read=src,test/workers src/workers test/workers/*.integration.test.ts"
   },
   "publish": {
     "include": [

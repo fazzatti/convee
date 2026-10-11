@@ -22,8 +22,8 @@ validation contacts the registry but does not publish.
 | Command                      | What it checks                                                                                                                            |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `deno task verify`           | Formatting, lint, unused declarations, types, docs, runtime suites, architecture, type depth, coverage, isolated consumer and JSR dry run |
-| `deno task test:unit`        | Existing module-level behavior                                                                                                            |
-| `deno task test:integration` | Existing composed public API scenarios                                                                                                    |
+| `deno task test:unit`        | Module and tooling behavior                                                                                                               |
+| `deno task test:integration` | Composed APIs, regressions, concurrency, properties and native workers                                                                    |
 | `deno task test:types`       | Positive consumers compile and deliberately invalid consumers remain errors                                                               |
 | `deno task test:stress`      | 10000 generated cases for each of six properties                                                                                          |
 | `deno task test:mutation`    | Assertions reject deliberately altered runtime semantics                                                                                  |
@@ -101,13 +101,12 @@ for each property, and `test:stress` executes 10000 each, or 60000 generated
 cases. These are generated cases, not 60000 separately maintained tests.
 
 Fast-check reports the seed, shrink path and minimized counterexample on
-failure. Run the individual test with
-`deno test test/properties --filter="property name"`. For exact replay,
-temporarily set the reported `seed` and `path` in the settings of
-`test/properties/models.test.ts`, keeping the failing test's generators intact.
-Restore those temporary settings after reducing the case into a permanent
-regression. For an intentional new campaign, change the seed or case budget
-explicitly and record them with the result.
+failure. Run the property suite with `deno test test/properties`. For exact
+replay, temporarily set the reported `seed` and `path` in the settings of
+`test/properties/models.integration.test.ts`, keeping the failing test's
+generators intact. Restore those temporary settings after reducing the case into
+a permanent regression. For an intentional new campaign, change the seed or case
+budget explicitly and record them with the result.
 
 Generators are bounded by graph length, command count and value ranges. They do
 not exhaust JavaScript programs or all asynchronous schedules. Deterministic

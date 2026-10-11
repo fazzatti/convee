@@ -1,8 +1,5 @@
-import { workerHost } from "../../src/workers/host.ts";
-import type {
-  WorkerRegistry,
-  WorkerTransport,
-} from "../../src/workers/types.ts";
+import { workerHost } from "@/workers/host.ts";
+import type { WorkerRegistry, WorkerTransport } from "@/workers/types.ts";
 
 /** In-memory message transport; real workers are exercised independently. */
 export class LocalWorker extends EventTarget implements WorkerTransport {

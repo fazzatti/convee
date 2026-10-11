@@ -1,4 +1,4 @@
-import { pipe, plugin, step } from "../../src/index.ts";
+import { pipe, plugin, step } from "@convee";
 
 export function invalidSyncContracts(): void {
   // @ts-expect-error no-argument output hooks must still reject async results

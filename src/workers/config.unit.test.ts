@@ -7,8 +7,8 @@ import {
   positive,
   recipes,
   record,
-} from "./config.ts";
-import { WorkerError } from "./error.ts";
+} from "@/workers/config.ts";
+import { WorkerError } from "@/workers/error.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker configuration", () => {

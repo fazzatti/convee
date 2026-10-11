@@ -5,9 +5,9 @@ import {
   resolve,
   resolvedPublicExports,
   sourceFiles,
-} from "../../tools/source.ts";
-import * as api from "../../src/index.ts";
-import * as workersApi from "../../src/workers/index.ts";
+} from "@tools/source.ts";
+import * as api from "@convee";
+import * as workersApi from "@convee/workers";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Architecture boundaries", () => {

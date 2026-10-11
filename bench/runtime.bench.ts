@@ -1,4 +1,4 @@
-import { createRunContext, pipe, plugin, step } from "../src/index.ts";
+import { createRunContext, pipe, plugin, step } from "@convee";
 
 const raw = (value: number) => value + 1;
 Deno.bench("direct callback baseline", () => {

@@ -1,9 +1,5 @@
 import { assertEquals } from "@std/assert";
-import {
-  createRunContext,
-  type RunContextCapture,
-  step,
-} from "../../src/index.ts";
+import { createRunContext, type RunContextCapture, step } from "@convee";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Resource retention", () => {

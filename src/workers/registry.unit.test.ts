@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { workerRegistry } from "./registry.ts";
-import { WorkerError } from "./error.ts";
+import { workerRegistry } from "@/workers/registry.ts";
+import { WorkerError } from "@/workers/error.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker registry", () => {

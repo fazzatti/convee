@@ -1,4 +1,4 @@
-import { sourceFiles } from "./source.ts";
+import { sourceFiles } from "@tools/source.ts";
 
 const destination = ".artifacts/package-consumer";
 await Deno.mkdir(destination + "/package", { recursive: true });

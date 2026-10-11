@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { contextValid, isReply, PROTOCOL } from "./protocol.ts";
+import { contextValid, isReply, PROTOCOL } from "@/workers/protocol.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker protocol messages", () => {

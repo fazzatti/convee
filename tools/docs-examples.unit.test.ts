@@ -1,5 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { exampleCompilerOptions, readmeExamples } from "./docs-examples.ts";
+import {
+  exampleCompilerOptions,
+  readmeExamples,
+} from "@tools/docs-examples.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("README example tooling", () => {
@@ -9,7 +12,7 @@ describe("README example tooling", () => {
         '# Guide\n\n```ts\nimport { step } from "jsr:@fifo/convee";\n```\n\n```typescript\nconst value = 1;\n```\n',
       ),
       [
-        { source: 'import { step } from "../../src/index.ts";\n', line: 4 },
+        { source: 'import { step } from "@convee";\n', line: 4 },
         { source: "const value = 1;\n", line: 8 },
       ],
     );
@@ -20,7 +23,7 @@ describe("README example tooling", () => {
       readmeExamples(
         "```ts\r\nimport { pipe } from 'jsr:@fifo/convee';\r\n```\r\n",
       ),
-      [{ source: 'import { pipe } from "../../src/index.ts";\r\n', line: 2 }],
+      [{ source: 'import { pipe } from "@convee";\r\n', line: 2 }],
     );
   });
 
@@ -38,7 +41,7 @@ describe("README example tooling", () => {
       ),
       [
         {
-          source: 'import { parallel } from "../../src/workers/index.ts";\n',
+          source: 'import { parallel } from "@convee/workers";\n',
           line: 2,
         },
       ],

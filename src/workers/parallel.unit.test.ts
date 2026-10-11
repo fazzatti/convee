@@ -4,13 +4,13 @@ import {
   assertRejects,
   assertThrows,
 } from "@std/assert";
-import { pipe, plugin, step } from "../index.ts";
-import { parallel } from "./parallel.ts";
-import { workerPool } from "./pool.ts";
-import { workerRegistry } from "./registry.ts";
-import { WorkerError } from "./error.ts";
-import registry from "../../test/workers/registry.ts";
-import { LocalWorker } from "../../test/workers/transport.ts";
+import { pipe, plugin, step } from "@convee";
+import { parallel } from "@/workers/parallel.ts";
+import { workerPool } from "@/workers/pool.ts";
+import { workerRegistry } from "@/workers/registry.ts";
+import { WorkerError } from "@/workers/error.ts";
+import registry from "@test/workers/registry.ts";
+import { LocalWorker } from "@test/workers/transport.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Parallel worker steps", () => {

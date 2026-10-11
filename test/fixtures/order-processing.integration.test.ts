@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { createRunContext, pipe, plugin, step } from "../../src/index.ts";
+import { createRunContext, pipe, plugin, step } from "@convee";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Order processing consumer", () => {

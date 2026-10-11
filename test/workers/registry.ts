@@ -1,5 +1,5 @@
-import { pipe, plugin, step } from "../../src/index.ts";
-import { workerRegistry } from "../../src/workers/index.ts";
+import { pipe, plugin, step } from "@convee";
+import { workerRegistry } from "@convee/workers";
 
 export default workerRegistry({
   tasks: {

@@ -1,11 +1,11 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { pipe, plugin, step } from "../../src/index.ts";
+import { pipe, plugin, step } from "@convee";
 import {
   type Body,
   type Hooks,
   makePlugin,
   makeUnit,
-} from "../support/runtime.ts";
+} from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Sync and plugin regressions", () => {

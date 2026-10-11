@@ -11,9 +11,9 @@ import {
   isPluginError,
   isStepError,
   step,
-} from "../../src/index.ts";
-import { RunContextController } from "../../src/context/runtime.ts";
-import { deferred } from "../support/runtime.ts";
+} from "@convee";
+import { RunContextController } from "@/context/runtime.ts";
+import { deferred } from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Error and retention regressions", () => {

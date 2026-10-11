@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { mutationStatus } from "./mutation-result.ts";
+import { mutationStatus } from "@tools/mutation-result.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Mutation result parsing", () => {

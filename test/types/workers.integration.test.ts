@@ -1,10 +1,6 @@
 import { pipe, plugin, step } from "@convee";
-import {
-  parallel,
-  type WorkerOutcome,
-  workerPool,
-} from "../../src/workers/index.ts";
-import type registry from "../workers/registry.ts";
+import { parallel, type WorkerOutcome, workerPool } from "@convee/workers";
+import type registry from "@test/workers/registry.ts";
 
 export function workerContracts(): void {
   const pool = workerPool.for<typeof registry>()({

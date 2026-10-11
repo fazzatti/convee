@@ -1,4 +1,4 @@
-import { parse, sourceFiles, ts } from "./source.ts";
+import { parse, sourceFiles, ts } from "@tools/source.ts";
 
 const coverage = new Map<
   string,

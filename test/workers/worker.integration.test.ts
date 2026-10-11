@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { parallel, WorkerError, workerPool } from "../../src/workers/index.ts";
-import type registry from "./registry.ts";
+import { parallel, WorkerError, workerPool } from "@convee/workers";
+import type registry from "@test/workers/registry.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Native worker integration", () => {

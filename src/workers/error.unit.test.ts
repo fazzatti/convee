@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { remoteError, WorkerError } from "./error.ts";
+import { remoteError, WorkerError } from "@/workers/error.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker error diagnostics", () => {

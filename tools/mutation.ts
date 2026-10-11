@@ -1,5 +1,5 @@
-import { parse, sourceFiles, ts } from "./source.ts";
-import { mutationStatus } from "./mutation-result.ts";
+import { parse, sourceFiles, ts } from "@tools/source.ts";
+import { mutationStatus } from "@tools/mutation-result.ts";
 
 interface Mutant {
   id: string;

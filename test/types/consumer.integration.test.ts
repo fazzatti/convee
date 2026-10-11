@@ -1,4 +1,4 @@
-import { pipe, plugin, type PluginThis, step } from "../../src/index.ts";
+import { pipe, plugin, type PluginThis, step } from "@convee";
 
 type IsExact<Left, Right> = (<Value>() => Value extends Left ? 1 : 2) extends
   (<Value>() => Value extends Right ? 1 : 2) ? true : false;

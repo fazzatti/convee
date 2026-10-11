@@ -12,8 +12,8 @@ import {
   type RunContext,
   type RunContextCapture,
   step,
-} from "../../src/index.ts";
-import { deferred } from "../support/runtime.ts";
+} from "@convee";
+import { deferred } from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Shared invocation context", () => {

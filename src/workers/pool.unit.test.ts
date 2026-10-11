@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { workerPool } from "./pool.ts";
-import { WorkerError } from "./error.ts";
-import { PROTOCOL, type RunMessage } from "./protocol.ts";
-import registry from "../../test/workers/registry.ts";
-import { LocalWorker, ManualWorker } from "../../test/workers/transport.ts";
+import { workerPool } from "@/workers/pool.ts";
+import { WorkerError } from "@/workers/error.ts";
+import { PROTOCOL, type RunMessage } from "@/workers/protocol.ts";
+import registry from "@test/workers/registry.ts";
+import { LocalWorker, ManualWorker } from "@test/workers/transport.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker pool lifecycle", () => {

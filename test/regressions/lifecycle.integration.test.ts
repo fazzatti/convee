@@ -5,14 +5,14 @@ import {
   assertStrictEquals,
   assertThrows,
 } from "@std/assert";
-import { ConveeError, createRunContext } from "../../src/index.ts";
+import { ConveeError, createRunContext } from "@convee";
 import {
   type Body,
   type Hooks,
   makePlugin,
   makeUnit,
   modes,
-} from "../support/runtime.ts";
+} from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Lifecycle regressions", () => {

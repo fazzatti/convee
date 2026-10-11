@@ -5,8 +5,13 @@ import {
   isPluginError,
   isStepError,
   step,
-} from "../../src/index.ts";
-import { deferred, makePlugin, makeUnit, modes } from "../support/runtime.ts";
+} from "@convee";
+import {
+  deferred,
+  makePlugin,
+  makeUnit,
+  modes,
+} from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Hostile boundary regressions", () => {

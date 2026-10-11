@@ -1,10 +1,10 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import { plugin, step } from "../index.ts";
-import { assemble } from "./assemble.ts";
-import { recipes } from "./config.ts";
-import { workerRegistry } from "./registry.ts";
-import { WorkerError } from "./error.ts";
-import registry from "../../test/workers/registry.ts";
+import { plugin, step } from "@convee";
+import { assemble } from "@/workers/assemble.ts";
+import { recipes } from "@/workers/config.ts";
+import { workerRegistry } from "@/workers/registry.ts";
+import { WorkerError } from "@/workers/error.ts";
+import registry from "@test/workers/registry.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker assembly", () => {

@@ -8,7 +8,7 @@ export function readmeExamples(markdown: string): {
     source: match[1].replaceAll(
       /(["'])jsr:@fifo\/convee(\/workers)?\1/g,
       (_match, _quote: string, workers: string | undefined) =>
-        workers ? '"../../src/workers/index.ts"' : '"../../src/index.ts"',
+        workers ? '"@convee/workers"' : '"@convee"',
     ),
     line: markdown.slice(0, match.index).split("\n").length + 1,
   }));

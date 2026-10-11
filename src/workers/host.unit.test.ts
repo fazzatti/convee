@@ -1,8 +1,8 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { workerHost } from "./host.ts";
-import { PROTOCOL, type Reply } from "./protocol.ts";
-import { workerRegistry } from "./registry.ts";
-import registry from "../../test/workers/registry.ts";
+import { workerHost } from "@/workers/host.ts";
+import { PROTOCOL, type Reply } from "@/workers/protocol.ts";
+import { workerRegistry } from "@/workers/registry.ts";
+import registry from "@test/workers/registry.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Worker host protocol", () => {

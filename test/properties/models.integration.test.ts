@@ -1,12 +1,6 @@
 import fc from "npm:fast-check@4.3.0";
 import { assertEquals, assertRejects } from "@std/assert";
-import {
-  ConveeError,
-  createRunContext,
-  pipe,
-  plugin,
-  step,
-} from "../../src/index.ts";
+import { ConveeError, createRunContext, pipe, plugin, step } from "@convee";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Property models", () => {

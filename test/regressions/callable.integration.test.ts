@@ -1,6 +1,6 @@
 import { assertEquals, assertStrictEquals, assertThrows } from "@std/assert";
-import { pipe, plugin, step } from "../../src/index.ts";
-import { makePlugin, makeUnit, modes } from "../support/runtime.ts";
+import { pipe, plugin, step } from "@convee";
+import { makePlugin, makeUnit, modes } from "@test/support/runtime.ts";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Callable regressions", () => {

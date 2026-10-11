@@ -110,7 +110,18 @@ function createFluentPluginBuilder<Shared extends ContextValues>(
 }
 
 /**
- * Creates a typed plugin factory for a known input/output/error contract.
+ * Bind a known input, output, error and context contract to a plugin factory.
+ *
+ * @typeParam I - Input argument tuple accepted by the wrapped execution.
+ *
+ * @typeParam O - Successful output, including values returned by recovery hooks.
+ * @typeParam E - Error subtype accepted by error hooks.
+ * @typeParam Shared - Shared state available through each hook's this.context().
+ * @returns A function accepting a hook definition and optional ID/target, producing
+ * a frozen plugin with the bound contract. Binding itself takes no runtime arguments.
+ * @remarks Binding does not intentionally throw. Calling the returned factory throws
+ * `PLG_001` for empty or non-callable hook definitions and propagates accessor errors.
+ * Asynchronous hook results are awaited by the step or pipeline executing the plugin.
  */
 export function pluginFor<
   I extends PluginArgs,
@@ -140,7 +151,18 @@ export function pluginFor<
 }
 
 /**
- * Creates a typed synchronous plugin factory for a known contract.
+ * Bind a known input, output, error and context contract to a synchronous plugin factory.
+ *
+ * @typeParam I - Input argument tuple accepted by the wrapped execution.
+ *
+ * @typeParam O - Successful output, including values returned by recovery hooks.
+ * @typeParam E - Error subtype accepted by error hooks.
+ * @typeParam Shared - Shared state available through each hook's this.context().
+ * @returns A function accepting a hook definition and optional ID/target, producing
+ * a frozen plugin with the bound contract. Binding itself takes no runtime arguments.
+ * @remarks Binding does not intentionally throw. Calling the returned factory throws
+ * `PLG_001` for empty or non-callable hook definitions and propagates accessor errors.
+ * Synchronous types reject async hooks; execution also rejects thenables at runtime.
  */
 export function syncPluginFor<
   I extends PluginArgs,
@@ -270,71 +292,32 @@ const createContextualPluginFactory = <
 const basePluginFactory = createContextualPluginFactory();
 
 /**
- * Creates a plugin builder with optional metadata.
+ * Start a fluent plugin definition with optional identity and routing metadata.
  *
- * This is the main asynchronous plugin factory.
+ * Chain onInput, onOutput, onError and/or onFinally; each registration returns a
+ * new builder with that hook set and preserves the earlier builder. At least one
+ * hook is needed before the value exposes a materialized plugin. Input hooks
+ * transform arguments, output hooks transform results, and error hooks recover a
+ * result or continue failure by returning an Error. Finalizers run after all phases
+ * and cannot replace the result; cleanup failures are aggregated as `RT_000`.
  *
- * Use `plugin(...)` to start a fluent plugin definition.
+ * Use `plugin.for<I, O, E>()` for an explicit definition, `plugin.sync` for
+ * synchronous hooks and `plugin.withContext<Shared>()` to bind shared-state types.
+ * Untargeted pipeline plugins wrap the whole pipeline; a target routes to the
+ * pipeline itself or one of its direct children.
  *
- * Chain one or more lifecycle hooks:
+ * @param options - Optional ID and target. ID defaults to a random UUID.
  *
- * - `.onInput(...args)`
- *   Runs before the step/process execution.
- *   It receives the full input tuple and must return the transformed input tuple.
- *
- * - `.onOutput(output)`
- *   Runs after successful execution.
- *   It receives the produced output and must return the final output.
- *
- * - `.onError(error, input)`
- *   Runs when execution fails.
- *   It receives the thrown error and the original input tuple, and may either
- *   return a recovered output or return an error to continue the error flow.
- *
- * - `.onFinally()`
- *   Runs once per selected registration after all phases, including hook
- *   failures. Async cleanup is awaited. No arguments are passed; use
- *   `this.context()` for invocation state. Return values are ignored.
- *   A failure does not stop other finalizers; all failures are retained in
- *   `RT_ERRORS.FINALIZATION_FAILED` without re-entering error hooks.
- *
- * At least one hook must be chained before the plugin is materialized.
- *
- * The optional `options` object supports:
- *
- * - `id`
- *   A stable identifier for the plugin.
- *   If omitted, a random id is generated.
- *
- * - `target`
- *   An optional step identifier used to scope the plugin when running inside a
- *   pipeline.
- *   If omitted, the plugin is considered applicable to any step.
- *
- * The returned value is a proxy-backed builder that exposes:
- *
- * - remaining lifecycle hook registration methods
- * - metadata like `id` and `target` once at least one hook is registered
- * - runtime helpers like `supports()` and `targets()` once materialized
- *
- * Additional helper APIs are exposed on the factory itself:
- *
- * - `plugin.for(...)` for a more explicit typed factory
- * - `plugin.sync(...)` for strictly synchronous plugins
- * - `plugin.hasInput(...)` to narrow plugins with an input hook
- * - `plugin.hasOutput(...)` to narrow plugins with an output hook
- * - `plugin.hasError(...)` to narrow plugins with an error hook
- * - `plugin.PluginEngine` for direct access to the underlying runtime class
- *
- * @param options Optional plugin metadata such as `id` and `target`.
+ * @returns A builder exposing unregistered hook methods and, after registration,
+ * the plugin's hooks, identity, supports and targets helpers.
+ * @throws Exceptions raised while reading metadata propagate. Hook registration
+ * throws TypeError unless given exactly one function; explicit definitions use
+ * `PLG_001` validation. Execution errors are handled later by the owning runtime.
  *
  * @example
  * ```ts
- * const auditPlugin = plugin({
- *   id: "audit-plugin",
- *   target: "sum-step",
- * })
- *   .onInput((value: number): number => value + 1)
+ * const audit = plugin({ id: "audit", target: "sum" })
+ *   .onInput((value: number): [number] => [value + 1])
  *   .onOutput((output: number) => output * 2);
  * ```
  */

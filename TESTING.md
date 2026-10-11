@@ -146,11 +146,11 @@ uploaded even when the mutation job fails.
 
 ## Coverage, complexity and architecture
 
-Production coverage must reach 98% lines and 95% branches. The checker rejects
-executable function modules missing from the LCOV report. Pure type declarations
-are checked by consumer/compiler fixtures, not assigned fictitious runtime
-coverage. Tests and development tooling do not inflate the production
-percentage.
+Production coverage must reach 100% lines, branches and instrumented functions,
+without rounding. The checker rejects executable function modules missing from
+the LCOV report. Pure type declarations are checked by consumer/compiler
+fixtures, not assigned fictitious runtime coverage. Tests and development
+tooling do not inflate the production percentage.
 
 `.artifacts/quality.json` reports missing lines, a syntactic cyclomatic
 approximation and `complexity² × (1 - lineCoverage)³ + complexity`. This is a

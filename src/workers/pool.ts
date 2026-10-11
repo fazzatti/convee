@@ -479,7 +479,23 @@ class Pool {
   }
 }
 
-/** Create a typed reusable pool through workerPool.for<typeof registry>()(options). */
+/**
+ * Create reusable worker resources through `workerPool.for<typeof registry>()(options)`.
+ *
+ * The registry import may be type-only in the parent. Configure a homogeneous
+ * `size` or named `roles`, a registry module URL, optional recipes and resource
+ * limits. Construction validates and snapshots configuration; workers start lazily
+ * on `ready()` or the first nonempty batch. Reuse one pool across parallel steps,
+ * then call `close()` to drain it or `terminate()` to abort outstanding work.
+ *
+ * @returns A factory namespace whose `for()` method binds the registry contract.
+ * The resulting options factory returns a typed WorkerPool, without spawning workers.
+ *
+ * @remarks `for()` takes no runtime arguments and does not intentionally throw.
+ * The options factory throws `WRK_CONFIG` for invalid configuration and `WRK_CLONE`
+ * for non-cloneable setup data. Worker startup and job failures occur later; see
+ * WorkerPool.ready, WorkerPool.run and WorkerPool.settle for their contracts.
+ */
 export const workerPool: WorkerPoolFactory = {
   for<R extends WorkerRegistry>(): TypedWorkerPoolFactory<R> {
     return ((options: unknown) =>

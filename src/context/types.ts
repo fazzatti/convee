@@ -6,17 +6,52 @@ export type RunContextCapture = "none" | "outputs" | "all";
 
 /** Mutable key-value store exposed on the run, step, and plugin context APIs. */
 export interface ContextStore<Shape extends ContextValues = ContextValues> {
-  /** Returns the value or snapshot for a key or identity, or undefined when absent. */
+  /**
+   * Read a shared-state entry without changing its identity.
+   *
+   * @param key - Key in the declared store shape; runtime keys are converted to strings.
+   * @returns The stored value, or undefined if absent; use has to distinguish stored undefined.
+   * @remarks Stored objects are not copied. Valid typed keys do not intentionally throw.
+   */
   get<K extends keyof Shape>(key: K): Shape[K] | undefined;
-  /** Writes a value to this shared store. */
+  /**
+   * Set or replace a shared-state entry, retaining the supplied value by reference.
+   *
+   * @param key - Key in the declared store shape; runtime keys are converted to strings.
+   * @param value - Value to store, including undefined.
+   * @returns Nothing; subsequent reads through this shared store observe the value.
+   * @remarks This does not clone or validate values and does not intentionally throw for typed keys.
+   */
   set<K extends keyof Shape>(key: K, value: Shape[K]): void;
-  /** Reports whether the store contains the key, including values explicitly set to undefined. */
+  /**
+   * Check membership independently of the stored value.
+   *
+   * @param key - Key in the declared store shape.
+   * @returns True if the key exists, including entries explicitly set to undefined.
+   * @remarks This does not change state or intentionally throw for typed keys.
+   */
   has<K extends keyof Shape>(key: K): boolean;
-  /** Removes a key and reports whether it was present. */
+  /**
+   * Remove one entry from the shared store.
+   *
+   * @param key - Key whose value should be removed.
+   * @returns True if an entry existed and was removed; false otherwise.
+   * @remarks Other entries are unchanged. Valid typed keys do not intentionally throw.
+   */
   delete<K extends keyof Shape>(key: K): boolean;
-  /** Removes all entries from this store. */
+  /**
+   * Remove every entry from this store.
+   *
+   * @returns Nothing; all views sharing this store subsequently see it empty.
+   * @remarks This does not clear other context stores or snapshots and does not intentionally throw.
+   */
   clear(): void;
-  /** Returns a defensive Map copy; stored payload objects keep their identities. */
+  /**
+   * Copy the store's entries for inspection without exposing its backing Map.
+   *
+   * @returns A new Map containing the current keys and values; payload objects retain identity.
+   * @remarks Mutating the returned container does not change this store. No errors are intentionally thrown.
+   */
   entries(): ReadonlyMap<string, unknown>;
 }
 
@@ -46,23 +81,66 @@ export interface PluginSnapshot {
 
 /** Invocation-local access and last-completed snapshots for steps. */
 export interface StepContextApi {
-  /** Returns this invocation's live snapshot; throws outside the corresponding execution scope. */
+  /**
+   * Read the step snapshot scoped to the active invocation.
+   *
+   * @returns A fresh snapshot container sharing its identity's state store; live input, output and error are available regardless of capture policy.
+   * @throws Error when this view is used outside the corresponding step execution scope.
+   */
   current(): StepSnapshot;
-  /** Returns the value or snapshot for a key or identity, or undefined when absent. */
+  /**
+   * Look up the shared run's snapshot for one step identity.
+   *
+   * @param stepId - Stable ID of the step whose snapshot is requested.
+   * @returns A defensive snapshot container, or undefined if the identity is unknown.
+   * State and payload objects remain shared references; retained execution fields follow the capture policy.
+   * @remarks This does not require an active invocation and does not intentionally throw.
+   */
   get(stepId: string): StepSnapshot | undefined;
-  /** Returns the most recently completed invocation in the shared run, not the last invocation entered. */
+  /**
+   * Read the most recently completed invocation in the shared run.
+   *
+   * @returns A defensive snapshot container, or undefined before any execution completes.
+   * Captured fields follow the run's policy; state and payload objects remain shared.
+   * @remarks Completion order, including nested or concurrent runs, determines this value.
+   * Reading it does not change history or intentionally throw.
+   */
   previous(): StepSnapshot | undefined;
-  /** Returns defensive snapshot containers for the known identities in this run. */
+  /**
+   * Inspect every known step identity in the shared run.
+   *
+   * @returns A new array of defensive snapshot containers, retaining shared state and payload references.
+   * @remarks The array is a view of known identities, not a history of every invocation.
+   * This method does not intentionally throw.
+   */
   all(): readonly StepSnapshot[];
 }
 
 /** Invocation-local access and per-identity plugin state. */
 export interface PluginContextApi {
-  /** Returns this invocation's live snapshot; throws outside the corresponding execution scope. */
+  /**
+   * Read the plugin snapshot scoped to the active invocation.
+   *
+   * @returns A fresh snapshot container sharing its identity's state store, with its ID and optional routing target.
+   * @throws Error when this view is used outside the corresponding plugin execution scope.
+   */
   current(): PluginSnapshot;
-  /** Returns the value or snapshot for a key or identity, or undefined when absent. */
+  /**
+   * Look up the shared run's snapshot for one plugin identity.
+   *
+   * @param pluginId - Stable ID of the plugin whose snapshot is requested.
+   * @returns A defensive snapshot container, or undefined if the identity is unknown.
+   * State and payload objects remain shared references.
+   * @remarks This does not require an active invocation and does not intentionally throw.
+   */
   get(pluginId: string): PluginSnapshot | undefined;
-  /** Returns defensive snapshot containers for the known identities in this run. */
+  /**
+   * Inspect every known plugin identity in the shared run.
+   *
+   * @returns A new array of defensive snapshot containers, retaining shared state and payload references.
+   * @remarks The array is a view of known identities, not a history of every invocation.
+   * This method does not intentionally throw.
+   */
   all(): readonly PluginSnapshot[];
 }
 
@@ -96,12 +174,24 @@ export interface RunContextOptions<
 
 /** `this` context available inside step functions. */
 export interface StepThis<Shared extends ContextValues = ContextValues> {
-  /** Returns this invocation's scoped view of the shared run. */
+  /**
+   * Access the context view associated with this invocation.
+   *
+   * @returns The invocation-scoped RunContext, sharing state and completed snapshots with its parent.
+   * @remarks This accessor does not intentionally throw. The context's current() methods
+   * require their corresponding active step or plugin scope; retaining a view does not keep that scope active.
+   */
   context(): RunContext<Shared>;
 }
 
 /** `this` context available inside plugin hooks. */
 export interface PluginThis<Shared extends ContextValues = ContextValues> {
-  /** Returns this invocation's scoped view of the shared run. */
+  /**
+   * Access the context view associated with this invocation.
+   *
+   * @returns The invocation-scoped RunContext, sharing state and completed snapshots with its parent.
+   * @remarks This accessor does not intentionally throw. The context's current() methods
+   * require their corresponding active step or plugin scope; retaining a view does not keep that scope active.
+   */
   context(): RunContext<Shared>;
 }

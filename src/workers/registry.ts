@@ -5,7 +5,22 @@ import type {
 } from "@/workers/types.ts";
 import { WorkerError } from "@/workers/error.ts";
 
-/** Register factories in a worker module; export the result as that module's default. */
+/**
+ * Register worker-local task and plugin factories without executing them.
+ *
+ * Export the returned registry as the default export of the worker module. The
+ * host invokes factories while assembling tasks and recipes inside each worker;
+ * the parent sends names and cloneable configuration instead of live functions.
+ *
+ * @typeParam Tasks - Named factories for functions, steps or pipelines.
+ *
+ * @typeParam Plugins - Named factories accepting optional plugin configuration.
+ * @param definition - Task factory map and optional plugin factory map. Own enumerable
+ * entries are copied; names must be nonempty and values must be functions.
+ * @returns A frozen registry with frozen, null-prototype factory maps, preserving types.
+ * @throws WorkerError with `WRK_CONFIG` for invalid maps, empty names or non-functions.
+ * Native errors from a missing definition or throwing property accessors propagate.
+ */
 export function workerRegistry<
   const Tasks extends WorkerTaskFactories,
   const Plugins extends WorkerPluginFactories = Record<never, never>,

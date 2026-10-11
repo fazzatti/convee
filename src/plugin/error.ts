@@ -31,6 +31,15 @@ export type PluginInvalidDefinitionMeta = {
 
 /** Explicit public types for the plugin error catalog. */
 export type PluginErrorCatalog = {
+  /**
+   * Describe a non-Error value thrown during plugin execution.
+   *
+   * @param args - Original cause and plugin identity, with optional trace and
+   * diagnostic guidance, plus the target when known.
+   *
+   * @returns A `PLG_000` ConveeError retaining the cause and identity metadata.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly UNKNOWN_THROWN: ConveeErrorCreator<
     "PLG_000",
     PluginUnknownThrownMeta,
@@ -39,6 +48,14 @@ export type PluginErrorCatalog = {
     "Unknown plugin error",
     PluginUnknownThrownArgs
   >;
+  /**
+   * Describe a missing or non-callable lifecycle hook in a plugin definition.
+   *
+   * @param args - Capability name and optional received value, plugin ID, target and trace.
+   *
+   * @returns A `PLG_001` ConveeError with a message identifying the invalid capability.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly INVALID_DEFINITION: ConveeErrorCreator<
     "PLG_001",
     PluginInvalidDefinitionMeta,
@@ -67,7 +84,17 @@ export type PluginInvalidDefinitionArgs = {
   trace?: ConveeErrorTrace;
 };
 
-/** Built-in plugin error catalog. */
+/**
+ * Built-in plugin error constructors, indexed by stable failure category.
+ *
+ * Each member accepts its named argument object and returns a ConveeError in the
+ * `plugin` domain with source `convee/plugin`. Constructors preserve diagnostic
+ * payload references and do not throw the error they create. Their identifier
+ * properties support code-based narrowing; see each member for inputs and output.
+ *
+ * @remarks Invalid runtime arguments or throwing property accessors can raise
+ * native errors during construction. Metadata is not deep-frozen or redacted.
+ */
 export const PLG_ERRORS: PluginErrorCatalog = {
   UNKNOWN_THROWN: definePluginError({
     code: "PLG_000",
@@ -114,7 +141,15 @@ export type PluginErrorOf<Code extends PluginErrorCode> = Extract<
   { code: Code }
 >;
 
-/** Returns `true` when the provided error belongs to the plugin domain. */
+/**
+ * Recognize a built-in plugin error and validate its required metadata fields.
+ *
+ * @param error - Unknown caught value to check against the PLG_ERRORS catalog.
+ *
+ * @returns True only for a ConveeError with the expected domain, source, known
+ * code and metadata shape. Unknown codes return false; this is not authentication.
+ * @throws Exceptions from getters or proxies encountered during inspection propagate.
+ */
 export function isPluginError(error: unknown): error is PluginError {
   if (
     !ConveeError.is(error) || error.domain !== "plugin" ||

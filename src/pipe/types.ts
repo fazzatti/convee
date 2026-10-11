@@ -20,6 +20,15 @@ export type PipeCompatibleStep<
 > = {
   readonly id: string;
   readonly isSync: boolean;
+  /**
+   * Invoke a structural child with pipeline-supplied context and targeted plugins.
+   *
+   * @param options - Parent execution context and plugins selected for this child.
+   * @param args - Child's input argument tuple.
+   * @returns A result or promise that the enclosing pipeline awaits.
+   * @throws Implementation-defined failures propagate into the enclosing pipeline's body
+   * error handling. Custom runtimes are responsible for honoring this structural contract.
+   */
   runWith(
     options: {
       context?: RunContextOptions<Shared>;
@@ -37,6 +46,15 @@ export type SyncPipeCompatibleStep<
 > = {
   readonly id: string;
   readonly isSync: true;
+  /**
+   * Invoke a structural child with pipeline-supplied context and targeted plugins.
+   *
+   * @param options - Parent execution context and plugins selected for this child.
+   * @param args - Child's input argument tuple.
+   * @returns A synchronous result; thenables are invalid in a synchronous pipeline.
+   * @throws Implementation-defined failures propagate into the enclosing pipeline's body
+   * error handling. Custom runtimes are responsible for honoring this structural contract.
+   */
   runWith(
     options: {
       context?: RunContextOptions<Shared>;
@@ -497,9 +515,30 @@ export interface PipeInstance<
   readonly steps: Steps;
   /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly (PluginWithId | Plugins[number])[];
-  /** Invokes the callable with its exact argument tuple. */
+  /**
+   * Execute this pipe with its persistent plugin registrations.
+   *
+   * @param args - Exact argument tuple matching the first child's input contract.
+   * @returns A Promise resolving to the final output after output hooks or recovery.
+   * @throws Rejects with unrecovered body, child or hook errors. Invalid input-hook results use
+   * `PIP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Unknown plugin targets use `PIP_002`; setup and routing failures bypass lifecycle hooks.
+   * @remarks Equivalent to direct invocation; uses a fresh context with outputs capture by default.
+   */
   run(...args: Input): Promise<Output>;
-  /** Invokes with per-call context and plugins without persisting those plugins. */
+  /**
+   * Execute once with additional plugins and an explicit context configuration.
+   *
+   * @param options - Per-call plugins and optional parent, seed and capture settings. Plugins are not persisted.
+   * @param args - Exact argument tuple matching the first child's input contract.
+   * @returns A Promise resolving to the final output after output hooks or recovery.
+   * @throws Rejects with unrecovered body, child or hook errors. Invalid input-hook results use
+   * `PIP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Unknown plugin targets use `PIP_002`; setup and routing failures bypass lifecycle hooks.
+   * An invalid parent context raises TypeError before execution hooks start.
+   * @remarks Persistent plugins precede per-call plugins. Execution snapshots the registrations;
+   * sharing a parent shares state and completed snapshots, while invocation scopes remain isolated.
+   */
   runWith(
     options: PipeRunOptions<Steps, E, Shared, Id>,
     ...args: Input
@@ -533,16 +572,49 @@ export interface SyncPipeInstance<
   readonly steps: Steps;
   /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly (PluginWithId | Plugins[number])[];
-  /** Invokes the callable with its exact argument tuple. */
+  /**
+   * Execute this pipe with its persistent plugin registrations.
+   *
+   * @param args - Exact argument tuple matching the first child's input contract.
+   * @returns The final output value after output hooks or recovery.
+   * @throws Throws unrecovered body, child or hook errors. Invalid input-hook results use
+   * `PIP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Thenables from a body, child or hook are rejected with TypeError; body failures can be recovered by error hooks.
+   * Unknown plugin targets use `PIP_002`; setup and routing failures bypass lifecycle hooks.
+   * @remarks Equivalent to direct invocation; uses a fresh context with outputs capture by default.
+   */
   run(...args: Input): Output;
-  /** Invokes with per-call context and plugins without persisting those plugins. */
+  /**
+   * Execute once with additional plugins and an explicit context configuration.
+   *
+   * @param options - Per-call plugins and optional parent, seed and capture settings. Plugins are not persisted.
+   * @param args - Exact argument tuple matching the first child's input contract.
+   * @returns The final output value after output hooks or recovery.
+   * @throws Throws unrecovered body, child or hook errors. Invalid input-hook results use
+   * `PIP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Thenables from a body, child or hook are rejected with TypeError; body failures can be recovered by error hooks.
+   * Unknown plugin targets use `PIP_002`; setup and routing failures bypass lifecycle hooks.
+   * An invalid parent context raises TypeError before execution hooks start.
+   * @remarks Persistent plugins precede per-call plugins. Execution snapshots the registrations;
+   * sharing a parent shares state and completed snapshots, while invocation scopes remain isolated.
+   */
   runWith(
     options: SyncPipeRunOptions<Steps, E, Shared, Id>,
     ...args: Input
   ): Output;
 }
 
-/** Callable async pipe type returned by `pipe(...)`. */
+/**
+ * Callable asynchronous pipeline with reusable children and plugin registrations.
+ *
+ * @param args - Input tuple of the first child; direct calls match run().
+ *
+ * @returns A Promise of the last child's output, after pipeline hooks or recovery.
+ * @throws Rejects with invalid routing, unrecovered child/hook errors or aggregated
+ * finalizer failures. See PipeInstance.runWith for per-call context and error handling.
+ * @remarks Children execute sequentially; array results become argument tuples for
+ * the next child. The use/remove methods affect future invocation plans.
+ */
 export type Pipe<
   Steps extends readonly [AnyPipeStep, ...AnyPipeStep[]],
   E extends Error = Error,
@@ -556,15 +628,39 @@ export type Pipe<
   & StepIdentity<Id>
   & PipeInstance<Steps, E, Shared, Id, Plugins, Input, Output>
   & {
+    /**
+     * Append a persistent plugin for future invocations of this pipe.
+     *
+     * @param plugin - Plugin compatible with the execution contract and routing namespace.
+     * @returns The same callable pipe; registrations already captured by an invocation are unchanged.
+     * @throws ConveeError with `PIP_002` for a target outside this pipeline or its direct children. Accessor errors propagate.
+     */
     use(
       plugin: PipeAttachablePlugin<Steps, E, Shared, Id>,
     ): Pipe<Steps, E, Shared, Id, Plugins, Input, Output>;
+    /**
+     * Remove every persistent registration with the specified plugin ID.
+     *
+     * @param pluginId - Identity to remove; missing IDs are a no-op.
+     * @returns The same callable pipe; previously captured invocation plans are unchanged.
+     * @throws Exceptions raised by ID getters on custom plugin objects propagate.
+     */
     remove(
       pluginId: string,
     ): Pipe<Steps, E, Shared, Id, Plugins, Input, Output>;
   };
 
-/** Callable sync pipe type returned by `pipe.sync(...)`. */
+/**
+ * Callable synchronous pipeline with reusable children and plugin registrations.
+ *
+ * @param args - Input tuple of the first child; direct calls match run().
+ *
+ * @returns The last child's output, after pipeline hooks or recovery.
+ * @throws Throws invalid routing, unrecovered child/hook errors or aggregated
+ * finalizer failures. See SyncPipeInstance.runWith for per-call context and error handling.
+ * @remarks Children execute sequentially; array results become argument tuples for
+ * the next child. The use/remove methods affect future invocation plans.
+ */
 export type SyncPipe<
   Steps extends readonly [AnySyncPipeStep, ...AnySyncPipeStep[]],
   E extends Error = Error,
@@ -587,9 +683,23 @@ export type SyncPipe<
   & StepIdentity<Id>
   & SyncPipeInstance<Steps, E, Shared, Id, Plugins, Input, Output>
   & {
+    /**
+     * Append a persistent plugin for future invocations of this pipe.
+     *
+     * @param plugin - Synchronous plugin compatible with the execution contract and routing namespace.
+     * @returns The same callable pipe; registrations already captured by an invocation are unchanged.
+     * @throws ConveeError with `PIP_002` for a target outside this pipeline or its direct children. Accessor errors propagate.
+     */
     use(
       plugin: SyncPipeAttachablePlugin<Steps, E, Shared, Id>,
     ): SyncPipe<Steps, E, Shared, Id, Plugins, Input, Output>;
+    /**
+     * Remove every persistent registration with the specified plugin ID.
+     *
+     * @param pluginId - Identity to remove; missing IDs are a no-op.
+     * @returns The same callable pipe; previously captured invocation plans are unchanged.
+     * @throws Exceptions raised by ID getters on custom plugin objects propagate.
+     */
     remove(
       pluginId: string,
     ): SyncPipe<Steps, E, Shared, Id, Plugins, Input, Output>;
@@ -598,10 +708,29 @@ export type SyncPipe<
 /** Stable identity fields exposed by pipe runtimes. */
 export type PipeIdentity<Id extends string = string> = StepIdentity<Id>;
 
-/** Context-aware sync pipe factory for a fixed shared context shape. */
+/**
+ * Construct a synchronous pipe with a fixed shared-context type.
+ *
+ * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+ * @param options - Optional stable identity and persistent synchronous plugins.
+ * @returns A reusable SyncPipe retaining its inferred input, output and identity types.
+ * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+ * Synchronous pipelines also reject asynchronous children with `PIP_004`.
+ * @remarks Construction does not invoke the body or hooks. All execution results must stay synchronous; thenables are rejected during execution.
+ */
 export type ContextualSyncPipeFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Construct a synchronous pipe with a fixed shared-context type.
+   *
+   * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+   * @param options - Optional stable identity and persistent synchronous plugins.
+   * @returns A reusable SyncPipe retaining its inferred input, output and identity types.
+   * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+   * Synchronous pipelines also reject asynchronous children with `PIP_004`.
+   * @remarks Construction does not invoke the body or hooks. All execution results must stay synchronous; thenables are rejected during execution.
+   */
   <
     const Steps extends readonly [SyncPipeInputStep, ...SyncPipeInputStep[]],
     E extends Error = Error,
@@ -620,6 +749,16 @@ export type ContextualSyncPipeFactory<
       Plugins
     >,
   ): SyncPipe<NormalizeSyncPipeSteps<Steps>, E, Shared, string, Plugins>;
+  /**
+   * Construct a synchronous pipe with a fixed shared-context type.
+   *
+   * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+   * @param options - Optional stable identity and persistent synchronous plugins.
+   * @returns A reusable SyncPipe retaining its inferred input, output and identity types.
+   * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+   * Synchronous pipelines also reject asynchronous children with `PIP_004`.
+   * @remarks Construction does not invoke the body or hooks. All execution results must stay synchronous; thenables are rejected during execution.
+   */
   <
     const Steps extends readonly [SyncPipeInputStep, ...SyncPipeInputStep[]],
     E extends Error = Error,
@@ -643,10 +782,29 @@ export type ContextualSyncPipeFactory<
   ): SyncPipe<NormalizeSyncPipeSteps<Steps>, E, Shared, Id, Plugins>;
 };
 
-/** Context-aware async pipe factory for a fixed shared context shape. */
+/**
+ * Construct an asynchronous pipe with a fixed shared-context type.
+ *
+ * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+ * @param options - Optional stable identity and persistent plugins.
+ * @returns A reusable Pipe retaining its inferred input, output and identity types.
+ * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+ *
+ * @remarks Construction does not invoke the body or hooks. Execution resolves asynchronously and follows the runtime run/runWith error contract.
+ */
 export type ContextualPipeFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Construct an asynchronous pipe with a fixed shared-context type.
+   *
+   * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+   * @param options - Optional stable identity and persistent plugins.
+   * @returns A reusable Pipe retaining its inferred input, output and identity types.
+   * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+   *
+   * @remarks Construction does not invoke the body or hooks. Execution resolves asynchronously and follows the runtime run/runWith error contract.
+   */
   <
     const Steps extends readonly [PipeInputStep, ...PipeInputStep[]],
     E extends Error = Error,
@@ -661,6 +819,16 @@ export type ContextualPipeFactory<
       Plugins
     >,
   ): Pipe<NormalizePipeSteps<Steps>, E, Shared, string, Plugins>;
+  /**
+   * Construct an asynchronous pipe with a fixed shared-context type.
+   *
+   * @param steps - Nonempty ordered tuple of compatible steps, pipelines or raw functions.
+   * @param options - Optional stable identity and persistent plugins.
+   * @returns A reusable Pipe retaining its inferred input, output and identity types.
+   * @throws TypeError for empty children, non-callable raw children or conflicting IDs; `PIP_002` for invalid plugin targets.
+   *
+   * @remarks Construction does not invoke the body or hooks. Execution resolves asynchronously and follows the runtime run/runWith error contract.
+   */
   <
     const Steps extends readonly [PipeInputStep, ...PipeInputStep[]],
     E extends Error = Error,
@@ -679,6 +847,13 @@ export type ContextualPipeFactory<
 
 /** Public sync pipe factory type, including `withContext(...)`. */
 export type SyncPipeFactory = ContextualSyncPipeFactory & {
+  /**
+   * Bind the shared-state shape used by newly constructed pipes.
+   *
+   * @typeParam Shared - Keys and value types accessible through this.context().state.
+   * @returns A contextual synchronous factory with the same runtime construction behavior.
+   * @remarks Takes no runtime arguments, adds no validation or state, and does not intentionally throw.
+   */
   withContext<
     Shared extends ContextValues,
   >(): ContextualSyncPipeFactory<Shared>;
@@ -687,5 +862,12 @@ export type SyncPipeFactory = ContextualSyncPipeFactory & {
 /** Public async pipe factory type, including sync and context-aware variants. */
 export type PipeFactory = ContextualPipeFactory & {
   sync: SyncPipeFactory;
+  /**
+   * Bind the shared-state shape used by newly constructed pipes.
+   *
+   * @typeParam Shared - Keys and value types accessible through this.context().state.
+   * @returns A contextual factory with the same runtime construction behavior.
+   * @remarks Takes no runtime arguments, adds no validation or state, and does not intentionally throw.
+   */
   withContext<Shared extends ContextValues>(): ContextualPipeFactory<Shared>;
 };

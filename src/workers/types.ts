@@ -5,11 +5,34 @@ import type { AnyPlugin, PluginInputResult } from "@/plugin/types.ts";
 import type { Step } from "@/step/types.ts";
 import type { WorkerError } from "@/workers/error.ts";
 
-/** A function, callable step or callable pipeline that a worker can execute. */
+/**
+ * Executable function signature accepted from a worker task factory.
+ *
+ * @param args - Arguments delivered through structured cloning for the selected task.
+ *
+ * @returns A value or promise; the host awaits it and sends a cloneable result to the parent.
+ * @throws Thrown/rejected task failures are reported as `WRK_TASK` with a remote diagnostic.
+ * Non-cloneable results become worker job failures rather than retaining live objects.
+ */
 export type WorkerCallable = (...args: never[]) => unknown;
-/** Factories create independent definitions for each configured task/recipe node. */
+/**
+ * Named zero-argument factories used to construct worker-local executable tasks.
+ *
+ * Each factory returns a function, callable step or callable pipeline. Factories
+ * run during host initialization, separately for configured task and recipe nodes,
+ * so state can persist in their returned callables across jobs on the same worker.
+ * Thrown factory errors or invalid returns fail startup. No functions are transferred
+ * from the parent; it references these names through job descriptors.
+ */
 export type WorkerTaskFactories = Record<string, () => WorkerCallable>;
-/** Plugin factories take zero or one configuration argument. */
+/**
+ * Named factories used to construct worker-local plugins from cloneable options.
+ *
+ * Each factory accepts zero or one configuration argument and returns a plugin
+ * descriptor with an ID. The host calls it when attaching recipe or role plugins;
+ * thrown factory errors or invalid descriptors fail initialization. Captured plugin
+ * state belongs to that worker, while each job gets a fresh Convee run context.
+ */
 export type WorkerPluginFactories = Record<
   string,
   (...args: never[]) => { readonly id: string }
@@ -214,9 +237,22 @@ export type WorkerOutcomes<
 
 /** Minimal Web Worker transport, also usable with bundler-specific constructors. */
 export interface WorkerTransport extends EventTarget {
-  /** Post a structured-cloned message. */
+  /**
+   * Send one data-only protocol message to the worker.
+   *
+   * @param message - Structured-cloneable initialization or job message supplied by the pool.
+   * @returns Nothing; the transport later emits message, error or messageerror events.
+   * @throws Transport or cloning failures may be thrown. The pool converts send failures
+   * to worker failures and closes unsafe resources; implementations must not silently drop messages.
+   */
   postMessage(message: unknown): void;
-  /** Stop the worker immediately; its finalizers are not guaranteed to run. */
+  /**
+   * Stop the worker immediately and release its transport resources.
+   *
+   * @returns Nothing; pending worker-local work and finalizers are not guaranteed to finish.
+   * @throws A custom transport may throw on cleanup failure. The pool records this as
+   * `WRK_CRASH` for close(), while still attempting cleanup of all other transports.
+   */
   terminate(): void;
 }
 /** Information passed to a custom worker constructor. */
@@ -250,7 +286,15 @@ export type WorkerPoolOptions<R extends WorkerRegistry> =
     readonly startupTimeoutMs?: number;
     /** Maximum execution time per dispatched job in milliseconds; default 30000. */
     readonly timeoutMs?: number;
-    /** Override the bootstrap transport for bundlers or transport adapters. */
+    /**
+     * Construct a transport for one lazily started pool slot.
+     *
+     * @param entry - Convee module-worker bootstrap URL to load, or adapt for a bundler.
+     * @param slot - Pool-local worker ID and configured routing role.
+     * @returns A WorkerTransport implementing the message protocol and termination lifecycle.
+     * @throws Constructor failures become startup WorkerErrors and close the pool.
+     * Each successful return transfers transport cleanup responsibility to the pool.
+     */
     readonly createWorker?: (entry: URL, slot: WorkerSlot) => WorkerTransport;
   }
   & (
@@ -301,7 +345,16 @@ export interface WorkerPool<
 > {
   /** Total configured workers, shared by all callers. */
   readonly size: number;
-  /** Construct a precisely typed job descriptor without dispatching it. */
+  /**
+   * Describe one typed remote invocation without dispatching or cloning it.
+   *
+   * @param task - Registered task or configured recipe name.
+   * @param args - Exact argument tuple for the selected task; values must be cloneable at submission.
+   * @param options - Explicit role for heterogeneous pools and optional fresh-job context seed/capture.
+   * @returns A descriptor retaining args and context references until run/settle snapshots them.
+   * @throws Exceptions raised while spreading options propagate. Validation, cloning,
+   * capacity checks and execution happen only when the descriptor is submitted.
+   */
   job<K extends keyof Tasks & string>(
     task: K,
     args: Readonly<Parameters<Tasks[K]>>,
@@ -310,30 +363,90 @@ export interface WorkerPool<
   ):
     & { readonly task: K; readonly args: Readonly<Parameters<Tasks[K]>> }
     & WorkerJobOptions<Role>;
-  /** Initialize every worker; automatically awaited by jobs. */
+  /**
+   * Start workers lazily and wait for every configured slot to initialize.
+   *
+   * @returns A Promise fulfilled once all workers report compatible task registries.
+   * Repeated calls share startup; later job submission also starts workers automatically.
+   * @throws Rejects with WorkerError on startup/configuration/protocol/transport failure
+   * or initialization timeout. A closed pool rejects with its stored failure or `WRK_CLOSED`.
+   * Startup failure closes the pool and settles any admitted jobs without retry.
+   */
   ready(): Promise<void>;
-  /** Execute one job, rejecting on its failure. */
+  /**
+   * Submit one job and await its successful output.
+   *
+   * @param job - Descriptor with task, cloneable argument tuple, role and optional context.
+   * @returns A Promise of the task's awaited result, received through structured cloning.
+   * @throws Rejects on admission failures (`WRK_CONFIG`, `WRK_CLONE`, `WRK_CAPACITY`,
+   * `WRK_CLOSED`) or the job's WorkerError. Execution failures include remote task errors,
+   * startup failure, transport/protocol failure and timeout; no automatic retry occurs.
+   * Property access failures while reading the descriptor also reject the promise.
+   */
   run<J extends WorkerJob<Tasks, Role>>(
     job: J,
   ): Promise<Awaited<ReturnType<Tasks[J["task"]]>>>;
-  /** Atomically admit a batch and await ordered outcomes; never retries jobs. */
+  /**
+   * Atomically admit a batch, then await outcomes in input order.
+   *
+   * @param jobs - Ordered descriptors; validation/cloning completes before any are admitted.
+   * An empty batch returns [] without starting workers, but still checks pool admission state.
+   * @returns A Promise of fulfilled/rejected outcomes in tuple order, independent of completion
+   * order. Admitted job failures are values, including failures caused by pool shutdown.
+   * @throws Rejects the entire batch before admission for invalid configuration, non-cloneable
+   * inputs, insufficient capacity or a closing/closed pool. Input property-access errors
+   * also reject. No partial admission or automatic retry occurs.
+   */
   settle<const Jobs extends readonly WorkerJob<Tasks, Role>[]>(
     jobs: Jobs,
   ): Promise<WorkerOutcomes<Tasks, Jobs>>;
-  /** Drain admitted jobs and terminate workers; reject if transport cleanup fails. */
+  /**
+   * Stop accepting new jobs, drain admitted work, then terminate worker transports.
+   *
+   * @returns A Promise fulfilled after all admitted jobs settle and transport cleanup completes.
+   * Repeated calls share the drain result; an unused pool closes without spawning workers.
+   * @throws Rejects with `WRK_CRASH` if listener removal or transport termination fails,
+   * after cleanup is attempted for every transport. Job failures remain in their own outcomes.
+   * @remarks This is graceful pool shutdown; an individual job timeout or crash may still
+   * force termination, in which case worker-local finalizers are not guaranteed.
+   */
   close(): Promise<void>;
-  /** Immediately terminate the pool and reject outstanding work. */
+  /**
+   * Immediately abort the pool and settle queued and executing work.
+   *
+   * @returns Nothing; outstanding jobs settle with `WRK_CLOSED` and later submissions reject.
+   * Repeated calls after closure are no-ops, and worker-local finalizers are not guaranteed.
+   * @remarks Transport cleanup exceptions are captured rather than thrown here. Observe
+   * close() for a cleanup rejection; no retries or replacement workers are started.
+   */
   terminate(): void;
 }
 /** Inference-preserving factory obtained from workerPool.for<typeof registry>(). */
 export interface TypedWorkerPoolFactory<R extends WorkerRegistry> {
+  /**
+   * Validate and snapshot configuration for a lazily started worker pool.
+   *
+   * @param options - Registry module URL, size or named roles, optional recipes,
+   * capacity/time limits and transport constructor. Configuration data must be cloneable.
+   * @returns A typed WorkerPool with bounded shared resources; no worker has started yet.
+   * @throws WorkerError with `WRK_CONFIG` for invalid shapes, limits, names or recipes,
+   * and `WRK_CLONE` for non-cloneable setup data. Option accessor exceptions propagate.
+   * Registry imports, factories and available task names are validated later during startup.
+   */
   <const C extends WorkerPoolOptions<R>>(
     options: C & ValidateWorkerPool<R, C>,
   ): WorkerPool<WorkerTasks<R, C>, WorkerRoles<C>>;
 }
 /** Typed factory facade; registry imports in the parent can be type-only. */
 export interface WorkerPoolFactory {
-  /** Bind the worker module's registry contract, then infer recipe and role types. */
+  /**
+   * Bind a worker registry's types before inferring pool recipes and role names.
+   *
+   * @typeParam R - Registry type imported from the application's worker module; may be type-only.
+   * @returns A configuration factory that produces a WorkerPool with inferred job/result types.
+   * @remarks Takes no runtime arguments, imports no worker module and does not intentionally
+   * throw. Configuration validation and resource ownership begin when the returned factory is called.
+   */
   for<R extends WorkerRegistry>(): TypedWorkerPoolFactory<R>;
 }
 /** Shared options for a parallel Step. split and join execute in the calling thread. */
@@ -347,9 +460,23 @@ export interface ParallelOptions<
 > {
   /** Reusable execution resources. */
   workers: WorkerPool<Tasks, Role>;
-  /** Turn input into an ordered job list; an empty list still calls join. */
+  /**
+   * Build the ordered batch for one parallel-step invocation in the calling thread.
+   *
+   * @param args - Input tuple after the outer step's input plugins have run.
+   * @returns A job tuple or promise; tuple positions determine join's result positions.
+   * @throws A thrown/rejected callback failure enters the outer step's body-error handling;
+   * no jobs from this invocation are submitted until split succeeds.
+   */
   split: (...args: Input) => MaybePromise<Jobs>;
-  /** Combine either successful values or explicit outcomes. */
+  /**
+   * Combine remote outcomes in the calling thread after every admitted job settles.
+   *
+   * @param results - Ordered values in all mode, or explicit success/failure outcomes in collect mode.
+   * @returns The combined output or promise, then passed through the outer step's output hooks.
+   * @throws A thrown/rejected callback failure enters the outer step's body-error handling.
+   * In all mode, any failed job prevents join from running; an empty batch still calls join.
+   */
   join: (
     results: Mode extends "collect" ? WorkerOutcomes<Tasks, Jobs>
       : WorkerResults<Tasks, Jobs>,

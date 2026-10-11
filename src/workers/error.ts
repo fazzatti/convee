@@ -38,9 +38,29 @@ export interface WorkerErrorMeta extends Record<string, unknown> {
   /** Individual failures retained by an all-mode parallel Step. */
   failures?: readonly WorkerError[];
 }
-/** Structured errors exposed by the worker adapter and normal outer error hooks. */
+/**
+ * Structured failure from worker configuration, transport, execution or aggregation.
+ *
+ * The code identifies the failure category, and metadata can identify a job, task,
+ * role, worker or remote diagnostic. Remote exceptions are data projections, not
+ * the original worker Error objects. `WRK_BATCH` retains individual failures.
+ *
+ * @remarks Construct with a code and message plus optional metadata and cause.
+ * The result is a ConveeError in domain `worker`, source `@fifo/convee/workers`;
+ * construction does not throw it. Inherited toJSON provides bounded diagnostics.
+ */
 export class WorkerError extends ConveeError<WorkerErrorCode, WorkerErrorMeta> {
-  /** Build an adapter failure with task, job and worker metadata when available. */
+  /**
+   * Create an adapter error with explicit failure category and diagnostics.
+   *
+   * @param code - Stable worker failure code used for programmatic handling.
+   *
+   * @param message - Human-readable explanation of the failure.
+   * @param meta - Optional job, task, worker, role, remote or batch details; defaults to {}.
+   * @param cause - Optional local cause or AggregateError for a failed batch.
+   * @remarks Produces a WorkerError without throwing it. Metadata is retained by
+   * reference without runtime validation; valid typed inputs do not intentionally throw.
+   */
   constructor(
     code: WorkerErrorCode,
     message: string,

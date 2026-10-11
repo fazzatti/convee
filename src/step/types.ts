@@ -20,7 +20,17 @@ export type NormalizePublicStepArgs<I> = [I] extends [never] ? never
   : I extends StepArgs ? I
   : [I];
 
-/** Function signature accepted by `step(...)`. */
+/**
+ * Body callback accepted by step, with invocation-scoped context.
+ *
+ * @param args - Exact input tuple after the selected input hooks have transformed it.
+ *
+ * @returns An output value or promise, then processed by output hooks.
+ * @throws A thrown or rejected body failure is normalized and offered to error hooks.
+ * If no hook recovers, the run fails after finalizers finish.
+ * @remarks A regular function can call this.context(); an arrow retains its lexical this.
+ * Promise results are awaited before output hooks run.
+ */
 export type StepFn<
   I = StepArgs,
   O = unknown,
@@ -31,7 +41,15 @@ export type StepFn<
 ) => MaybePromise<O>;
 
 /**
- * Synchronous step function used by `step.sync(...)`.
+ * Body callback accepted by step.sync, with invocation-scoped context.
+ *
+ * @param args - Exact input tuple after the selected input hooks have transformed it.
+ *
+ * @returns A plain output value, then processed by output hooks.
+ * @throws A thrown body failure is normalized and offered to error hooks.
+ * If no hook recovers, the run fails after finalizers finish.
+ * @remarks A regular function can call this.context(); an arrow retains its lexical this.
+ * Thenable results are invalid and raise TypeError during synchronous execution.
  */
 export type SyncStepFn<
   I = StepArgs,
@@ -151,16 +169,49 @@ export interface StepInstance<
   readonly isSync: false;
   /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly StepPlugin<Fn, E>[];
-  /** Invokes the callable with its exact argument tuple. */
+  /**
+   * Execute this step with its persistent plugin registrations.
+   *
+   * @param args - Exact argument tuple matching the wrapped function's input contract.
+   * @returns A Promise resolving to the final output after output hooks or recovery.
+   * @throws Rejects with unrecovered body or hook errors. Invalid input-hook results use
+   * `STP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Plugin selection/property access can throw synchronously before the lifecycle starts.
+   * @remarks Equivalent to direct invocation; uses a fresh context with outputs capture by default.
+   */
   run(...args: Parameters<Fn>): Promise<Awaited<ReturnType<Fn>>>;
-  /** Invokes with per-call context and plugins without persisting those plugins. */
+  /**
+   * Execute once with additional plugins and an explicit context configuration.
+   *
+   * @param options - Per-call plugins and optional parent, seed and capture settings. Plugins are not persisted.
+   * @param args - Exact argument tuple matching the wrapped function's input contract.
+   * @returns A Promise resolving to the final output after output hooks or recovery.
+   * @throws Rejects with unrecovered body or hook errors. Invalid input-hook results use
+   * `STP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Plugin selection/property access can throw synchronously before the lifecycle starts.
+   * An invalid parent context raises TypeError before execution hooks start.
+   * @remarks Persistent plugins precede per-call plugins. Execution snapshots the registrations;
+   * sharing a parent shares state and completed snapshots, while invocation scopes remain isolated.
+   */
   runWith(
     options: StepRunOptions<Fn, E>,
     ...args: Parameters<Fn>
   ): Promise<Awaited<ReturnType<Fn>>>;
-  /** Appends a persistent plugin and returns the same callable. */
+  /**
+   * Append a persistent plugin for future invocations of this step.
+   *
+   * @param plugin - Plugin compatible with the execution contract and routing namespace.
+   * @returns The same callable step; registrations already captured by an invocation are unchanged.
+   * @remarks Registration does not execute or validate hooks and does not intentionally throw for a valid plugin.
+   */
   use(plugin: StepPlugin<Fn, E>): this;
-  /** Removes registrations matching an ID and returns the same callable. */
+  /**
+   * Remove every persistent registration with the specified plugin ID.
+   *
+   * @param pluginId - Identity to remove; missing IDs are a no-op.
+   * @returns The same callable step; previously captured invocation plans are unchanged.
+   * @throws Exceptions raised by ID getters on custom plugin objects propagate.
+   */
   remove(pluginId: string): this;
 }
 
@@ -177,20 +228,64 @@ export interface SyncStepInstance<
   readonly isSync: true;
   /** Defensive copy of the current registration list; mutation methods change the same runtime. */
   readonly plugins: readonly SyncStepPlugin<Fn, E>[];
-  /** Invokes the callable with its exact argument tuple. */
+  /**
+   * Execute this step with its persistent plugin registrations.
+   *
+   * @param args - Exact argument tuple matching the wrapped function's input contract.
+   * @returns The final output value after output hooks or recovery.
+   * @throws Throws unrecovered body or hook errors. Invalid input-hook results use
+   * `STP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Thenables from a body or hook are rejected with TypeError; body failures can be recovered by error hooks.
+   * Plugin selection/property access can throw synchronously before the lifecycle starts.
+   * @remarks Equivalent to direct invocation; uses a fresh context with outputs capture by default.
+   */
   run(...args: Parameters<Fn>): ReturnType<Fn>;
-  /** Invokes with per-call context and plugins without persisting those plugins. */
+  /**
+   * Execute once with additional plugins and an explicit context configuration.
+   *
+   * @param options - Per-call plugins and optional parent, seed and capture settings. Plugins are not persisted.
+   * @param args - Exact argument tuple matching the wrapped function's input contract.
+   * @returns The final output value after output hooks or recovery.
+   * @throws Throws unrecovered body or hook errors. Invalid input-hook results use
+   * `STP_001`; failed finalizers aggregate as `RT_000` after all finalizers are attempted.
+   * Thenables from a body or hook are rejected with TypeError; body failures can be recovered by error hooks.
+   * Plugin selection/property access can throw synchronously before the lifecycle starts.
+   * An invalid parent context raises TypeError before execution hooks start.
+   * @remarks Persistent plugins precede per-call plugins. Execution snapshots the registrations;
+   * sharing a parent shares state and completed snapshots, while invocation scopes remain isolated.
+   */
   runWith(
     options: SyncStepRunOptions<Fn, E>,
     ...args: Parameters<Fn>
   ): ReturnType<Fn>;
-  /** Appends a persistent plugin and returns the same callable. */
+  /**
+   * Append a persistent plugin for future invocations of this step.
+   *
+   * @param plugin - Synchronous plugin compatible with the execution contract and routing namespace.
+   * @returns The same callable step; registrations already captured by an invocation are unchanged.
+   * @remarks Registration does not execute or validate hooks and does not intentionally throw for a valid plugin.
+   */
   use(plugin: SyncStepPlugin<Fn, E>): this;
-  /** Removes registrations matching an ID and returns the same callable. */
+  /**
+   * Remove every persistent registration with the specified plugin ID.
+   *
+   * @param pluginId - Identity to remove; missing IDs are a no-op.
+   * @returns The same callable step; previously captured invocation plans are unchanged.
+   * @throws Exceptions raised by ID getters on custom plugin objects propagate.
+   */
   remove(pluginId: string): this;
 }
 
-/** Method and identity surface attached to an asynchronous callable step. */
+/**
+ * Callable asynchronous step with identity and lifecycle registration methods.
+ *
+ * @param args - The wrapped function's input argument tuple; direct calls match run().
+ *
+ * @returns A Promise of the final output after hooks and any successful recovery.
+ * @throws Rejects with unrecovered execution errors or aggregated finalizer failures.
+ * Plugin selection can throw before the lifecycle starts; see StepInstance.runWith
+ * for context options, setup failures and the full execution contract.
+ */
 export type StepRuntime<
   Fn extends (...args: never[]) => unknown,
   E extends Error = Error,
@@ -201,7 +296,14 @@ export type StepRuntime<
   & StepInstance<Fn, E>;
 
 /**
- * Public callable surface returned by `step.sync(...)`.
+ * Callable synchronous step with identity and lifecycle registration methods.
+ *
+ * @param args - The wrapped function's input argument tuple; direct calls match run().
+ *
+ * @returns The final output value after hooks and any successful recovery.
+ * @throws Throws unrecovered execution errors or aggregated finalizer failures.
+ * Plugin selection can throw before the lifecycle starts; see SyncStepInstance.runWith
+ * for context options, setup failures and the full execution contract.
  */
 export type SyncStepRuntime<
   Fn extends (...args: never[]) => unknown,
@@ -212,7 +314,16 @@ export type SyncStepRuntime<
   & StepIdentity<Id>
   & SyncStepInstance<Fn, E>;
 
-/** Callable step type returned by `step(...)`. */
+/**
+ * Callable asynchronous step with identity and lifecycle registration methods.
+ *
+ * @param args - The wrapped function's input argument tuple; direct calls match run().
+ *
+ * @returns A Promise of the final output after hooks and any successful recovery.
+ * @throws Rejects with unrecovered execution errors or aggregated finalizer failures.
+ * Plugin selection can throw before the lifecycle starts; see StepInstance.runWith
+ * for context options, setup failures and the full execution contract.
+ */
 export type Step<
   I = StepArgs,
   O = unknown,
@@ -222,7 +333,14 @@ export type Step<
 > = StepRuntime<StepFn<I, O, Shared>, E, Id>;
 
 /**
- * Public callable surface returned by `step.sync(...)`.
+ * Callable synchronous step with identity and lifecycle registration methods.
+ *
+ * @param args - The wrapped function's input argument tuple; direct calls match run().
+ *
+ * @returns The final output value after hooks and any successful recovery.
+ * @throws Throws unrecovered execution errors or aggregated finalizer failures.
+ * Plugin selection can throw before the lifecycle starts; see SyncStepInstance.runWith
+ * for context options, setup failures and the full execution contract.
  */
 export type SyncStep<
   I = StepArgs,
@@ -259,11 +377,28 @@ export type SyncStepFromFunction<
 >;
 
 /**
- * Context-aware synchronous step factory.
+ * Construct a synchronous step with a fixed shared-context type.
+ *
+ * @param fn - Callable receiving the input tuple and this.context().
+ * @param options - Optional stable identity and persistent synchronous plugins.
+ * @returns A reusable SyncStep retaining its inferred input, output and identity types.
+ * @throws TypeError when fn is not callable; option accessor errors propagate.
+ *
+ * @remarks Construction does not invoke the body or hooks. All execution results must stay synchronous; thenables are rejected during execution.
  */
 export type ContextualSyncStepFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Construct a synchronous step with a fixed shared-context type.
+   *
+   * @param fn - Callable receiving the input tuple and this.context().
+   * @param options - Optional stable identity and persistent synchronous plugins.
+   * @returns A reusable SyncStep retaining its inferred input, output and identity types.
+   * @throws TypeError when fn is not callable; option accessor errors propagate.
+   *
+   * @remarks Construction does not invoke the body or hooks. All execution results must stay synchronous; thenables are rejected during execution.
+   */
   <I extends StepArgs, O, E extends Error = Error, Id extends string = string>(
     fn: (this: StepThis<Shared>, ...args: I) => NonPromise<O>,
     options?: {
@@ -274,11 +409,28 @@ export type ContextualSyncStepFactory<
 };
 
 /**
- * Context-aware step factory.
+ * Construct an asynchronous step with a fixed shared-context type.
+ *
+ * @param fn - Callable receiving the input tuple and this.context().
+ * @param options - Optional stable identity and persistent plugins.
+ * @returns A reusable Step retaining its inferred input, output and identity types.
+ * @throws TypeError when fn is not callable; option accessor errors propagate.
+ *
+ * @remarks Construction does not invoke the body or hooks. Execution resolves asynchronously and follows the runtime run/runWith error contract.
  */
 export type ContextualStepFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Construct an asynchronous step with a fixed shared-context type.
+   *
+   * @param fn - Callable receiving the input tuple and this.context().
+   * @param options - Optional stable identity and persistent plugins.
+   * @returns A reusable Step retaining its inferred input, output and identity types.
+   * @throws TypeError when fn is not callable; option accessor errors propagate.
+   *
+   * @remarks Construction does not invoke the body or hooks. Execution resolves asynchronously and follows the runtime run/runWith error contract.
+   */
   <I extends StepArgs, O, E extends Error = Error, Id extends string = string>(
     fn: (this: StepThis<Shared>, ...args: I) => MaybePromise<O>,
     options?: {
@@ -293,6 +445,13 @@ export type ContextualStepFactory<
  * Public synchronous step factory type.
  */
 export type SyncStepFactory = ContextualSyncStepFactory & {
+  /**
+   * Bind the shared-state shape used by newly constructed steps.
+   *
+   * @typeParam Shared - Keys and value types accessible through this.context().state.
+   * @returns A contextual synchronous factory with the same runtime construction behavior.
+   * @remarks Takes no runtime arguments, adds no validation or state, and does not intentionally throw.
+   */
   withContext<
     Shared extends ContextValues,
   >(): ContextualSyncStepFactory<Shared>;
@@ -303,5 +462,12 @@ export type SyncStepFactory = ContextualSyncStepFactory & {
  */
 export type StepFactory = ContextualStepFactory & {
   sync: SyncStepFactory;
+  /**
+   * Bind the shared-state shape used by newly constructed steps.
+   *
+   * @typeParam Shared - Keys and value types accessible through this.context().state.
+   * @returns A contextual factory with the same runtime construction behavior.
+   * @remarks Takes no runtime arguments, adds no validation or state, and does not intentionally throw.
+   */
   withContext<Shared extends ContextValues>(): ContextualStepFactory<Shared>;
 };

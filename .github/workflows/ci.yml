@@ -41,7 +41,7 @@ jobs:
         run: |
           echo '## Convee quality evidence' >> "$GITHUB_STEP_SUMMARY"
           if [ -f .artifacts/quality.json ]; then
-            jq '{linePercent, branchPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
+            jq '{linePercent, branchPercent, functionPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()

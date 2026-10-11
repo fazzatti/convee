@@ -325,6 +325,66 @@ describe("Worker pool lifecycle", () => {
     assertEquals(empty.workers.length, 0);
   });
 
+  it("ignores transport callbacks already queued when the pool is terminated", async () => {
+    const callbacks = new Map<string, EventListener>();
+    const worker = new ManualWorker();
+    const add = worker.addEventListener.bind(worker);
+    worker.addEventListener = (type, listener, options) => {
+      assert(typeof listener === "function");
+      callbacks.set(type, listener);
+      add(type, listener, options);
+    };
+    let terminations = 0;
+    worker.terminate = () => {
+      terminations++;
+      worker.terminated = true;
+    };
+    const pool = workerPool.for<typeof registry>()({
+      module,
+      size: 1,
+      createWorker: () => worker,
+    });
+    const jobs = pool.settle([
+      pool.job("double", [1]),
+      pool.job("double", [2]),
+    ]);
+    worker.reply(ready);
+    assertEquals(worker.sent.length, 2); // Initialization and one active job.
+    pool.terminate();
+    assertEquals(
+      (await jobs).map((outcome) =>
+        outcome.status === "rejected" && outcome.error.code
+      ),
+      ["WRK_CLOSED", "WRK_CLOSED"],
+    );
+    const failure = await assertRejects(() => pool.ready(), WorkerError);
+    let reads = 0;
+    // A custom transport may have captured callbacks before listener removal.
+    callbacks.get("message")!(
+      new MessageEvent("message", {
+        data: {
+          get protocol() {
+            reads++;
+            return PROTOCOL;
+          },
+        },
+      }),
+    );
+    for (const type of ["error", "messageerror"]) {
+      const event = new Event(type, { cancelable: true });
+      callbacks.get(type)!(event);
+      assert(event.defaultPrevented);
+    }
+    assertEquals(reads, 0);
+    assert((await assertRejects(() => pool.ready(), WorkerError)) === failure);
+    assertEquals(failure.code, "WRK_CLOSED");
+    assertEquals(worker.sent.length, 2);
+    assertEquals(terminations, 1);
+    await pool.close();
+    pool.terminate();
+    assertEquals(terminations, 1);
+  });
+
   it("reentrant input getters cannot admit jobs after close or exceed capacity", async () => {
     const closed = controlled();
     const args: [number] = [1];

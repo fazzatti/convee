@@ -25,6 +25,15 @@ export type FinalizationErrorArgs = FinalizationErrorMeta & {
 
 /** Stable runtime error constructors. */
 export type RuntimeErrorCatalog = {
+  /**
+   * Combine cleanup failures without losing an earlier execution failure.
+   *
+   * @param args - Execution ID, ordered failed finalizers with traces, optional
+   * execution error and the finalization trace.
+   *
+   * @returns An `RT_000` ConveeError with all failures in metadata and AggregateError cause.
+   * @throws Native errors for an invalid failure collection or throwing input getters.
+   */
   readonly FINALIZATION_FAILED: ConveeErrorCreator<
     "RT_000",
     FinalizationErrorMeta,
@@ -40,7 +49,17 @@ const defineRuntimeError = createErrorFactory({
   source: "convee/runtime",
 });
 
-/** Structured cleanup errors. The cause is an AggregateError retaining all failures. */
+/**
+ * Runtime error catalog for cleanup failures after execution has finished.
+ *
+ * `FINALIZATION_FAILED` accepts the execution ID, optional execution error, failed
+ * finalizers and trace. It returns an `RT_000` ConveeError whose AggregateError cause
+ * retains the execution error first, followed by cleanup errors in registration
+ * order. Creating it does not throw it or run error hooks again.
+ *
+ * @remarks Invalid failure collections or throwing property accessors can raise
+ * native errors during construction. Original error objects remain referenced.
+ */
 export const RT_ERRORS: RuntimeErrorCatalog = {
   FINALIZATION_FAILED: defineRuntimeError({
     code: "RT_000",

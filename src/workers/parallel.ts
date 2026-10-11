@@ -7,7 +7,24 @@ import type {
   WorkerTaskMap,
 } from "@/workers/types.ts";
 
-/** Fan out to workers and join ordered successful results inside an ordinary async Step. */
+/**
+ * Wrap worker fan-out and an ordered successful-result join in an async Convee step.
+ *
+ * Each invocation runs split in the caller, submits its batch to the shared pool,
+ * waits for every admitted job, and runs join in the caller only if all succeeded.
+ * An empty batch still calls join. Outer plugins wrap the entire split/run/join
+ * lifecycle, and the returned step can be reused or composed in a normal pipeline.
+ *
+ * @param options - Worker pool, input-to-jobs split function, values-to-output join
+ * function, optional `all` mode, step ID and outer plugins.
+ *
+ * @returns A Step accepting split's input tuple and resolving to join's awaited output.
+ * The pool remains caller-owned and is not closed after an invocation.
+ * @throws WorkerError with `WRK_CONFIG` synchronously for invalid factory options.
+ * The returned step rejects with `WRK_BATCH` after any admitted job fails, retaining
+ * every failure, unless an outer error hook recovers. Split, join, admission and
+ * cleanup failures follow normal step error/finalization handling.
+ */
 export function parallel<
   Tasks extends WorkerTaskMap,
   Role extends string,
@@ -17,7 +34,22 @@ export function parallel<
 >(
   options: ParallelOptions<Tasks, Role, Input, Jobs, Output, "all">,
 ): ParallelStep<Input, Output>;
-/** Collect individual failures and let join explicitly choose the combined result. */
+/**
+ * Wrap worker fan-out and an ordered success/failure join in an async Convee step.
+ *
+ * Collect mode waits for every admitted job and passes each explicit outcome to
+ * join, including failures. Split and join execute in the caller. Empty batches
+ * still call join, and outer plugins wrap the complete invocation lifecycle.
+ *
+ * @param options - Worker pool, split function, outcome-aware join function,
+ * required `collect` mode, optional step ID and outer plugins.
+ *
+ * @returns A reusable Step resolving to join's awaited output; pool ownership stays
+ * with the caller. Individual rejected outcomes do not automatically fail the step.
+ * @throws WorkerError with `WRK_CONFIG` synchronously for invalid factory options.
+ * Batch admission, split or join failures reject the returned step unless recovered
+ * by an outer error hook; finalizer failures use normal step cleanup handling.
+ */
 export function parallel<
   Tasks extends WorkerTaskMap,
   Role extends string,
@@ -29,6 +61,17 @@ export function parallel<
     mode: "collect";
   },
 ): ParallelStep<Input, Output>;
+/**
+ * Construct a worker-backed async step with all-success or explicit-outcome joining.
+ *
+ * @param options - Shared pool, split and join callbacks, mode, optional ID and plugins.
+ *
+ * @returns A normal reusable Step: split and join run locally, admitted jobs run remotely,
+ * and the pool remains owned by the caller. The overloads describe each join contract.
+ * @throws `WRK_CONFIG` for invalid construction options. Invocations use normal step
+ * error/finalization handling; all mode aggregates failed jobs as `WRK_BATCH`, while
+ * collect mode passes those failures to join as ordered outcome values.
+ */
 export function parallel<
   Tasks extends WorkerTaskMap,
   Role extends string,

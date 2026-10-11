@@ -24,31 +24,58 @@ export type PluginInputResult<I extends PluginArgs> = I extends [] ? []
   : I extends [infer Value] ? Value extends readonly unknown[] ? I : Value | I
   : I;
 
-/** Async input hook signature used by plugins. */
+/**
+ * Awaitable input lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param args - Current execution argument tuple, spread into the callback.
+ * @returns Replacement arguments: the full tuple, or a scalar for one non-array argument. Promise results are awaited by async runtimes.
+ * @throws A thrown hook failure or invalid input transport fails the execution without body-error recovery; finalizers still run.
+ */
 export type PluginInputHook<I extends PluginArgs> = (
   ...args: I
 ) => MaybePromise<PluginInputResult<I>>;
 
 /**
- * Synchronous input hook used by `plugin.sync(...)`.
+ * Synchronous input lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param args - Current execution argument tuple, spread into the callback.
+ * @returns Replacement arguments: the full tuple, or a scalar for one non-array argument. Thenables are invalid in a synchronous runtime.
+ * @throws A thrown hook failure or invalid input transport fails the execution without body-error recovery; finalizers still run.
  */
 export type SyncPluginInputHook<I extends PluginArgs> = (
   ...args: I
 ) => PluginInputResult<I>;
 
-/** Async output hook signature used by plugins. */
+/**
+ * Awaitable output lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param output - Current successful or recovered output.
+ * @returns The next output with the same contract. Promise results are awaited by async runtimes.
+ * @throws A thrown hook failure fails the execution without re-entering error hooks; finalizers still run.
+ */
 export type PluginOutputHook<_Input extends PluginArgs, O> = (
   output: O,
 ) => MaybePromise<O>;
 
 /**
- * Synchronous output hook used by `plugin.sync(...)`.
+ * Synchronous output lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param output - Current successful or recovered output.
+ * @returns The next output with the same contract. Thenables are invalid in a synchronous runtime.
+ * @throws A thrown hook failure fails the execution without re-entering error hooks; finalizers still run.
  */
 export type SyncPluginOutputHook<_Input extends PluginArgs, O> = (
   output: O,
 ) => O;
 
-/** Async error hook signature used by plugins. */
+/**
+ * Awaitable error lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param error - Current body failure or an Error returned by a preceding error hook.
+ * @param input - Copy of the argument tuple after input hooks have transformed it.
+ * @returns An output value to recover, or an Error to continue to the next error hook. Promise results are awaited by async runtimes.
+ * @throws A thrown hook failure ends recovery; finalizers still run. Input/output/finalizer failures do not enter these hooks.
+ */
 export type PluginErrorHook<
   I extends PluginArgs,
   O,
@@ -56,7 +83,12 @@ export type PluginErrorHook<
 > = (error: E, input: I) => MaybePromise<O | E>;
 
 /**
- * Synchronous error hook used by `plugin.sync(...)`.
+ * Synchronous error lifecycle callback executed with the plugin's invocation context.
+ *
+ * @param error - Current body failure or an Error returned by a preceding error hook.
+ * @param input - Copy of the argument tuple after input hooks have transformed it.
+ * @returns An output value to recover, or an Error to continue to the next error hook. Thenables are invalid in a synchronous runtime.
+ * @throws A thrown hook failure ends recovery; finalizers still run. Input/output/finalizer failures do not enter these hooks.
  */
 export type SyncPluginErrorHook<
   I extends PluginArgs,
@@ -64,10 +96,22 @@ export type SyncPluginErrorHook<
   E extends Error = Error,
 > = (error: E, input: I) => O | E;
 
-/** Cleanup hook awaited after all execution phases; it cannot replace the outcome. */
+/**
+ * Awaitable finally lifecycle callback executed with the plugin's invocation context.
+ *
+ * @returns No meaningful value; cleanup cannot replace the execution result. Promise results are awaited by async runtimes.
+ *
+ * @throws Thrown cleanup failures are aggregated as `RT_000` after all selected finalizers are attempted.
+ */
 export type PluginFinallyHook = () => MaybePromise<void>;
 
-/** Synchronous cleanup hook; undefined prevents accepting async functions as void callbacks. */
+/**
+ * Synchronous finally lifecycle callback executed with the plugin's invocation context.
+ *
+ * @returns No meaningful value; cleanup cannot replace the execution result. Thenables are invalid in a synchronous runtime.
+ *
+ * @throws Thrown cleanup failures are aggregated as `RT_000` after all selected finalizers are attempted.
+ */
 export type SyncPluginFinallyHook = () => undefined;
 
 /** Shape of the async hooks that can be implemented by a plugin. */
@@ -160,7 +204,15 @@ export type FluentMembers<
   Id extends string = string,
 > =
   & ("finally" extends Keys ? Record<never, never> : {
-    /** Release resources after success, recovery, or any hook/body failure. */
+    /**
+     * Register cleanup after success, recovery or execution-phase failure.
+     *
+     * @param hook - Callback receiving no arguments and this.context(); returned values are
+     * ignored and async cleanup is awaited, except that sync builders require synchronous cleanup.
+     * @returns A new builder with finally registered; each selected registration finalizes once.
+     * @throws TypeError unless exactly one callable hook is supplied. Execution-time cleanup
+     * failures become `RT_000` after all finalizers run and do not re-enter error hooks.
+     */
     onFinally<Result extends void | Promise<void>>(
       hook:
         & ((this: PluginThis<Shared>) => Result)
@@ -171,6 +223,15 @@ export type FluentMembers<
     ): FluentState<I, O, E, Shared, Target, Keys | "finally", Sync, Id>;
   })
   & ("input" extends Keys ? Record<never, never> : {
+    /**
+     * Register a hook that transforms the execution's arguments before its body runs.
+     *
+     * @param hook - Callback receiving arguments and this.context(); return the replacement
+     * tuple, or a scalar for a single non-array argument. Sync builders require a synchronous result.
+     * @returns A new builder with input registered, preserving this builder and the configured identity.
+     * @throws TypeError unless exactly one callable hook is supplied. At execution time,
+     * invalid tuple transport fails the owning step or pipe, and input-hook failures skip error recovery.
+     */
     onInput<NextI extends HookArguments<I>>(
       hook: (
         this: PluginThis<Shared>,
@@ -179,6 +240,15 @@ export type FluentMembers<
     ): FluentState<NextI, O, E, Shared, Target, Keys | "input", Sync, Id>;
   })
   & ("output" extends Keys ? Record<never, never> : {
+    /**
+     * Register a hook that transforms a successful or recovered result.
+     *
+     * @param hook - Callback receiving the current output and this.context(), returning
+     * the next output of the same contract. Sync builders require a synchronous result.
+     * @returns A new builder with output registered; the previous builder remains reusable.
+     * @throws TypeError unless exactly one callable hook is supplied. Output-hook failures
+     * fail the owning runtime without re-entering error hooks; finalizers still run.
+     */
     onOutput<NextO>(
       hook: (
         this: PluginThis<Shared>,
@@ -196,6 +266,15 @@ export type FluentMembers<
     >;
   })
   & ("error" extends Keys ? Record<never, never> : {
+    /**
+     * Register recovery for a failure thrown by the execution body.
+     *
+     * @param hook - Callback receiving the current Error, the input tuple after input hooks,
+     * and this.context(). Return an output to recover or an Error to continue failure.
+     * @returns A new builder with error registered, preserving the previous builder.
+     * @throws TypeError unless exactly one callable hook is supplied. A thrown/rejected
+     * error-hook failure ends recovery; finalizers still run. Sync builders reject thenables during execution.
+     */
     onError<
       NextI extends HookArguments<I> = HookArguments<I>,
       NextE extends Error = Error,
@@ -236,7 +315,23 @@ export type FluentState<
 > =
   & PluginIdentity<Id, Target>
   & {
+    /**
+     * Check whether this plugin has a callable lifecycle hook.
+     *
+     * @param capability - One of input, output, error or finally.
+     * @returns True when the corresponding hook is present and callable.
+     * @remarks Built-in descriptors do not run hooks or intentionally throw. Custom structural
+     * implementations may throw; this check does not validate a hook's result or behavior.
+     */
     supports(capability: PluginCapability): boolean;
+    /**
+     * Check whether this plugin applies to the supplied execution identity.
+     *
+     * @param stepId - Step or pipeline identity being considered for routing.
+     * @returns True if the plugin is untargeted or its configured target equals this ID.
+     * @remarks Built-in descriptors use exact comparison without intentionally throwing;
+     * custom structural implementations may throw. Pipelines route untargeted plugins to the outer pipeline.
+     */
     targets(stepId: string): boolean;
   }
   & ("input" extends Keys ? {
@@ -306,7 +401,23 @@ export type PublicPluginBaseMembers<
 > = HasPluginRuntimeState<I, O, E, Definition> extends true ? {
     readonly id: string;
     readonly target: Target;
+    /**
+     * Check whether this plugin has a callable lifecycle hook.
+     *
+     * @param capability - One of input, output, error or finally.
+     * @returns True when the corresponding hook is present and callable.
+     * @remarks Built-in descriptors do not run hooks or intentionally throw. Custom structural
+     * implementations may throw; this check does not validate a hook's result or behavior.
+     */
     supports(capability: PluginCapability): boolean;
+    /**
+     * Check whether this plugin applies to the supplied execution identity.
+     *
+     * @param stepId - Step or pipeline identity being considered for routing.
+     * @returns True if the plugin is untargeted or its configured target equals this ID.
+     * @remarks Built-in descriptors use exact comparison without intentionally throwing;
+     * custom structural implementations may throw. Pipelines route untargeted plugins to the outer pipeline.
+     */
     targets(stepId: string): boolean;
   }
   : Record<never, never>;
@@ -360,7 +471,23 @@ export type AnyPlugin<
   & {
     readonly id: string;
     readonly target: Target;
+    /**
+     * Check whether this plugin has a callable lifecycle hook.
+     *
+     * @param capability - One of input, output, error or finally.
+     * @returns True when the corresponding hook is present and callable.
+     * @remarks Built-in descriptors do not run hooks or intentionally throw. Custom structural
+     * implementations may throw; this check does not validate a hook's result or behavior.
+     */
     supports(capability: PluginCapability): boolean;
+    /**
+     * Check whether this plugin applies to the supplied execution identity.
+     *
+     * @param stepId - Step or pipeline identity being considered for routing.
+     * @returns True if the plugin is untargeted or its configured target equals this ID.
+     * @remarks Built-in descriptors use exact comparison without intentionally throwing;
+     * custom structural implementations may throw. Pipelines route untargeted plugins to the outer pipeline.
+     */
     targets(stepId: string): boolean;
   }
   & ThisType<PluginThis<Shared>>
@@ -402,7 +529,23 @@ export type AnySyncPlugin<
   & {
     readonly id: string;
     readonly target: Target;
+    /**
+     * Check whether this plugin has a callable lifecycle hook.
+     *
+     * @param capability - One of input, output, error or finally.
+     * @returns True when the corresponding hook is present and callable.
+     * @remarks Built-in descriptors do not run hooks or intentionally throw. Custom structural
+     * implementations may throw; this check does not validate a hook's result or behavior.
+     */
     supports(capability: PluginCapability): boolean;
+    /**
+     * Check whether this plugin applies to the supplied execution identity.
+     *
+     * @param stepId - Step or pipeline identity being considered for routing.
+     * @returns True if the plugin is untargeted or its configured target equals this ID.
+     * @remarks Built-in descriptors use exact comparison without intentionally throwing;
+     * custom structural implementations may throw. Pipelines route untargeted plugins to the outer pipeline.
+     */
     targets(stepId: string): boolean;
   }
   & ThisType<PluginThis<Shared>>
@@ -477,7 +620,23 @@ export type SyncPlugin<
   & {
     readonly id: string;
     readonly target: Target;
+    /**
+     * Check whether this plugin has a callable lifecycle hook.
+     *
+     * @param capability - One of input, output, error or finally.
+     * @returns True when the corresponding hook is present and callable.
+     * @remarks Built-in descriptors do not run hooks or intentionally throw. Custom structural
+     * implementations may throw; this check does not validate a hook's result or behavior.
+     */
     supports(capability: PluginCapability): boolean;
+    /**
+     * Check whether this plugin applies to the supplied execution identity.
+     *
+     * @param stepId - Step or pipeline identity being considered for routing.
+     * @returns True if the plugin is untargeted or its configured target equals this ID.
+     * @remarks Built-in descriptors use exact comparison without intentionally throwing;
+     * custom structural implementations may throw. Pipelines route untargeted plugins to the outer pipeline.
+     */
     targets(stepId: string): boolean;
   }
   & ("input" extends keyof Definition
@@ -603,7 +762,13 @@ export type InferredSyncPluginDefinition<
     Shared
   >;
 
-/** Type-only sentinel distinguishing unset builder state from unknown. */
+/**
+ * Type-only identity distinguishing an unset fluent contract from unknown.
+ *
+ * This declaration is used by builder inference and is re-exported only as a type
+ * from the package entrypoint. It has no runtime value to read, call or instantiate;
+ * use the plugin factory to construct executable plugin descriptors.
+ */
 export declare const PLUGIN_BUILDER_UNSET: unique symbol;
 
 /** Type-only marker for a hook contract that has not yet been inferred. */
@@ -697,7 +862,13 @@ export type PluginIdentity<
 };
 
 /**
- * Strongly typed plugin factory for a known input/output/error contract.
+ * Materialize a plugin under an explicitly bound input/output/error contract.
+ *
+ * @param definition - At least one callable lifecycle hook with the bound context type.
+ * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+ * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+ * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+ * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
  */
 export type TypedPluginFactory<
   I extends PluginArgs,
@@ -705,23 +876,58 @@ export type TypedPluginFactory<
   E extends Error,
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Materialize a plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <Definition extends PluginDefinition<I, O, E, Shared>>(
     definition: Definition & ThisType<PluginThis<Shared>>,
   ):
     & Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
     & PluginIdentity<string, undefined>;
+  /**
+   * Materialize a plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <Definition extends PluginDefinition<I, O, E, Shared>, Id extends string>(
     definition: Definition & ThisType<PluginThis<Shared>>,
     options: { id: Id; target?: undefined },
   ):
     & Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
     & PluginIdentity<Id, undefined>;
+  /**
+   * Materialize a plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <Definition extends PluginDefinition<I, O, E, Shared>, Target extends string>(
     definition: Definition & ThisType<PluginThis<Shared>>,
     options: { target: Target; id?: undefined },
   ):
     & Plugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
     & PluginIdentity<string, Target>;
+  /**
+   * Materialize a plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <
     Definition extends PluginDefinition<I, O, E, Shared>,
     Id extends string,
@@ -735,7 +941,13 @@ export type TypedPluginFactory<
 };
 
 /**
- * Strongly typed synchronous plugin factory for a known contract.
+ * Materialize a synchronous plugin under an explicitly bound input/output/error contract.
+ *
+ * @param definition - At least one callable lifecycle hook with the bound context type.
+ * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+ * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+ * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+ * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
  */
 export type SyncTypedPluginFactory<
   I extends PluginArgs,
@@ -743,6 +955,14 @@ export type SyncTypedPluginFactory<
   E extends Error,
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Materialize a synchronous plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <Definition extends SyncPluginDefinition<I, O, E, Shared>>(
     definition:
       & Definition
@@ -751,6 +971,15 @@ export type SyncTypedPluginFactory<
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
     & PluginIdentity<string, undefined>;
+  /**
+   * Materialize a synchronous plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <Definition extends SyncPluginDefinition<I, O, E, Shared>, Id extends string>(
     definition:
       & Definition
@@ -760,6 +989,15 @@ export type SyncTypedPluginFactory<
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, undefined>
     & PluginIdentity<Id, undefined>;
+  /**
+   * Materialize a synchronous plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <
     Definition extends SyncPluginDefinition<I, O, E, Shared>,
     Target extends string,
@@ -772,6 +1010,15 @@ export type SyncTypedPluginFactory<
   ):
     & SyncPlugin<CompactPluginArgs<I>, O, E, Definition, Shared, Target>
     & PluginIdentity<string, Target>;
+  /**
+   * Materialize a synchronous plugin under an explicitly bound input/output/error contract.
+   *
+   * @param definition - At least one callable lifecycle hook with the bound context type.
+   * @param options - Optional stable ID and/or target; omitted IDs become random UUIDs.
+   * @returns A frozen descriptor retaining the supplied hook functions and inferred literal identity.
+   * @throws ConveeError with `PLG_001` for an empty definition or non-callable hook;
+   * exceptions raised by definition or option accessors propagate. Hooks run only during execution.
+   */
   <
     Definition extends SyncPluginDefinition<I, O, E, Shared>,
     Id extends string,
@@ -793,6 +1040,14 @@ export type SyncTypedPluginFactory<
 export type ContextualPluginSyncFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Start a synchronous fluent builder with a fixed shared-context type.
+   *
+   * @param options - Optional stable ID and target; the ID defaults to a random UUID.
+   * @returns An empty builder whose onInput/onOutput/onError/onFinally methods register hooks.
+   * @throws Exceptions from metadata property access propagate. An empty builder has no
+   * runtime descriptor until a hook is registered; registration validates its callable argument.
+   */
   <
     Id extends string = string,
     Target extends string | undefined = undefined,
@@ -800,6 +1055,16 @@ export type ContextualPluginSyncFactory<
     id?: Id;
     target?: Target;
   }): FluentMembers<never, never, never, Shared, Target, never, true, Id>;
+  /**
+   * Bind the execution input/output/error types while retaining this context type.
+   *
+   * @typeParam I - Execution argument tuple.
+   * @typeParam O - Successful or recovered output.
+   * @typeParam E - Error subtype accepted by error hooks.
+   * @returns A synchronous typed factory accepting an explicit hook definition and metadata.
+   * @remarks Takes no runtime arguments and does not intentionally throw. The returned
+   * factory validates definitions with `PLG_001`; see TypedPluginFactory or SyncTypedPluginFactory.
+   */
   for: <
     I extends PluginArgs,
     O,
@@ -817,6 +1082,14 @@ export type ContextualPluginSyncFactory<
 export type ContextualPluginFactory<
   Shared extends ContextValues = ContextValues,
 > = {
+  /**
+   * Start a fluent builder with a fixed shared-context type.
+   *
+   * @param options - Optional stable ID and target; the ID defaults to a random UUID.
+   * @returns An empty builder whose onInput/onOutput/onError/onFinally methods register hooks.
+   * @throws Exceptions from metadata property access propagate. An empty builder has no
+   * runtime descriptor until a hook is registered; registration validates its callable argument.
+   */
   <
     Id extends string = string,
     Target extends string | undefined = undefined,
@@ -824,6 +1097,16 @@ export type ContextualPluginFactory<
     id?: Id;
     target?: Target;
   }): FluentPluginStart<Shared, Id, Target>;
+  /**
+   * Bind the execution input/output/error types while retaining this context type.
+   *
+   * @typeParam I - Execution argument tuple.
+   * @typeParam O - Successful or recovered output.
+   * @typeParam E - Error subtype accepted by error hooks.
+   * @returns A typed factory accepting an explicit hook definition and metadata.
+   * @remarks Takes no runtime arguments and does not intentionally throw. The returned
+   * factory validates definitions with `PLG_001`; see TypedPluginFactory or SyncTypedPluginFactory.
+   */
   for: <
     I extends PluginArgs,
     O,
@@ -841,6 +1124,13 @@ export type ContextualPluginFactory<
  * Public synchronous plugin factory type.
  */
 export type PluginSyncFactory = ContextualPluginSyncFactory & {
+  /**
+   * Bind shared-state types for a synchronous plugin builder and its typed factories.
+   *
+   * @typeParam Shared - Keys and value types of this.context().state inside hooks.
+   * @returns A contextual plugin factory; this operation does not create shared state or run hooks.
+   * @remarks Takes no runtime arguments, performs no runtime validation and does not intentionally throw.
+   */
   withContext<
     Shared extends ContextValues,
   >(): ContextualPluginSyncFactory<Shared>;
@@ -851,5 +1141,12 @@ export type PluginSyncFactory = ContextualPluginSyncFactory & {
  */
 export type PluginFactory = ContextualPluginFactory & {
   sync: PluginSyncFactory;
+  /**
+   * Bind shared-state types for a plugin builder and its typed factories.
+   *
+   * @typeParam Shared - Keys and value types of this.context().state inside hooks.
+   * @returns A contextual plugin factory; this operation does not create shared state or run hooks.
+   * @remarks Takes no runtime arguments, performs no runtime validation and does not intentionally throw.
+   */
   withContext<Shared extends ContextValues>(): ContextualPluginFactory<Shared>;
 };

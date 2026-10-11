@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from "jsr:@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { createRunContext, RunContextController } from "@/context/index.ts";
 
@@ -80,18 +80,13 @@ describe("RunContext", () => {
     assertEquals(context.plugin.get("missing-plugin"), undefined);
   });
 
-  it("returns undefined when previous-step lookup has no frame", () => {
+  it("returns undefined until a real invocation completes", () => {
     const context = createRunContext({ capture: "all" });
-    const controller = RunContextController.from(context) as unknown as {
-      stepVisits: { length: number; at(index: number): unknown };
-    };
-
-    controller.stepVisits = {
-      length: 2,
-      at: () => undefined,
-    };
-
+    const controller = RunContextController.from(context);
+    controller.enterStep("pending", []);
     assertEquals(context.step.previous(), undefined);
+    controller.leaveStep();
+    assertEquals(context.step.previous()?.id, "pending");
   });
 
   it("keeps only outputs when using output capture", () => {
@@ -149,6 +144,7 @@ describe("RunContext", () => {
     assertThrows(() => context.plugin.current(), Error);
     assertThrows(() => controller.leaveStep(), Error);
     assertThrows(() => controller.leavePlugin(), Error);
-    assertThrows(() => RunContextController.from({} as never), TypeError);
+    // @ts-expect-error deliberately invalid input exercises the runtime guard
+    assertThrows(() => RunContextController.from({}), TypeError);
   });
 });

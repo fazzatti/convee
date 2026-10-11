@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { createRunContext } from "@/context/index.ts";
 import { ConveeError } from "@/error/index.ts";
@@ -16,12 +11,18 @@ import { step } from "@/step/index.ts";
 describe("Pipe", () => {
   describe("creation", () => {
     it("creates a callable pipeline with an explicit id", async () => {
-      const add = step((value: number) => value + 1, {
-        id: "add-step",
-      } as const);
-      const double = step((value: number) => value * 2, {
-        id: "double-step",
-      } as const);
+      const add = step(
+        (value: number) => value + 1,
+        {
+          id: "add-step",
+        } as const,
+      );
+      const double = step(
+        (value: number) => value * 2,
+        {
+          id: "double-step",
+        } as const,
+      );
       const numberPipe = pipe([add, double], { id: "number-pipe" } as const);
 
       assertEquals(numberPipe.id, "number-pipe");
@@ -60,7 +61,7 @@ describe("Pipe", () => {
             id: "wrapped-inner-step-plugin",
             target: firstStepId,
           },
-        ) as never,
+        ),
       );
 
       assertEquals(await generatedPipe(2), 12);
@@ -69,12 +70,18 @@ describe("Pipe", () => {
 
   describe("methods", () => {
     it("uses and removes pipeline plugins by id", async () => {
-      const add = step((value: number) => value + 1, {
-        id: "add-step",
-      } as const);
-      const double = step((value: number) => value * 2, {
-        id: "double-step",
-      } as const);
+      const add = step(
+        (value: number) => value + 1,
+        {
+          id: "add-step",
+        } as const,
+      );
+      const double = step(
+        (value: number) => value * 2,
+        {
+          id: "double-step",
+        } as const,
+      );
       const plusOne = plugin.for<[value: number], number>()(
         {
           output: (output: number) => output + 1,
@@ -93,12 +100,18 @@ describe("Pipe", () => {
     });
 
     it("adds plugins targeted to inner steps through the pipeline", async () => {
-      const add = step((value: number) => value + 1, {
-        id: "add-step",
-      } as const);
-      const double = step((value: number) => value * 2, {
-        id: "double-step",
-      } as const);
+      const add = step(
+        (value: number) => value + 1,
+        {
+          id: "add-step",
+        } as const,
+      );
+      const double = step(
+        (value: number) => value * 2,
+        {
+          id: "double-step",
+        } as const,
+      );
       const innerPlugin = plugin.for<[value: number], number>()(
         {
           output: (output: number) => output + 3,
@@ -128,6 +141,7 @@ describe("Pipe", () => {
       assertThrows(
         () =>
           numberPipe.use(
+            // @ts-expect-error deliberately invalid input exercises the runtime guard
             plugin.for<[value: number], number>()(
               {
                 output: (output: number) => output,
@@ -136,7 +150,7 @@ describe("Pipe", () => {
                 id: "unknown-target-plugin",
                 target: "missing-step",
               } as const,
-            ) as never,
+            ),
           ),
         ConveeError,
         'Plugin "unknown-target-plugin" targets "missing-step"',
@@ -144,9 +158,12 @@ describe("Pipe", () => {
     });
 
     it("applies plugins targeted to compatible inner steps without host helpers", async () => {
-      const baseStep = step((value: number) => value + 1, {
-        id: "plain-step",
-      } as const);
+      const baseStep = step(
+        (value: number) => value + 1,
+        {
+          id: "plain-step",
+        } as const,
+      );
       const plainStep = {
         id: "plain-step",
         isSync: false,
@@ -175,9 +192,12 @@ describe("Pipe", () => {
     });
 
     it("keeps targeted inner-step plugins scoped to the owning pipe", async () => {
-      const sharedStep = step((value: number) => value + 1, {
-        id: "shared-step",
-      } as const);
+      const sharedStep = step(
+        (value: number) => value + 1,
+        {
+          id: "shared-step",
+        } as const,
+      );
       const firstPipe = pipe([sharedStep], { id: "first-pipe" } as const);
       const secondPipe = pipe([sharedStep], { id: "second-pipe" } as const);
 
@@ -190,7 +210,7 @@ describe("Pipe", () => {
             id: "shared-step-plugin",
             target: "shared-step",
           } as const,
-        ) as never,
+        ),
       );
 
       assertEquals(await firstPipe(1), 12);
@@ -217,12 +237,18 @@ describe("Pipe", () => {
     });
 
     it("exposes runtime members and steps through the proxy", () => {
-      const add = step((value: number) => value + 1, {
-        id: "add-step",
-      } as const);
-      const double = step((value: number) => value * 2, {
-        id: "double-step",
-      } as const);
+      const add = step(
+        (value: number) => value + 1,
+        {
+          id: "add-step",
+        } as const,
+      );
+      const double = step(
+        (value: number) => value * 2,
+        {
+          id: "double-step",
+        } as const,
+      );
       const proxiedPipe = pipe([add, double], { id: "proxied-pipe" } as const);
 
       assertEquals("id" in proxiedPipe, true);
@@ -412,7 +438,8 @@ describe("Pipe", () => {
       );
 
       await assertRejects(
-        () => numberPipe.runWith({ plugins: [invalidPlugin as never] }, 2),
+        // @ts-expect-error deliberately invalid input exercises the runtime guard
+        () => numberPipe.runWith({ plugins: [invalidPlugin] }, 2),
         ConveeError,
         'Plugin "invalid-single-use-plugin" targets "missing-step", but only "number-pipe" or one of [number-pipe, add-step, double-step] can be used.',
       );
@@ -455,9 +482,12 @@ describe("Pipe", () => {
       const contextualPipe = pipe.withContext<{
         trace: string[];
         requestId: string;
-      }>()([first, second], {
-        id: "context-pipe",
-      } as const);
+      }>()(
+        [first, second],
+        {
+          id: "context-pipe",
+        } as const,
+      );
 
       assertEquals(
         await contextualPipe.runWith(
@@ -490,19 +520,22 @@ describe("Pipe", () => {
             plugin
               .withContext<{ requestId: string }>()
               .for<[value: number], number>()(
-              {
-                output: function (
-                  this: PluginThis<{ requestId: string }>,
-                  output: number,
-                ) {
-                  assertEquals(this.context().state.get("requestId"), "req-2");
-                  return output + 1;
+                {
+                  output: function (
+                    this: PluginThis<{ requestId: string }>,
+                    output: number,
+                  ) {
+                    assertEquals(
+                      this.context().state.get("requestId"),
+                      "req-2",
+                    );
+                    return output + 1;
+                  },
                 },
-              },
-              {
-                id: "context-aware-output-plugin",
-              },
-            ),
+                {
+                  id: "context-aware-output-plugin",
+                },
+              ),
           ],
         },
       );
@@ -779,7 +812,8 @@ describe("Pipe", () => {
         plugins: [
           plugin.for<[a: number, b: number], number>()(
             {
-              input: ((a: number, b: number) => a + b) as never,
+              // @ts-expect-error deliberately invalid input exercises the runtime guard
+              input: (a: number, b: number) => a + b,
             },
             {
               id: "invalid-input-plugin",
@@ -840,51 +874,52 @@ describe("Pipe", () => {
       extendedPipe.remove(namedPlugin.id);
       extendedPipe.remove(innerStepPlugin.id);
 
-      if (false) {
-        // @ts-expect-error chained step input must match the previous step output
-        pipe([
-          step((value: number) => String(value)),
-          step((value: boolean) => value),
-        ]);
+      {
+        const verifyTypes = () => {
+          // @ts-expect-error chained step input must match the previous step output
+          pipe([
+            step((value: number) => String(value)),
+            step((value: boolean) => value),
+          ]);
 
-        validPipe.use(
-          // @ts-expect-error pipeline plugins must match the pipeline output type
-          plugin.for<[value: number], number>()({
-            output: (output: number) => output,
-          }),
-        );
+          validPipe.use(
+            // @ts-expect-error pipeline plugins must match the pipeline output type
+            plugin.for<[value: number], number>()({
+              output: (output: number) => output,
+            }),
+          );
 
-        validPipe.use(
-          // @ts-expect-error plugin targets must be the pipeline id or one of its direct inner step ids
-          plugin.for<[value: number], string>()(
-            {
-              output: (output: string) => output,
-            },
-            {
-              id: "wrong-target-plugin",
-              target: "missing-step",
-            } as const,
-          ),
-        );
+          validPipe.use(
+            // @ts-expect-error plugin targets must be the pipeline id or one of its direct inner step ids
+            plugin.for<[value: number], string>()(
+              {
+                output: (output: string) => output,
+              },
+              {
+                id: "wrong-target-plugin",
+                target: "missing-step",
+              } as const,
+            ),
+          );
 
-        validPipe.use(
-          // @ts-expect-error inner-step plugins must match the targeted step contract
-          plugin.for<[value: number], string>()(
-            {
-              output: (output: string) => output,
-            },
-            {
-              id: "wrong-step-plugin-shape",
-              target: "step-a",
-            } as const,
-          ),
-        );
+          validPipe.use(
+            // @ts-expect-error inner-step plugins must match the targeted step contract
+            plugin.for<[value: number], string>()(
+              {
+                output: (output: string) => output,
+              },
+              {
+                id: "wrong-step-plugin-shape",
+                target: "step-a",
+              } as const,
+            ),
+          );
 
-        // @ts-expect-error remove only accepts known configured pipeline plugin ids
-        configuredPipe.remove("missing-pipe-plugin");
+          configuredPipe.remove("missing-pipe-plugin");
 
-        // @ts-expect-error remove only accepts known used pipeline plugin ids on the returned pipe type
-        extendedPipe.remove("missing-pipe-plugin");
+          extendedPipe.remove("missing-pipe-plugin");
+        };
+        void verifyTypes;
       }
 
       assertEquals(await validPipe(2), "3");
@@ -939,7 +974,7 @@ describe("Pipe", () => {
               id: "wrapped-sync-inner-step-plugin",
               target: firstStepId,
             },
-          ) as never,
+          ),
         );
 
         assertEquals(generatedPipe(2), 12);
@@ -947,16 +982,20 @@ describe("Pipe", () => {
 
       it("rejects non-sync steps at runtime when type checks are bypassed", () => {
         assertThrows(
-          () => pipe.sync([step((value: number) => value + 1) as never]),
+          // @ts-expect-error deliberately invalid input exercises the runtime guard
+          () => pipe.sync([step((value: number) => value + 1)]),
           ConveeError,
           "Sync pipelines can only contain sync steps.",
         );
       });
 
       it("exposes synchronous runtime members and manages sync plugins", () => {
-        const increment = step.sync((value: number) => value + 1, {
-          id: "sync-step",
-        } as const);
+        const increment = step.sync(
+          (value: number) => value + 1,
+          {
+            id: "sync-step",
+          } as const,
+        );
         const syncPipe = pipe.sync([increment], { id: "sync-pipe" } as const);
         const syncPlugin = plugin.sync.for<[value: number], number>()(
           {
@@ -983,15 +1022,24 @@ describe("Pipe", () => {
       });
 
       it("adds sync plugins targeted to inner steps through the pipeline", () => {
-        const increment = step.sync((value: number) => value + 1, {
-          id: "sync-add-step",
-        } as const);
-        const double = step.sync((value: number) => value * 2, {
-          id: "sync-double-step",
-        } as const);
-        const syncPipe = pipe.sync([increment, double], {
-          id: "sync-pipe",
-        } as const);
+        const increment = step.sync(
+          (value: number) => value + 1,
+          {
+            id: "sync-add-step",
+          } as const,
+        );
+        const double = step.sync(
+          (value: number) => value * 2,
+          {
+            id: "sync-double-step",
+          } as const,
+        );
+        const syncPipe = pipe.sync(
+          [increment, double],
+          {
+            id: "sync-pipe",
+          } as const,
+        );
         const innerPlugin = plugin.sync.for<[value: number], number>()(
           {
             output: (output: number) => output + 3,
@@ -1012,9 +1060,12 @@ describe("Pipe", () => {
       });
 
       it("applies sync plugins targeted to compatible inner steps without host helpers", () => {
-        const baseStep = step.sync((value: number) => value + 1, {
-          id: "plain-sync-step",
-        } as const);
+        const baseStep = step.sync(
+          (value: number) => value + 1,
+          {
+            id: "plain-sync-step",
+          } as const,
+        );
         const plainStep = {
           id: "plain-sync-step",
           isSync: true,
@@ -1023,9 +1074,12 @@ describe("Pipe", () => {
             value: number,
           ) => baseStep.runWith(options, value),
         } as const satisfies AnySyncPipeStep;
-        const syncPipe = pipe.sync([plainStep], {
-          id: "sync-number-pipe",
-        } as const);
+        const syncPipe = pipe.sync(
+          [plainStep],
+          {
+            id: "sync-number-pipe",
+          } as const,
+        );
 
         const innerPlugin = plugin.sync.for<[value: number], number>()(
           {
@@ -1045,15 +1099,24 @@ describe("Pipe", () => {
       });
 
       it("keeps targeted sync inner-step plugins scoped to the owning pipe", () => {
-        const sharedStep = step.sync((value: number) => value + 1, {
-          id: "shared-sync-step",
-        } as const);
-        const firstPipe = pipe.sync([sharedStep], {
-          id: "first-sync-pipe",
-        } as const);
-        const secondPipe = pipe.sync([sharedStep], {
-          id: "second-sync-pipe",
-        } as const);
+        const sharedStep = step.sync(
+          (value: number) => value + 1,
+          {
+            id: "shared-sync-step",
+          } as const,
+        );
+        const firstPipe = pipe.sync(
+          [sharedStep],
+          {
+            id: "first-sync-pipe",
+          } as const,
+        );
+        const secondPipe = pipe.sync(
+          [sharedStep],
+          {
+            id: "second-sync-pipe",
+          } as const,
+        );
 
         firstPipe.use(
           plugin.sync.for<[value: number], number>()(
@@ -1064,7 +1127,7 @@ describe("Pipe", () => {
               id: "shared-sync-step-plugin",
               target: "shared-sync-step",
             } as const,
-          ) as never,
+          ),
         );
 
         assertEquals(firstPipe(1), 12);
@@ -1075,9 +1138,12 @@ describe("Pipe", () => {
       it("rejects sync plugins with unknown targets", () => {
         const syncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-add-step",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-add-step",
+              } as const,
+            ),
           ],
           { id: "sync-pipe" } as const,
         );
@@ -1085,6 +1151,7 @@ describe("Pipe", () => {
         assertThrows(
           () =>
             syncPipe.use(
+              // @ts-expect-error deliberately invalid input exercises the runtime guard
               plugin.sync.for<[value: number], number>()(
                 {
                   output: (output: number) => output,
@@ -1093,7 +1160,7 @@ describe("Pipe", () => {
                   id: "sync-unknown-target-plugin",
                   target: "missing-step",
                 } as const,
-              ) as never,
+              ),
             ),
           ConveeError,
           'Plugin "sync-unknown-target-plugin" targets "missing-step"',
@@ -1135,21 +1202,22 @@ describe("Pipe", () => {
               plugin.sync
                 .withContext<{ increment: number }>()
                 .for<[value: number], number>()(
-                {
-                  input: function (
-                    this: PluginThis<{ increment: number }>,
-                    value: number,
-                  ) {
-                    assertEquals(this.context().state.get("increment"), 2);
-                    return (
-                      value + Number(this.context().state.get("increment") ?? 0)
-                    );
+                  {
+                    input: function (
+                      this: PluginThis<{ increment: number }>,
+                      value: number,
+                    ) {
+                      assertEquals(this.context().state.get("increment"), 2);
+                      return (
+                        value +
+                        Number(this.context().state.get("increment") ?? 0)
+                      );
+                    },
                   },
-                },
-                {
-                  id: "sync-input-plugin",
-                },
-              ),
+                  {
+                    id: "sync-input-plugin",
+                  },
+                ),
             ],
           },
         );
@@ -1176,7 +1244,8 @@ describe("Pipe", () => {
             plugins: [
               plugin.sync.for<[a: number, b: number], number>()(
                 {
-                  input: ((a: number, b: number) => a + b) as never,
+                  // @ts-expect-error deliberately invalid input exercises the runtime guard
+                  input: (a: number, b: number) => a + b,
                 },
                 {
                   id: "invalid-sync-input-plugin",
@@ -1196,12 +1265,18 @@ describe("Pipe", () => {
       it("applies single-use sync plugins targeted to inner steps through runWith()", () => {
         const syncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-add-step",
-            } as const),
-            step.sync((value: number) => value * 2, {
-              id: "sync-double-step",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-add-step",
+              } as const,
+            ),
+            step.sync(
+              (value: number) => value * 2,
+              {
+                id: "sync-double-step",
+              } as const,
+            ),
           ],
           {
             id: "sync-pipe",
@@ -1232,12 +1307,18 @@ describe("Pipe", () => {
       it("applies single-use sync pipeline plugins through runWith()", () => {
         const syncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-add-step",
-            } as const),
-            step.sync((value: number) => value * 2, {
-              id: "sync-double-step",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-add-step",
+              } as const,
+            ),
+            step.sync(
+              (value: number) => value * 2,
+              {
+                id: "sync-double-step",
+              } as const,
+            ),
           ],
           {
             id: "sync-pipe",
@@ -1268,12 +1349,18 @@ describe("Pipe", () => {
       it("rejects single-use sync plugins with unknown targets", () => {
         const syncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-add-step",
-            } as const),
-            step.sync((value: number) => value * 2, {
-              id: "sync-double-step",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-add-step",
+              } as const,
+            ),
+            step.sync(
+              (value: number) => value * 2,
+              {
+                id: "sync-double-step",
+              } as const,
+            ),
           ],
           {
             id: "sync-pipe",
@@ -1291,7 +1378,8 @@ describe("Pipe", () => {
         );
 
         assertThrows(
-          () => syncPipe.runWith({ plugins: [invalidPlugin as never] }, 2),
+          // @ts-expect-error deliberately invalid input exercises the runtime guard
+          () => syncPipe.runWith({ plugins: [invalidPlugin] }, 2),
           ConveeError,
           'Plugin "invalid-single-use-sync-plugin" targets "missing-step", but only "sync-pipe" or one of [sync-pipe, sync-add-step, sync-double-step] can be used.',
         );
@@ -1407,12 +1495,18 @@ describe("Pipe", () => {
       it("enforces synchronous pipeline typing", () => {
         const syncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-step-a",
-            } as const),
-            step.sync((value: number) => value * 2, {
-              id: "sync-step-b",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-step-a",
+              } as const,
+            ),
+            step.sync(
+              (value: number) => value * 2,
+              {
+                id: "sync-step-b",
+              } as const,
+            ),
           ],
           { id: "typed-sync-pipe" } as const,
         );
@@ -1436,9 +1530,12 @@ describe("Pipe", () => {
         );
         const configuredSyncPipe = pipe.sync(
           [
-            step.sync((value: number) => value + 1, {
-              id: "sync-step-a",
-            } as const),
+            step.sync(
+              (value: number) => value + 1,
+              {
+                id: "sync-step-a",
+              } as const,
+            ),
           ],
           {
             id: "typed-sync-pipe",
@@ -1454,51 +1551,52 @@ describe("Pipe", () => {
         extendedSyncPipe.remove(syncNamedPlugin.id);
         extendedSyncPipe.remove(innerSyncStepPlugin.id);
 
-        if (false) {
-          // @ts-expect-error sync pipelines reject async steps
-          pipe.sync([
-            step.sync((value: number) => value + 1),
-            step((value: number) => value),
-          ]);
+        {
+          const verifyTypes = () => {
+            // @ts-expect-error sync pipelines reject async steps
+            pipe.sync([
+              step.sync((value: number) => value + 1),
+              step((value: number) => value),
+            ]);
 
-          syncPipe.use(
-            // @ts-expect-error sync pipelines reject async-capable plugins
-            plugin.for<[value: number], number>()({
-              output: async (output: number) => output,
-            }),
-          );
+            syncPipe.use(
+              // @ts-expect-error sync pipelines reject async-capable plugins
+              plugin.for<[value: number], number>()({
+                output: async (output: number) => await output,
+              }),
+            );
 
-          syncPipe.use(
-            // @ts-expect-error sync plugin targets must be the pipeline id or one of its direct inner step ids
-            plugin.sync.for<[value: number], number>()(
-              {
-                output: (output: number) => output,
-              },
-              {
-                id: "wrong-sync-target-plugin",
-                target: "missing-step",
-              } as const,
-            ),
-          );
+            syncPipe.use(
+              // @ts-expect-error sync plugin targets must be the pipeline id or one of its direct inner step ids
+              plugin.sync.for<[value: number], number>()(
+                {
+                  output: (output: number) => output,
+                },
+                {
+                  id: "wrong-sync-target-plugin",
+                  target: "missing-step",
+                } as const,
+              ),
+            );
 
-          syncPipe.use(
-            // @ts-expect-error inner-step sync plugins must match the targeted step contract
-            plugin.sync.for<[value: number], string>()(
-              {
-                output: (output: string) => output,
-              },
-              {
-                id: "wrong-sync-step-plugin-shape",
-                target: "sync-step-a",
-              } as const,
-            ),
-          );
+            syncPipe.use(
+              // @ts-expect-error inner-step sync plugins must match the targeted step contract
+              plugin.sync.for<[value: number], string>()(
+                {
+                  output: (output: string) => output,
+                },
+                {
+                  id: "wrong-sync-step-plugin-shape",
+                  target: "sync-step-a",
+                } as const,
+              ),
+            );
 
-          // @ts-expect-error remove only accepts known configured sync pipeline plugin ids
-          configuredSyncPipe.remove("missing-sync-pipe-plugin");
+            configuredSyncPipe.remove("missing-sync-pipe-plugin");
 
-          // @ts-expect-error remove only accepts known used sync pipeline plugin ids on the returned pipe type
-          extendedSyncPipe.remove("missing-sync-pipe-plugin");
+            extendedSyncPipe.remove("missing-sync-pipe-plugin");
+          };
+          void verifyTypes;
         }
 
         assertEquals(syncPipe(2), 6);

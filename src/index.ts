@@ -1,4 +1,12 @@
 export { createRunContext } from "@/context/runtime.ts";
+export { RT_ERRORS } from "@/runtime/error.ts";
+export type {
+  FinalizationErrorArgs,
+  FinalizationErrorMeta,
+  FinalizationFailure,
+  RuntimeError,
+  RuntimeErrorCatalog,
+} from "@/runtime/error.ts";
 export type {
   ContextStore,
   ContextValues,
@@ -31,8 +39,8 @@ export type {
   Diagnostic,
 } from "@/error/index.ts";
 
-export { hasError, hasInput, hasOutput } from "@/plugin/guards.ts";
-export { PLG_ERRORS, isPluginError } from "@/plugin/error.ts";
+export { hasError, hasFinally, hasInput, hasOutput } from "@/plugin/guards.ts";
+export { isPluginError, PLG_ERRORS } from "@/plugin/error.ts";
 export { plugin, pluginFor, syncPluginFor } from "@/plugin/factory.ts";
 export type {
   PluginError,
@@ -72,7 +80,7 @@ export type {
   TypedPluginFactory,
 } from "@/plugin/types.ts";
 
-export { STP_ERRORS, isStepError } from "@/step/error.ts";
+export { isStepError, STP_ERRORS } from "@/step/error.ts";
 export { step } from "@/step/factory.ts";
 export type {
   StepError,
@@ -100,13 +108,9 @@ export type {
   SyncStepRunOptions,
 } from "@/step/types.ts";
 
-export { PIP_ERRORS, isPipeError } from "@/pipe/error.ts";
+export { isPipeError, PIP_ERRORS } from "@/pipe/error.ts";
 export { pipe } from "@/pipe/factory.ts";
-export type {
-  PipeError,
-  PipeErrorCode,
-  PipeErrorOf,
-} from "@/pipe/error.ts";
+export type { PipeError, PipeErrorCode, PipeErrorOf } from "@/pipe/error.ts";
 export type {
   ContextualPipeFactory,
   ContextualSyncPipeFactory,
@@ -136,3 +140,16 @@ export type {
   SyncPipeRunOptions,
   SyncPipeStepPlugin,
 } from "@/pipe/types.ts";
+
+/** Advanced type utilities used by the public factory signatures. */
+export type * from "@/core/types.ts";
+export type * from "@/context/types.ts";
+export type * from "@/error/index.ts";
+export type * from "@/error/types.ts";
+export type * from "@/pipe/types.ts";
+export type * from "@/pipe/error.ts";
+export type * from "@/plugin/types.ts";
+export type * from "@/plugin/error.ts";
+export type * from "@/step/types.ts";
+export type * from "@/step/error.ts";
+export type { PluginEngine } from "@/plugin/plugin.ts";

@@ -1,7 +1,7 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
-import { createRunContext, plugin, step, type PluginThis } from "@convee";
+import { createRunContext, plugin, type PluginThis, step } from "@convee";
 
 describe("Integration: Context", () => {
   describe("case-by-case scenarios", () => {

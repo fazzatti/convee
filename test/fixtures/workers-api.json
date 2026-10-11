@@ -1,0 +1,102 @@
+[
+  {
+    "name": "CreateWorker",
+    "typeOnly": true
+  },
+  {
+    "name": "parallel",
+    "typeOnly": false
+  },
+  {
+    "name": "ParallelOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "ParallelStep",
+    "typeOnly": true
+  },
+  {
+    "name": "PersistentOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "persistentParallel",
+    "typeOnly": false
+  },
+  {
+    "name": "PersistentParallel",
+    "typeOnly": true
+  },
+  {
+    "name": "RemoteWorkerError",
+    "typeOnly": true
+  },
+  {
+    "name": "worker",
+    "typeOnly": false
+  },
+  {
+    "name": "WorkerBuilders",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerCallable",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerContext",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerDefinition",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerError",
+    "typeOnly": false
+  },
+  {
+    "name": "WorkerErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerErrorMeta",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerGroup",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerGroups",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerJob",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerJobTree",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerOutcome",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerOutcomes",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerResults",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerSlot",
+    "typeOnly": true
+  },
+  {
+    "name": "WorkerTransport",
+    "typeOnly": true
+  }
+]

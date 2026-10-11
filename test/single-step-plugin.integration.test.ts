@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import type { PluginThis } from "@convee";
@@ -305,44 +305,47 @@ describe("Integration: Single Step Plugins", () => {
   });
 
   describe("typing", () => {
-    it("rejects incompatible plugins at the type level", async () => {
+    it("rejects incompatible plugins at the type level", () => {
       const sumTwo = makeSumTwoStep();
       void sumTwo;
 
-      if (false) {
-        sumTwo.use(
-          // @ts-expect-error input plugin tuple must match the step input tuple
-          plugin.for<[value: string], number>()({
-            input: (value: string) => [value],
-          }),
-        );
+      {
+        const verifyTypes = async () => {
+          sumTwo.use(
+            // @ts-expect-error input plugin tuple must match the step input tuple
+            plugin.for<[value: string], number>()({
+              input: (value: string) => [value],
+            }),
+          );
 
-        sumTwo.use(
-          // @ts-expect-error output plugin output type must match the step output type
-          plugin.for<[value: number, other: number], string>()({
-            output: (output: string) => output,
-          }),
-        );
+          sumTwo.use(
+            // @ts-expect-error output plugin output type must match the step output type
+            plugin.for<[value: number, other: number], string>()({
+              output: (output: string) => output,
+            }),
+          );
 
-        await sumTwo.runWith(
-          {
-            plugins: [
-              // @ts-expect-error single-use plugins must match the step input tuple
-              plugin.for<[value: number], number>()({
-                input: (value: number) => value + 1,
-              }),
-            ],
-          },
-          2,
-          3,
-        );
+          await sumTwo.runWith(
+            {
+              plugins: [
+                // @ts-expect-error single-use plugins must match the step input tuple
+                plugin.for<[value: number], number>()({
+                  input: (value: number) => value + 1,
+                }),
+              ],
+            },
+            2,
+            3,
+          );
 
-        sumTwo.use(
-          plugin.for<[value: number, other: number], number>()({
-            // @ts-expect-error error plugin input tuple must match the step input tuple
-            error: (_error: Error, input: [string]) => Number(input[0]),
-          }),
-        );
+          sumTwo.use(
+            plugin.for<[value: number, other: number], number>()({
+              // @ts-expect-error error plugin input tuple must match the step input tuple
+              error: (_error: Error, input: [string]) => Number(input[0]),
+            }),
+          );
+        };
+        void verifyTypes;
       }
     });
   });

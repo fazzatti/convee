@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { step } from "@convee";
@@ -24,9 +24,12 @@ describe("Integration: Single Step", () => {
       assertExists(shoutStep.id);
       assertEquals(await shoutStep("hello"), "HELLO");
 
-      if (false) {
-        // @ts-expect-error string step rejects numbers
-        await shoutStep(123);
+      {
+        const verifyTypes = async () => {
+          // @ts-expect-error string step rejects numbers
+          await shoutStep(123);
+        };
+        void verifyTypes;
       }
     });
 
@@ -36,9 +39,12 @@ describe("Integration: Single Step", () => {
       assertExists(nowStep.id);
       assertEquals(await nowStep(), "ready");
 
-      if (false) {
-        // @ts-expect-error zero-argument steps reject extra arguments
-        await nowStep("unexpected");
+      {
+        const verifyTypes = async () => {
+          // @ts-expect-error zero-argument steps reject extra arguments
+          await nowStep("unexpected");
+        };
+        void verifyTypes;
       }
     });
 
@@ -58,8 +64,9 @@ describe("Integration: Single Step", () => {
             orderId: order.id,
             subtotal,
             discount: order.customer.tier === "premium" ? 0.1 : 0,
-            total:
-              order.customer.tier === "premium" ? subtotal * 0.9 : subtotal,
+            total: order.customer.tier === "premium"
+              ? subtotal * 0.9
+              : subtotal,
           };
         },
       );
@@ -80,19 +87,22 @@ describe("Integration: Single Step", () => {
         total: 22.5,
       });
 
-      if (false) {
-        await orderStep({
-          id: "order-1",
-          items: [
-            {
-              sku: "a",
-              // @ts-expect-error complex object steps validate nested shapes
-              price: "10",
-              quantity: 2,
-            },
-          ],
-          customer: { tier: "premium" },
-        });
+      {
+        const verifyTypes = async () => {
+          await orderStep({
+            id: "order-1",
+            items: [
+              {
+                sku: "a",
+                // @ts-expect-error complex object steps validate nested shapes
+                price: "10",
+                quantity: 2,
+              },
+            ],
+            customer: { tier: "premium" },
+          });
+        };
+        void verifyTypes;
       }
     });
 
@@ -132,7 +142,7 @@ describe("Integration: Single Step", () => {
 
     it("supports union-shaped inputs", async () => {
       const identifierStep = step((input: { id: string } | { slug: string }) =>
-        "id" in input ? `id:${input.id}` : `slug:${input.slug}`,
+        "id" in input ? `id:${input.id}` : `slug:${input.slug}`
       );
 
       assertEquals(await identifierStep({ id: "123" }), "id:123");
@@ -145,15 +155,18 @@ describe("Integration: Single Step", () => {
       assertEquals(await sumTwo(2, 2), 4);
       assertEquals(await sumTwo(1, 2), 3);
 
-      if (false) {
-        // @ts-expect-error
-        await sumTwo("2", 3);
+      {
+        const verifyTypes = async () => {
+          // @ts-expect-error argument must be numeric
+          await sumTwo("2", 3);
 
-        // @ts-expect-error
-        await sumTwo(2, "3");
+          // @ts-expect-error argument must be numeric
+          await sumTwo(2, "3");
 
-        // @ts-expect-error
-        await sumTwo(2, {});
+          // @ts-expect-error argument must be numeric
+          await sumTwo(2, {});
+        };
+        void verifyTypes;
       }
     });
   });

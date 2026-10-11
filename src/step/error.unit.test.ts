@@ -1,8 +1,8 @@
-import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 import { ConveeError, isConveeErrorOf } from "@/error/index.ts";
 import { plugin } from "@/plugin/index.ts";
-import { STP_ERRORS, isStepError, type StepErrorOf } from "@/step/error.ts";
+import { isStepError, type StepErrorOf, STP_ERRORS } from "@/step/error.ts";
 import { step } from "@/step/index.ts";
 
 describe("StepError", () => {
@@ -56,20 +56,23 @@ describe("StepError", () => {
     });
 
     it("narrows meta by code", () => {
-      if (false) {
-        const error = null as unknown as StepErrorOf<
-          typeof STP_ERRORS.INVALID_INPUT_PLUGIN_RESULT.code
-        >;
+      {
+        const verifyTypes = () => {
+          const error = null as unknown as StepErrorOf<
+            typeof STP_ERRORS.INVALID_INPUT_PLUGIN_RESULT.code
+          >;
 
-        const stepId: string = error.meta.stepId;
-        const pluginId: string = error.meta.pluginId;
-        const inputArity: number = error.meta.inputArity;
-        const received: unknown = error.meta.received;
+          const stepId: string = error.meta.stepId;
+          const pluginId: string = error.meta.pluginId;
+          const inputArity: number = error.meta.inputArity;
+          const received: unknown = error.meta.received;
 
-        void stepId;
-        void pluginId;
-        void inputArity;
-        void received;
+          void stepId;
+          void pluginId;
+          void inputArity;
+          void received;
+        };
+        void verifyTypes;
       }
     });
   });
@@ -182,7 +185,8 @@ describe("StepError", () => {
         plugins: [
           plugin.for<[a: number, b: number], number>()(
             {
-              input: ((a: number) => a + 1) as never,
+              // @ts-expect-error deliberately invalid input exercises the runtime guard
+              input: (a: number) => a + 1,
             },
             {
               id: "tuple-plugin",

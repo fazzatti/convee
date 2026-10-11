@@ -1,5 +1,6 @@
 import type { ContextValues } from "@/context/types.ts";
-import {
+import { PLG_ERRORS } from "@/plugin/error.ts";
+import type {
   Plugin,
   PluginArgs,
   PluginCapability,
@@ -8,48 +9,27 @@ import {
 } from "@/plugin/types.ts";
 
 /**
- * Runtime representation of a plugin.
+ * Factory namespace for immutable lifecycle-hook descriptors.
  *
- * A `PluginEngine` stores plugin metadata such as `id` and `target`, then uses
- * a `Proxy` to expose lifecycle hooks from the original definition alongside
- * engine-level helpers like `supports()` and `targets()`.
+ * Use `PluginEngine.create(definition, options)` to materialize a plugin directly;
+ * the fluent `plugin` factory delegates here after hooks are registered. Identity
+ * comes from options, and only supported hooks are copied from the definition.
+ *
+ * @remarks No engine instance is needed. The returned descriptor exposes its hooks,
+ * identity, supports and targets helpers. Validation errors are described by create.
  */
-export class PluginEngine<
-  I extends PluginArgs,
-  O,
-  E extends Error,
-  Shared extends ContextValues = ContextValues,
-  Definition extends PluginDefinition<I, O, E, Shared> = PluginDefinition<
-    I,
-    O,
-    E,
-    Shared
-  >,
-  Id extends string = string,
-  Target extends string | undefined = undefined,
-> {
-  private readonly _id: PluginIdentity<Id, Target>["id"];
-  private readonly _target: PluginIdentity<Id, Target>["target"];
-
+export class PluginEngine {
   /**
-   * Creates a plugin runtime from a plugin definition and optional metadata.
-   */
-  private constructor(
-    private readonly definition: Definition,
-    options?: { id?: Id; target?: Target },
-  ) {
-    this._id = (options?.id ?? crypto.randomUUID()) as PluginIdentity<
-      Id,
-      Target
-    >["id"];
-    this._target = (options?.target ?? undefined) as PluginIdentity<
-      Id,
-      Target
-    >["target"];
-  }
-
-  /**
-   * Creates a proxy-backed plugin instance.
+   * Validate a definition and copy its callable lifecycle hooks into a frozen plugin.
+   *
+   * @param definition - At least one of input, output, error or finally; absent hooks
+   * must be undefined. Extra properties are ignored and hooks are not executed here.
+   *
+   * @param options - Optional stable ID and routing target; ID defaults to a random UUID.
+   * @returns A frozen descriptor retaining the hook functions, ID and target, with
+   * supports and targets helpers. Captured values inside hooks are not frozen.
+   * @throws ConveeError with `PLG_001` when no hook is supplied or a hook is non-callable.
+   * Exceptions from definition or option accessors propagate unchanged.
    */
   static create<
     I extends PluginArgs,
@@ -68,53 +48,42 @@ export class PluginEngine<
     definition: Definition,
     options?: { id?: Id; target?: Target },
   ): Plugin<I, O, E, Definition, Shared, Target> & PluginIdentity<Id, Target> {
-    const instance = new PluginEngine<I, O, E, Shared, Definition, Id, Target>(
-      definition,
-      options,
-    );
-
-    return new Proxy(instance, {
-      get(target, prop, receiver) {
-        if (typeof prop === "string" && prop in definition) {
-          return Reflect.get(definition, prop, definition);
-        }
-
-        const value = Reflect.get(target, prop, receiver);
-        return typeof value === "function" ? value.bind(target) : value;
-      },
-
-      has(target, prop) {
-        return prop in definition || prop in target;
-      },
-
-      set() {
-        return false;
-      },
-    }) as unknown as Plugin<I, O, E, Definition, Shared, Target> &
-      PluginIdentity<Id, Target>;
-  }
-
-  /** The unique plugin identifier. */
-  get id(): PluginIdentity<Id, Target>["id"] {
-    return this._id;
-  }
-
-  /** The optional step identifier this plugin targets inside a pipeline. */
-  get target(): PluginIdentity<Id, Target>["target"] {
-    return this._target;
-  }
-
-  /** Returns whether the plugin implements the requested lifecycle hook. */
-  supports(capability: PluginCapability): boolean {
-    return capability in this.definition;
-  }
-
-  /**
-   * Returns whether the plugin should apply to a given step id.
-   *
-   * Plugins without a target apply to all steps.
-   */
-  targets(stepId: string): boolean {
-    return this._target === undefined || this._target === stepId;
+    const id = options?.id ?? crypto.randomUUID();
+    const target = options?.target;
+    const hooks: Partial<
+      Record<PluginCapability, (...args: never[]) => unknown>
+    > = {};
+    for (const capability of ["input", "output", "error", "finally"] as const) {
+      const hook = definition == null
+        ? undefined
+        : Reflect.get(Object(definition), capability);
+      if (hook === undefined) continue;
+      if (typeof hook !== "function") {
+        throw PLG_ERRORS.INVALID_DEFINITION({
+          capability,
+          received: hook,
+          pluginId: id,
+          target,
+        });
+      }
+      hooks[capability] = hook as (...args: never[]) => unknown;
+    }
+    if (Object.keys(hooks).length === 0) {
+      throw PLG_ERRORS.INVALID_DEFINITION({
+        capability: "input|output|error|finally",
+        pluginId: id,
+        target,
+      });
+    }
+    return Object.freeze({
+      ...hooks,
+      id,
+      target,
+      supports: (capability: PluginCapability) =>
+        typeof hooks[capability] === "function",
+      targets: (stepId: string) => target === undefined || target === stepId,
+    }) as unknown as
+      & Plugin<I, O, E, Definition, Shared, Target>
+      & PluginIdentity<Id, Target>;
   }
 }

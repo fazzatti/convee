@@ -1,4 +1,4 @@
-import { assertEquals, assertExists } from "jsr:@std/assert";
+import { assertEquals, assertExists } from "@std/assert";
 import { describe, it } from "@std/testing/bdd";
 
 import { pipe, plugin, step } from "@convee";
@@ -14,12 +14,15 @@ describe("Integration: Single Pipe", () => {
       assertExists(numberPipe.id);
       assertEquals(await numberPipe(2), 6);
 
-      if (false) {
-        const result: number = await numberPipe(2);
-        void result;
+      {
+        const verifyTypes = async () => {
+          const result: number = await numberPipe(2);
+          void result;
 
-        // @ts-expect-error raw-function pipes keep the inferred input type
-        await numberPipe("2");
+          // @ts-expect-error raw-function pipes keep the inferred input type
+          await numberPipe("2");
+        };
+        void verifyTypes;
       }
     });
 
@@ -52,7 +55,7 @@ describe("Integration: Single Pipe", () => {
             id: "wrapped-step-plugin",
             target: firstStepId,
           },
-        ) as never,
+        ),
       );
 
       assertEquals(await numberPipe(2), 12);
@@ -78,7 +81,7 @@ describe("Integration: Single Pipe", () => {
             id: "wrapped-sync-step-plugin",
             target: firstStepId,
           },
-        ) as never,
+        ),
       );
 
       assertEquals(syncPipe(2), 12);

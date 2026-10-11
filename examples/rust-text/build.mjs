@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { componentNew, transpile } from "@bytecodealliance/jco";
+import { componentNew, parse, transpile } from "@bytecodealliance/jco";
 
-for (const name of ["text", "host"]) {
+for (const name of ["text", "host", "abi"]) {
   const example = new URL("../rust-" + name + "/", import.meta.url);
   const root = fileURLToPath(example);
   execFileSync("cargo", [
@@ -21,6 +21,17 @@ for (const name of ["text", "host"]) {
     ),
   );
   const component = await componentNew(core);
+  await generate(name, component, example);
+}
+
+const pair = new URL("../component-pair/", import.meta.url);
+await generate(
+  "pair",
+  await parse(await readFile(new URL("pair.wat", pair), "utf8")),
+  pair,
+);
+
+async function generate(name, component, example) {
   const output = await transpile(component, {
     name,
     instantiation: "async",
@@ -40,6 +51,11 @@ for (const name of ["text", "host"]) {
   const entries = Object.entries(output.files).filter(([name]) =>
     name.endsWith(".wasm")
   );
+  if (name === "pair" && entries.length < 2) {
+    throw new Error(
+      "The multi-core component must exercise at least two actual modules.",
+    );
+  }
   const manifest = entries.map(([name, bytes]) =>
     "  " + JSON.stringify(name) + ": { source: new URL(" +
     JSON.stringify("./" + name) +

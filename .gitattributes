@@ -1,2 +1,3 @@
 # Keep generated Jco artifacts recognizable in reviews and preserve their formatting.
 examples/rust-*/generated/* linguist-generated -whitespace
+examples/component-pair/generated/* linguist-generated -whitespace

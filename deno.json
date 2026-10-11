@@ -27,9 +27,9 @@
     "lint": "deno lint",
     "fmt": "deno fmt",
     "docs": "deno doc --lint src/index.ts src/workers/index.ts src/workers/vite.ts src/wasm/index.ts src/wasm/jco.ts",
-    "test": "deno test --allow-env=JCO_DEBUG --allow-read=src,test/workers,examples --clean --parallel --coverage=coverage src test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts test/wasm/*.integration.test.ts",
-    "test:unit": "deno test src tools/*.unit.test.ts",
-    "test:integration": "deno test --allow-env=JCO_DEBUG --allow-read=src,test/workers,examples test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts test/wasm/*.integration.test.ts",
+    "test": "deno test --allow-env=JCO_DEBUG --allow-read=src,test/workers,examples --clean --parallel --coverage=coverage src test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts test/wasm/*.integration.test.ts test/wasm/*.unit.test.ts",
+    "test:unit": "deno test src tools/*.unit.test.ts test/wasm/*.unit.test.ts",
+    "test:integration": "deno test --allow-env=JCO_DEBUG --allow-read=src,test/workers,examples test/*.integration.test.ts test/regressions test/concurrency test/properties test/fixtures test/workers/*.integration.test.ts test/wasm/*.integration.test.ts test/wasm/*.unit.test.ts",
     "test:types": "deno check test/types/*.integration.test.ts",
     "test:tooling": "deno test tools/*.unit.test.ts",
     "test:architecture": "deno test --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,test/fixtures,deno.json test/architecture",
@@ -41,11 +41,11 @@
     "package:check": "deno publish --dry-run --allow-dirty",
     "verify": "deno fmt --check && deno lint && deno task check && deno task docs && deno task docs:examples && deno task test:types && deno task test:tooling && deno task test && deno task test:architecture && deno task test:depth && deno task coverage && deno task test:consumer && deno task package:check",
     "docs:examples": "deno run --allow-read=README.md,deno.json --allow-write=.artifacts/docs --allow-run=deno tools/docs-examples.ts",
-    "test:consumer": "deno run --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,examples/rust-text/generated,examples/rust-host/generated,test/fixtures --allow-write=.artifacts/package-consumer --allow-run=deno tools/package-consumer.ts",
+    "test:consumer": "deno run --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,examples/rust-text/generated,examples/rust-host/generated,examples/rust-abi/generated,examples/component-pair/generated,test/wasm,test/fixtures --allow-write=.artifacts/package-consumer --allow-run=deno tools/package-consumer.ts",
     "test:resources": "deno test --allow-env=JCO_DEBUG --allow-read=examples --v8-flags=--expose-gc test/resources",
     "test:workers": "deno test --allow-env=JCO_DEBUG --allow-read=src,test/workers,examples/rust-text src/workers test/workers/*.integration.test.ts",
-    "test:runtime": "deno run --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,examples/rust-text/generated,examples/rust-host/generated,test/fixtures,test/runtime,.artifacts/runtime-consumer --allow-write=.artifacts/runtime-consumer --allow-run=node,bun tools/runtime-consumer.ts",
-    "test:wasm": "deno test --allow-env=JCO_DEBUG --allow-read=src,examples src/wasm test/wasm/*.integration.test.ts",
+    "test:runtime": "deno run --allow-env=TSC_WATCHFILE,TSC_WATCHDIRECTORY,TSC_NONPOLLING_WATCHER,NODE_INSPECTOR_IPC,VSCODE_INSPECTOR_OPTIONS,NODE_ENV,TSC_WATCH_POLLINGINTERVAL_LOW,TSC_WATCH_POLLINGINTERVAL_MEDIUM,TSC_WATCH_POLLINGINTERVAL_HIGH,TSC_WATCH_POLLINGCHUNKSIZE_LOW,TSC_WATCH_POLLINGCHUNKSIZE_MEDIUM,TSC_WATCH_POLLINGCHUNKSIZE_HIGH,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_LOW,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_MEDIUM,TSC_WATCH_UNCHANGEDPOLLTHRESHOLDS_HIGH --allow-read=src,examples/rust-text/generated,examples/rust-host/generated,examples/rust-abi/generated,examples/component-pair/generated,test/wasm,test/fixtures,test/runtime,.artifacts/runtime-consumer --allow-write=.artifacts/runtime-consumer --allow-run=node,bun tools/runtime-consumer.ts",
+    "test:wasm": "deno test --allow-env=JCO_DEBUG --allow-read=src,examples src/wasm test/wasm/*.integration.test.ts test/wasm/*.unit.test.ts",
     "wasm:build": "npm ci --ignore-scripts --prefix examples/rust-text && npm run build --prefix examples/rust-text"
   },
   "publish": {
@@ -88,7 +88,10 @@
       "examples/rust-text/target",
       "examples/rust-text/generated",
       "examples/rust-host/target",
-      "examples/rust-host/generated"
+      "examples/rust-host/generated",
+      "examples/rust-abi/target",
+      "examples/rust-abi/generated",
+      "examples/component-pair/generated"
     ]
   }
 }

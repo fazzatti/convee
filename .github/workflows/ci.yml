@@ -52,6 +52,8 @@ jobs:
           path: |
             examples/rust-text/generated/
             examples/rust-host/generated/
+            examples/rust-abi/generated/
+            examples/component-pair/generated/
             .artifacts/package-consumer/report.json
           if-no-files-found: error
   quality:

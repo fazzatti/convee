@@ -71,11 +71,17 @@ for (const runtime of runtimes) {
       consumer.replace('"./worker-registry.js"', '"./browser.worker.js"') +
         '\nawait import("./wasm-consumer.js");\n',
     );
-    const wasmWorker = await Deno.readTextFile(destination + "/wasm.worker.js");
-    await Deno.writeTextFile(
-      destination + "/wasm.worker.js",
-      wasmWorker.replace('"./package/workers/index.js"', '"@convee/workers"'),
-    );
+    for (
+      const name of ["wasm.worker", "wasm-abi.worker", "wasm-packet.worker"]
+    ) {
+      const wasmWorker = await Deno.readTextFile(
+        destination + "/" + name + ".js",
+      );
+      await Deno.writeTextFile(
+        destination + "/" + name + ".js",
+        wasmWorker.replace('"./package/workers/index.js"', '"@convee/workers"'),
+      );
+    }
     await Deno.writeTextFile(
       destination + "/index.html",
       '<!doctype html><html><head><meta charset="utf-8"><title>Convee worker consumer</title></head><body><script type="module" src="/browser.js"></script></body></html>',

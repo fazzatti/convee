@@ -1,0 +1,91 @@
+package convee:abi-tests;
+
+world abi {
+    enum enum-256 { c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83, c84, c85, c86, c87, c88, c89, c90, c91, c92, c93, c94, c95, c96, c97, c98, c99, c100, c101, c102, c103, c104, c105, c106, c107, c108, c109, c110, c111, c112, c113, c114, c115, c116, c117, c118, c119, c120, c121, c122, c123, c124, c125, c126, c127, c128, c129, c130, c131, c132, c133, c134, c135, c136, c137, c138, c139, c140, c141, c142, c143, c144, c145, c146, c147, c148, c149, c150, c151, c152, c153, c154, c155, c156, c157, c158, c159, c160, c161, c162, c163, c164, c165, c166, c167, c168, c169, c170, c171, c172, c173, c174, c175, c176, c177, c178, c179, c180, c181, c182, c183, c184, c185, c186, c187, c188, c189, c190, c191, c192, c193, c194, c195, c196, c197, c198, c199, c200, c201, c202, c203, c204, c205, c206, c207, c208, c209, c210, c211, c212, c213, c214, c215, c216, c217, c218, c219, c220, c221, c222, c223, c224, c225, c226, c227, c228, c229, c230, c231, c232, c233, c234, c235, c236, c237, c238, c239, c240, c241, c242, c243, c244, c245, c246, c247, c248, c249, c250, c251, c252, c253, c254, c255 }
+    enum enum-257 { c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38, c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53, c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68, c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83, c84, c85, c86, c87, c88, c89, c90, c91, c92, c93, c94, c95, c96, c97, c98, c99, c100, c101, c102, c103, c104, c105, c106, c107, c108, c109, c110, c111, c112, c113, c114, c115, c116, c117, c118, c119, c120, c121, c122, c123, c124, c125, c126, c127, c128, c129, c130, c131, c132, c133, c134, c135, c136, c137, c138, c139, c140, c141, c142, c143, c144, c145, c146, c147, c148, c149, c150, c151, c152, c153, c154, c155, c156, c157, c158, c159, c160, c161, c162, c163, c164, c165, c166, c167, c168, c169, c170, c171, c172, c173, c174, c175, c176, c177, c178, c179, c180, c181, c182, c183, c184, c185, c186, c187, c188, c189, c190, c191, c192, c193, c194, c195, c196, c197, c198, c199, c200, c201, c202, c203, c204, c205, c206, c207, c208, c209, c210, c211, c212, c213, c214, c215, c216, c217, c218, c219, c220, c221, c222, c223, c224, c225, c226, c227, c228, c229, c230, c231, c232, c233, c234, c235, c236, c237, c238, c239, c240, c241, c242, c243, c244, c245, c246, c247, c248, c249, c250, c251, c252, c253, c254, c255, c256 }
+    variant scalar-value { u32-value(u32), s32-value(s32), f32-value(f32), u64-value(u64), s64-value(s64), f64-value(f64) }
+    record aligned { a: u8, b: u64, c: u16, d: s32, e: f32, f: s8, g: f64, h: s16, enabled: bool }
+    export echo-scalar-value: func(value: scalar-value) -> scalar-value;
+    export inspect-scalar-value: func(value: scalar-value) -> string;
+    export echo-aligned: func(value: aligned) -> aligned;
+    export list-aligned: func(value: list<aligned>) -> list<aligned>;
+    export enum-256: func(value: enum-256) -> enum-256;
+    export enum-257: func(value: enum-257) -> enum-257;
+    enum shade { red, green, blue }
+    record point { x: s32, label: string }
+    variant choice { none, number(s64), text(string), points(list<point>) }
+    type identifier = u64;
+    record packet {
+        id: identifier,
+        name: string,
+        enabled: bool,
+        anchor: point,
+        values: list<point>,
+        choices: list<choice>,
+        optional: option<option<string>>,
+        verdicts: list<result<u32, string>>,
+        pair: tuple<f64, string>,
+        shade: shade,
+        bytes: list<u8>,
+    }
+    flags flags-1 { b0 }
+    flags flags-8 { b0, b1, b2, b3, b4, b5, b6, b7 }
+    flags flags-9 { b0, b1, b2, b3, b4, b5, b6, b7, b8 }
+    flags flags-16 { b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15 }
+    flags flags-17 { b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16 }
+    flags flags-32 { b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21, b22, b23, b24, b25, b26, b27, b28, b29, b30, b31 }
+    import observe: func(value: packet) -> packet;
+    export echo-bool: func(value: bool) -> bool;
+    export echo-u8: func(value: u8) -> u8;
+    export echo-s8: func(value: s8) -> s8;
+    export echo-u16: func(value: u16) -> u16;
+    export echo-s16: func(value: s16) -> s16;
+    export echo-u32: func(value: u32) -> u32;
+    export echo-s32: func(value: s32) -> s32;
+    export echo-u64: func(value: u64) -> u64;
+    export echo-s64: func(value: s64) -> s64;
+    export echo-f32: func(value: f32) -> f32;
+    export echo-f64: func(value: f64) -> f64;
+    export echo-char: func(value: char) -> char;
+    export echo-string: func(value: string) -> string;
+    export list-bool: func(value: list<bool>) -> list<bool>;
+    export list-u8: func(value: list<u8>) -> list<u8>;
+    export list-s8: func(value: list<s8>) -> list<s8>;
+    export list-u16: func(value: list<u16>) -> list<u16>;
+    export list-s16: func(value: list<s16>) -> list<s16>;
+    export list-u32: func(value: list<u32>) -> list<u32>;
+    export list-s32: func(value: list<s32>) -> list<s32>;
+    export list-u64: func(value: list<u64>) -> list<u64>;
+    export list-s64: func(value: list<s64>) -> list<s64>;
+    export list-f32: func(value: list<f32>) -> list<f32>;
+    export list-f64: func(value: list<f64>) -> list<f64>;
+    export list-char: func(value: list<char>) -> list<char>;
+    export list-string: func(value: list<string>) -> list<string>;
+    export flags-1: func(value: flags-1) -> flags-1;
+    export flags-8: func(value: flags-8) -> flags-8;
+    export flags-9: func(value: flags-9) -> flags-9;
+    export flags-16: func(value: flags-16) -> flags-16;
+    export flags-17: func(value: flags-17) -> flags-17;
+    export flags-32: func(value: flags-32) -> flags-32;
+    export echo-shade: func(value: shade) -> shade;
+    export echo-choice: func(value: choice) -> choice;
+    export echo-packet: func(value: packet) -> packet;
+    export inspect-packet: func(value: packet) -> string;
+    export through-host: func(value: packet) -> packet;
+    export echo-tuple: func(value: tuple<s64, string, bool, list<u16>>) -> tuple<s64, string, bool, list<u16>>;
+    export echo-nested: func(value: list<list<point>>) -> list<list<point>>;
+    export echo-option: func(value: option<option<string>>) -> option<option<string>>;
+    export echo-result: func(value: result<option<string>, choice>) -> result<option<string>, choice>;
+    export result-ok: func(fail: bool) -> result<u32>;
+    export result-err: func(fail: bool) -> result<_, string>;
+    export result-unit: func(fail: bool) -> result;
+    export echo-identifier: func(value: identifier) -> identifier;
+    export char-code: func(value: char) -> u32;
+    export string-codes: func(value: string) -> list<u32>;
+    export bits-f32: func(value: f32) -> u32;
+    export bits-f64: func(value: f64) -> u64;
+    export no-args: func() -> string;
+    export no-result: func();
+    export flat-16: func(a0: u32, a1: u32, a2: u32, a3: u32, a4: u32, a5: u32, a6: u32, a7: u32, a8: u32, a9: u32, a10: u32, a11: u32, a12: u32, a13: u32, a14: u32, a15: u32) -> u32;
+    export flat-17: func(a0: u32, a1: u32, a2: u32, a3: u32, a4: u32, a5: u32, a6: u32, a7: u32, a8: u32, a9: u32, a10: u32, a11: u32, a12: u32, a13: u32, a14: u32, a15: u32, a16: u32) -> u32;
+}

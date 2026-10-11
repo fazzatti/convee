@@ -17,11 +17,12 @@ deno run --allow-read=examples --allow-env=JCO_DEBUG examples/rust-text/main.ts
 ```
 
 The build uses locked Cargo dependencies, wit-bindgen 0.62.0 and Jco 1.37.0. It
-builds both Rust examples, converts core modules to components, then generates
-JS factories, TypeScript declarations and SHA-256 asset manifests. No global Jco
-or wasm-tools installation is needed. CI rebuilds these actual Rust sources and
-runs the consumer tests against the regenerated output. Committed generated
-fixtures let ordinary SDK tests run without a Rust compiler.
+builds all three Rust examples and a two-core WAT fixture, converts core modules
+to components, then generates JS factories, TypeScript declarations and SHA-256
+asset manifests. No global Jco or wasm-tools installation is needed. CI rebuilds
+these actual Rust sources and runs the consumer tests against the regenerated
+output. Committed generated fixtures let ordinary SDK tests run without a Rust
+compiler.
 
 - [rust-text](https://github.com/fazzatti/convee/blob/dev/examples/rust-text/src/lib.rs)
   implements word counting, document summaries, structured domain errors, bytes,
@@ -30,6 +31,12 @@ fixtures let ordinary SDK tests run without a Rust compiler.
 - [rust-host](https://github.com/fazzatti/convee/blob/dev/examples/rust-host/src/lib.rs)
   calls an explicit host capability. Its tests verify fresh host closures and
   cleanup per session.
+- [rust-abi](https://github.com/fazzatti/convee/blob/dev/examples/rust-abi/src/lib.rs)
+  exercises every owned-value type family, canonical layout boundaries and a
+  rich host import. Its three generated core modules are tested together.
+- [component-pair](https://github.com/fazzatti/convee/blob/dev/examples/component-pair/pair.wat)
+  links two core modules and deliberately emits malformed characters, UTF-8 and
+  memory ranges to verify generated lifting failures and instance retirement.
 
 The WIT contract is compiler-checked against the Rust implementation, and Jco
 generates the matching TypeScript types. Deploy generated glue, declarations and
@@ -137,11 +144,20 @@ never triggers reopening or bypasses the restart limit.
 ## Supported profile and runtime limits
 
 The initial Rust profile uses synchronous, top-level WIT function exports with
-owned scalars, strings, bytes/lists, records, variants, options and results.
-`u64`/`s64` map to `bigint`; other conversions follow the generated Jco/WIT ABI.
-TypeScript does not establish numeric ranges or prove that a supplied binary
-matches an interface. Use the generated artifacts and test boundary behavior.
-Convee invocations remain asynchronous for preparation and lifecycle work.
+owned scalars, strings, lists, records, tuples, enums, flags, variants, options,
+results and aliases, using memory32 and UTF-8. `u64`/`s64` map to `bigint`;
+other conversions follow the generated Jco/WIT ABI. TypeScript does not
+establish numeric ranges or prove that a supplied binary matches an interface.
+Use the generated artifacts and test boundary behavior. Convee invocations
+remain asynchronous for preparation and lifecycle work.
+
+The [ABI conformance inventory](TESTING.md#abi-conformance-inventory) states the
+tested type/value boundaries, invalid inputs, malformed outputs and exclusions.
+Jco may coerce scalar inputs (including integer wrapping and Unicode
+replacement) rather than rejecting them. Add input plugins when your application
+needs stricter validation. The pinned validator rejects empty records and more
+than 32 flags; arbitrary nesting and alternate encoding/toolchain combinations
+are not exhaustively tested.
 
 Exported resource handles, borrowed/shared memory, guest async/streams, JSPI and
 threading are outside this profile. Namespaced interface objects are not step

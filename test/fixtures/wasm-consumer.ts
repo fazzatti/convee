@@ -1,7 +1,15 @@
 import { persistentWasm, wasm, WasmError } from "./package/wasm/index.ts";
 import { parallel, persistentParallel } from "./package/workers/index.ts";
-import { bindings, hostBindings } from "./wasm-bindings.ts";
+import {
+  abiBindings,
+  bindings,
+  hostBindings,
+  pairBindings,
+} from "./wasm-bindings.ts";
 import definition from "./wasm.worker.ts";
+import abiWorker from "./wasm-abi.worker.ts";
+import packetWorker from "./wasm-packet.worker.ts";
+import { abiEqual, abiPacket, runAbiMatrix } from "./wasm-abi-cases.ts";
 
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw new Error(message);
@@ -95,5 +103,79 @@ try {
 } finally {
   await host.dispose();
 }
-Object.assign(globalThis, { __conveeWasmReport: { passed: true, checks: 12 } });
-console.log("WASM Rust consumer: 12 checks passed");
+const freshAbi = await runAbiMatrix(wasm({ bindings: abiBindings }));
+const persistentAbi = persistentWasm({
+  bindings: abiBindings,
+  maxRestarts: 32,
+});
+let reusedAbi;
+try {
+  reusedAbi = await runAbiMatrix(persistentAbi);
+} finally {
+  await persistentAbi.dispose();
+}
+abiEqual(freshAbi, reusedAbi);
+const inWorker = parallel({
+  // One job executes thousands of ABI calls, including a fresh instance for
+  // each exhaustive scalar value. Give this conformance workload its own bound.
+  workers: { abi: { worker: abiWorker, count: 1, timeoutMs: 120_000 } },
+  split: ({ abi }) => [abi.job()] as const,
+  join: ([value]) => value,
+});
+abiEqual(await inWorker(), { fresh: freshAbi, persistent: reusedAbi });
+const payloads = [abiPacket(), {
+  ...abiPacket(),
+  pair: [NaN, "nan"] as [number, string],
+}];
+const crossBoundary = parallel({
+  workers: { packet: { worker: packetWorker, count: 2 } },
+  split: ({ packet }) => payloads.map((value) => packet.job(value)),
+  join: (values) => values,
+});
+abiEqual(
+  await crossBoundary(),
+  payloads.map((value) => ({ ...value, name: "host:" + value.name })),
+);
+const pair = persistentWasm({ bindings: pairBindings, maxRestarts: 4 });
+try {
+  assert(await pair.step("add")(25) === 42, "actual multi-module linking");
+  for (
+    const [name, kind] of [
+      ["badChar", TypeError],
+      ["badUtf8", TypeError],
+      ["badStringPointer", RangeError],
+      ["outOfBoundsList", WebAssembly.RuntimeError],
+    ] as const
+  ) {
+    try {
+      await pair.step(name)();
+      throw new Error("expected invalid guest rejection: " + name);
+    } catch (error) {
+      assert(error instanceof kind, "invalid guest lifting: " + name);
+    }
+    assert(
+      await pair.step("add")(1) === 18,
+      "invalid result retires and replaces its instance",
+    );
+  }
+} finally {
+  await pair.dispose();
+}
+Object.assign(globalThis, {
+  __conveeWasmReport: {
+    passed: true,
+    checks: 12,
+    abi: {
+      cases: freshAbi.cases,
+      exports: freshAbi.exports,
+      modes: ["fresh", "persistent", "worker-fresh", "worker-persistent"],
+      crossBoundary: true,
+      multiCore: true,
+      malformedGuest: ["char", "utf8", "string-pointer", "byte-list-bounds"],
+    },
+  },
+});
+console.log(
+  "WASM Rust consumer: 12 original checks; " + freshAbi.cases.length +
+    " ABI cases in four modes, rich worker payloads and multi-core lifting passed",
+);

@@ -256,13 +256,14 @@ without `--allow-slow-types`.
 
 ## Rust components and WASM ownership
 
-`deno task wasm:build` rebuilds both checked-in Rust examples using the locked
-wit-bindgen/Jco build profile. `deno task test:wasm` exercises actual generated
-bindings, owned value conversions, state isolation, explicit host imports,
-expected errors, panics, plugin gates, lifecycle races and worker composition.
-The fixtures are also included in the isolated package and cross-runtime
-consumers. The Rust CI job rebuilds before testing, so committed fixture output
-is not the sole evidence for the source examples.
+`deno task wasm:build` rebuilds all three checked-in Rust examples and the
+two-core WAT component using the locked wit-bindgen/Jco build profile.
+`deno task test:wasm` exercises actual generated bindings, owned value
+conversions, state isolation, explicit host imports, expected errors, panics,
+plugin gates, lifecycle races and worker composition. The fixtures are also
+included in the isolated package and cross-runtime consumers. The Rust CI job
+rebuilds before testing, so committed fixture output is not the sole evidence
+for the source examples.
 
 The existing exact line/branch/function coverage gate includes all authored
 `src/wasm` production code without exclusions or lower thresholds. Generated
@@ -270,3 +271,77 @@ third-party glue is exercised by integration tests and is outside the authored
 production denominator, just like other test fixtures. Type contracts verify
 export names, generated inputs/outputs, host imports and plugin compatibility.
 See [WASM.md](WASM.md) for the tested build profile and runtime limitations.
+
+### ABI conformance inventory
+
+The ABI gate is a finite, reviewed inventory for Rust 1.96.0, wit-bindgen 0.62.0
+and Jco 1.37.0, using synchronous owned values, memory32 and UTF-8. It covers
+every type family in this profile. It does **not** mean every possible value,
+combination of nested types, malformed binary or toolchain version has been
+exhausted. This is separate from the exact 100% authored production coverage
+gate.
+
+`test/fixtures/wasm-abi-profile.json` fixes the required category IDs.
+`test/wasm/abi-cases.ts` implements 56 portable categories against the real
+`examples/rust-abi` guest. The inventory test fails for missing/extra
+categories, duplicate IDs or an unexercised generated export. Generated
+declarations supply the types; the compile-time suite checks every export's
+argument and result contract in both ownership modes, plus deliberately invalid
+consumers.
+
+| ABI surface                       | Assertions and boundaries                                                                                                                                                                  |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `bool`, eight integer types       | Both booleans; full `u8` and `s8` domains; every width's extrema/sign boundary; `u64`/`s64` beyond JavaScript's safe integer range                                                         |
+| `f32`, `f64`                      | Signed zero, NaN, infinities, subnormals, extrema, rounding and independent Rust bit observations; NaN payload identity is not promised                                                    |
+| `char`, `string`                  | Unicode scalar/UTF-8 width boundaries, supplementary characters, embedded NUL, empty strings, combining characters and lone-surrogate replacement                                          |
+| Lists                             | Every scalar element family, empty/populated arrays, all ten numeric typed-array classes, nonzero view offsets, unchanged inputs and Rust-side reversal                                    |
+| Records, tuples and aliases       | Required/nested fields, heterogeneous tuples, mixed-width alignment/padding, record-list stride and full-width integer aliases                                                             |
+| Enums and flags                   | Every enumerator in 256/257-case fixtures (8-to-16-bit discriminant boundary); 1/8/9/16/17/32 flags, all 256 eight-flag combinations, empty/default and walking-bit patterns               |
+| Variants                          | Every case, absent/aggregate payloads and mixed integer/float flat joins; independent Rust observations catch conversion/sign/bit errors                                                   |
+| Options and Results               | None versus empty versus present; nested some-none; success/error payloads; success-only, error-only and unit Results; nested Results remain tagged while function Results unwrap or throw |
+| Calling convention                | No arguments, no result, exact 16/17-argument direct/indirect boundary and aggregate indirect returns                                                                                      |
+| Imports and multiple core modules | Rich aggregate JS host round trips through a three-core Rust component; a separate two-core component links one module's export into another                                               |
+| Ownership                         | Input/output mutation isolation, retained results after 2 MiB guest memory growth and rich values across real worker messages                                                              |
+| Generated samples                 | 128 reproducible nested aggregate cases in addition to the named boundaries                                                                                                                |
+| JavaScript interop                | Pinned scalar coercions and 18 deliberately invalid input forms, including unknown tags, wrong field types and invalid list elements                                                       |
+
+Every portable category runs with fresh and persistent instances, directly and
+inside a real Convee worker, in the isolated Deno, Node and Bun consumers and
+each Chromium/Firefox/WebKit Vite development/production path. Rich packets also
+cross the caller/worker message boundary in both directions. Browser reports
+retain case IDs, selected exports and execution modes, and require zero
+remaining workers. The exhaustive worker job has its own 120-second deadline; it
+includes thousands of calls and fresh instantiations, not one application
+operation. Production worker defaults are unchanged.
+
+Separate failure tests use real generated factories and malformed core output:
+invalid characters, invalid UTF-8, out-of-bounds string return pointers and
+byte-list ranges must reject and retire the session before later work. Consumers
+repeat these four malformed-output checks on each runtime. Deno integration
+tests also check missing non-first modules, wrong asset digests,
+valid-but-incompatible modules, throwing host imports, malformed host returns,
+cleanup and no replay. The assertion helper is itself checked against wrong
+signs, widths, order, fields, discriminants, typed-array contents and signed
+zero. These cases improve fault detection; they are not a proof against every
+possible hostile guest or a replacement for upstream canonical-ABI conformance
+suites.
+
+Pinned Jco conversions deliberately coerce some out-of-range JavaScript scalar
+inputs. Convee does not add a conflicting codec or pretend these all reject.
+TypeScript also cannot encode arbitrary numeric ranges or Unicode validity.
+Applications needing stricter validation should use native input plugins.
+
+This profile excludes resource handles, guest async/futures/streams/JSPI,
+shared/borrowed memory, threads, implicit WASI, memory64, alternative string
+encodings and alternate toolchain versions. The pinned component validator
+rejects records without fields and flags with more than 32 members; these are
+not supported fixture shapes. Larger enum discriminants and arbitrary nesting
+combinations are not exhaustively enumerated. Extend the inventory, Rust/WIT
+source, type contracts and portable cases together when broadening the profile.
+
+The type taxonomy and representation boundaries follow the
+[WIT reference](https://component-model.bytecodealliance.org/design/wit.html)
+and
+[Canonical ABI](https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md);
+the tested JavaScript behavior comes from the pinned generated artifacts, not an
+assumption that every Jco release behaves identically.

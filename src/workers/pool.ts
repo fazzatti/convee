@@ -1,504 +1,484 @@
+import { clone, type GroupSetup, type Setup } from "@/workers/config.ts";
+import { WorkerError, type WorkerErrorCode } from "@/workers/error.ts";
+import { type PreparedJob } from "@/workers/jobs.ts";
 import {
-  clone,
-  name,
-  type PoolSetup,
-  poolSetup,
-  record,
-  type RoleSpec,
-} from "@/workers/config.ts";
-import { WorkerError } from "@/workers/error.ts";
-import {
-  contextValid,
   isReply,
   PROTOCOL,
   type Reply,
   type RunMessage,
 } from "@/workers/protocol.ts";
-import type {
-  TypedWorkerPoolFactory,
-  WorkerContext,
-  WorkerOutcome,
-  WorkerPoolFactory,
-  WorkerRegistry,
-  WorkerTransport,
-} from "@/workers/types.ts";
+import type { CreateWorker, WorkerTransport } from "@/workers/types.ts";
 
-interface Job {
-  task: string;
-  args: unknown[];
-  role?: string;
-  context?: WorkerContext;
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  void promise.catch(() => {});
+  return { promise, resolve, reject };
 }
 interface Pending {
+  job: PreparedJob;
   request: RunMessage;
-  role: string;
-  resolve(outcome: WorkerOutcome<unknown>): void;
+  resolve(value: unknown): void;
+  reject(error: unknown): void;
 }
 interface Slot {
   id: string;
-  role: RoleSpec;
-  transport: WorkerTransport;
+  index: number;
+  restart: number;
   ready: boolean;
+  dead: boolean;
+  expired: boolean;
+  abort: AbortController;
+  expiration: { promise: Promise<void>; reject(error: unknown): void };
+  transport?: WorkerTransport;
+  constructing?: Promise<void>;
+  stopping?: Promise<void>;
   current?: Pending;
   timer?: ReturnType<typeof setTimeout>;
   listeners: [string, EventListener][];
 }
-
-class Pool {
-  readonly size: number;
-  private state: "new" | "starting" | "ready" | "closing" | "closed" = "new";
+/** One independent queue and bounded replacement budget for one generation. */
+export class Group {
+  private state: "new" | "active" | "failed" | "closed" = "new";
   private readonly queue: Pending[] = [];
-  private readonly slots: Slot[] = [];
-  private readonly taskNames = new Map<string, Set<string>>();
-  private readonly setup: PoolSetup;
-  private pending = 0;
+  private readonly slots = new Set<Slot>();
+  private readonly startup = deferred<void>();
+  private readonly stops: Promise<void>[] = [];
   private pumping = false;
+  private restarts = 0;
   private failure?: WorkerError;
-  private readonly startup: Promise<void>;
-  private started!: () => void;
-  private startFailed!: (error: WorkerError) => void;
-  private readonly drained: Promise<void>;
-  private didDrain!: () => void;
-  private drainFailed!: (error: WorkerError) => void;
-
-  constructor(options: unknown) {
-    this.setup = poolSetup(options);
-    this.size = this.setup.size;
-    this.startup = new Promise((resolve, reject) => {
-      this.started = resolve;
-      this.startFailed = reject;
-    });
-    // Lazy callers can close/terminate without ever observing readiness.
-    void this.startup.catch(() => {});
-    this.drained = new Promise((resolve, reject) => {
-      this.didDrain = resolve;
-      this.drainFailed = reject;
-    });
-    void this.drained.catch(() => {});
-  }
-  job(
-    task: string,
-    args: unknown[],
-    options: Omit<Job, "task" | "args"> = {},
-  ): Job {
-    return { ...options, task, args };
-  }
-  ready(): Promise<void> {
+  private shutdown?: Promise<void>;
+  constructor(
+    readonly setup: GroupSetup,
+    private readonly createWorker: CreateWorker,
+  ) {}
+  available(): void {
     if (this.state === "closed") {
-      return Promise.reject(
-        this.failure ?? new WorkerError("WRK_CLOSED", "Worker pool is closed."),
-      );
-    }
-    if (this.state === "new") this.start();
-    return this.startup;
-  }
-  async run(job: Job): Promise<unknown> {
-    const [outcome] = await this.settle([job]);
-    if (outcome.status === "rejected") throw outcome.error;
-    return outcome.value;
-  }
-  async settle(jobs: readonly Job[]): Promise<WorkerOutcome<unknown>[]> {
-    if (!Array.isArray(jobs)) {
-      throw new WorkerError("WRK_CONFIG", "Jobs must be an array.");
-    }
-    this.checkAdmission(jobs.length);
-    const prepared = Array.from(jobs, (job) => this.prepare(job));
-    // Reading/cloning user data may run getters that submit work or close the pool.
-    this.checkAdmission(prepared.length);
-    const promises = prepared.map(({ request, role }) =>
-      new Promise<WorkerOutcome<unknown>>((resolve) => {
-        this.queue.push({ request, role, resolve });
-        this.pending++;
-      })
-    );
-    if (prepared.length) {
-      void this.ready().catch(() => {});
-      this.dispatch();
-    }
-    return await Promise.all(promises);
-  }
-  close(): Promise<void> {
-    if (this.state === "closed") return this.drained;
-    if (this.state === "new") {
-      this.started();
-      this.shutdown();
-    } else {
-      this.state = "closing";
-      this.dispatch();
-      this.finishDrain();
-    }
-    return this.drained;
-  }
-  terminate(): void {
-    if (this.state !== "closed") {
-      this.fail(
-        new WorkerError(
-          "WRK_CLOSED",
-          "Worker pool was terminated; worker-local cleanup is not guaranteed.",
-        ),
-      );
-    }
-  }
-
-  private checkAdmission(count: number): void {
-    if (this.state === "closed" || this.state === "closing") {
-      throw this.failure ??
-        new WorkerError("WRK_CLOSED", "Worker pool is not accepting work.");
-    }
-    if (this.pending + count > this.setup.maxPending) {
-      throw new WorkerError(
-        "WRK_CAPACITY",
-        "Worker pool admission limit exceeded; no jobs in this batch were admitted.",
-        { maxPending: this.setup.maxPending },
-      );
-    }
-  }
-  private prepare(value: unknown): { request: RunMessage; role: string } {
-    const job = record(value, "job");
-    const task = name(job.task, "job task");
-    const roleName = this.setup.explicitRoles
-      ? name(job.role, "job role")
-      : name(job.role ?? "default", "job role");
-    const role = this.setup.roles.find((role) => role.name === roleName);
-    if (!role) {
-      throw new WorkerError("WRK_CONFIG", "Unknown worker role.", {
-        role: roleName,
+      throw new WorkerError("WRK_CLOSED", "Worker group is closed.", {
+        group: this.setup.name,
       });
     }
-    if (role.tasks && !role.tasks.includes(task)) {
-      throw new WorkerError(
-        "WRK_CONFIG",
-        "Task is not available in the requested role.",
-        { task, role: roleName },
-      );
+    if (this.failure) throw this.unavailable();
+  }
+  ready(): Promise<void> {
+    this.available();
+    if (this.state === "new") {
+      this.state = "active";
+      for (let index = 0; index < this.setup.count; index++) {
+        this.spawn(index, 0);
+      }
     }
-    if (!Array.isArray(job.args) || !contextValid(job.context)) {
-      throw new WorkerError(
-        "WRK_CONFIG",
-        "A job needs an argument array and valid context data.",
-      );
-    }
+    return this.startup.promise;
+  }
+  run(job: PreparedJob, args: unknown[]): Promise<unknown> {
+    this.available();
     const request: RunMessage = clone({
       protocol: PROTOCOL,
       kind: "run",
-      id: crypto.randomUUID(),
-      task,
-      args: job.args,
+      id: job.id,
+      args,
       context: job.context,
     });
-    return { request, role: roleName };
+    const result = new Promise((resolve, reject) => {
+      this.queue.push({ job, request, resolve, reject });
+    });
+    void this.ready().catch(() => {});
+    this.dispatch();
+    return result;
   }
-  private start(): void {
-    this.state = "starting";
-    try {
-      for (const role of this.setup.roles) {
-        for (let index = 0; index < role.size; index++) {
-          if (this.failure || this.isClosed()) return;
-          this.spawn(role, index);
-        }
-      }
-    } catch (cause) {
-      this.fail(
-        new WorkerError(
-          "WRK_STARTUP",
-          "Could not start the worker pool.",
-          {},
-          cause,
-        ),
-      );
-    }
+  private error(
+    code: WorkerErrorCode,
+    message: string,
+    slot: Slot,
+    cause?: unknown,
+  ): WorkerError {
+    return new WorkerError(code, message, {
+      group: this.setup.name,
+      workerId: slot.id,
+      ...(slot.current
+        ? { jobId: slot.current.job.id, path: slot.current.job.path }
+        : {}),
+    }, cause);
   }
-  private isClosed(): boolean {
-    return this.state === "closed";
-  }
-  private spawn(role: RoleSpec, index: number): void {
-    const id = `convee:${role.name}:${index}`;
-    const transport = this.setup.createWorker(
-      new URL("./entry.ts", import.meta.url),
-      { id, role: role.name },
+  private unavailable(): WorkerError {
+    return new WorkerError(
+      "WRK_UNAVAILABLE",
+      "Worker group is unavailable for this generation.",
+      { group: this.setup.name },
+      this.failure,
     );
-    if (this.state === "closed") {
-      transport.terminate();
-      return;
-    }
-    const slot: Slot = { id, role, transport, ready: false, listeners: [] };
-    this.slots.push(slot);
-    const message: EventListener = (event) =>
-      this.receive(slot, (event as MessageEvent<unknown>).data);
-    const failure: EventListener = (event) => {
-      event.preventDefault();
-      this.fail(
-        new WorkerError(
-          "WRK_CRASH",
-          "Worker transport failed; outstanding jobs were stopped without retry.",
-          { workerId: id, role: role.name },
-          (event as ErrorEvent).error,
-        ),
-      );
+  }
+  private spawn(index: number, restart: number): void {
+    const slot: Slot = {
+      id: `convee:${this.setup.name}:${index}:${crypto.randomUUID()}`,
+      index,
+      restart,
+      ready: false,
+      dead: false,
+      expired: false,
+      abort: new AbortController(),
+      expiration: deferred<void>(),
+      listeners: [],
     };
-    slot.listeners = [["message", message], ["error", failure], [
-      "messageerror",
-      failure,
-    ]];
-    for (const [type, listener] of slot.listeners) {
-      transport.addEventListener(type, listener);
-    }
-    slot.timer = setTimeout(
-      () =>
-        this.fail(
-          new WorkerError("WRK_STARTUP", "Worker initialization timed out.", {
-            workerId: id,
-            role: role.name,
-          }),
-        ),
-      this.setup.startupTimeoutMs,
-    );
-    transport.postMessage({
-      protocol: PROTOCOL,
-      kind: "init",
-      module: this.setup.module,
-      pipelines: this.setup.pipelines,
-      role,
+    this.slots.add(slot);
+    slot.timer = setTimeout(() => {
+      const error = this.error(
+        "WRK_STARTUP",
+        "Worker initialization timed out.",
+        slot,
+      );
+      if (!slot.transport) {
+        slot.expired = true;
+        slot.expiration.reject(
+          new WorkerError(
+            "WRK_STARTUP",
+            "Worker constructor did not settle before its deadline; cleanup cannot be confirmed.",
+            { group: this.setup.name, workerId: slot.id },
+            error,
+          ),
+        );
+      }
+      this.fault(slot, error);
+    }, this.setup.startupTimeoutMs);
+    slot.constructing = Promise.resolve().then(async () => {
+      if (slot.dead) return;
+      try {
+        const transport = await this.createWorker(
+          new URL(this.setup.entry ?? "./entry.ts", import.meta.url),
+          {
+            id: slot.id,
+            group: this.setup.name,
+            index,
+            restart,
+            module: this.setup.module,
+            signal: slot.abort.signal,
+          },
+        );
+        slot.transport = transport;
+        if (slot.dead) {
+          if (slot.expired) {
+            await transport.terminate();
+            slot.transport = undefined;
+          }
+          return;
+        }
+        const message: EventListener = (event) => {
+          if (slot.dead) return;
+          try {
+            this.receive(slot, (event as MessageEvent<unknown>).data);
+          } catch (cause) {
+            this.fault(
+              slot,
+              this.error(
+                "WRK_PROTOCOL",
+                "Could not inspect worker reply.",
+                slot,
+                cause,
+              ),
+            );
+          }
+        };
+        const failure: EventListener = (event) => {
+          if (slot.dead) return;
+          event.preventDefault();
+          this.fault(
+            slot,
+            this.error(
+              slot.ready ? "WRK_CRASH" : "WRK_STARTUP",
+              "Worker transport failed.",
+              slot,
+              (event as ErrorEvent).error,
+            ),
+          );
+        };
+        slot.listeners = [["message", message], ["error", failure], [
+          "messageerror",
+          failure,
+        ]];
+        for (const [type, listener] of slot.listeners) {
+          transport.addEventListener(type, listener);
+        }
+        transport.postMessage({
+          protocol: PROTOCOL,
+          kind: "init",
+          module: this.setup.module,
+        });
+      } catch (cause) {
+        this.fault(
+          slot,
+          this.error("WRK_STARTUP", "Could not start worker.", slot, cause),
+        );
+      }
     });
   }
   private receive(slot: Slot, value: unknown): void {
-    if (this.state === "closed") return;
     if (!isReply(value)) {
-      this.fail(
-        new WorkerError("WRK_PROTOCOL", "Malformed worker reply.", {
-          workerId: slot.id,
-        }),
+      this.fault(
+        slot,
+        this.error("WRK_PROTOCOL", "Malformed worker reply.", slot),
       );
       return;
     }
     if (value.kind === "fatal") {
-      this.fail(
-        new WorkerError(
-          slot.ready ? "WRK_PROTOCOL" : "WRK_STARTUP",
-          value.error.message,
-          { workerId: slot.id, remote: value.error },
-        ),
+      const error = this.error(
+        slot.ready ? "WRK_PROTOCOL" : "WRK_STARTUP",
+        value.error.message,
+        slot,
       );
-    } else if (value.kind === "ready") this.acceptReady(slot, value.tasks);
-    else this.acceptResult(slot, value);
-  }
-  private acceptReady(slot: Slot, names: string[]): void {
-    const previous = this.taskNames.get(slot.role.name);
-    if (
-      slot.ready ||
-      (previous &&
-        (previous.size !== names.length ||
-          names.some((name) => !previous.has(name))))
-    ) {
-      this.fail(
-        new WorkerError("WRK_PROTOCOL", "Inconsistent worker readiness.", {
-          workerId: slot.id,
-        }),
-      );
-      return;
-    }
-    clearTimeout(slot.timer);
-    slot.ready = true;
-    this.taskNames.set(slot.role.name, new Set(names));
-    if (
-      this.slots.length === this.size &&
-      this.slots.every((entry) => entry.ready)
-    ) {
-      if (this.state !== "closing") this.state = "ready";
-      this.started();
+      error.meta!.remote = value.error;
+      this.fault(slot, error);
+    } else if (value.kind === "ready") {
+      if (slot.ready) {
+        this.fault(
+          slot,
+          this.error("WRK_PROTOCOL", "Duplicate readiness reply.", slot),
+        );
+        return;
+      }
+      clearTimeout(slot.timer);
+      slot.ready = true;
+      if (
+        [...this.slots].filter((item) => !item.dead && item.ready).length ===
+          this.setup.count
+      ) this.startup.resolve();
       this.dispatch();
-      this.finishDrain();
-    }
+    } else this.result(slot, value);
   }
-  private acceptResult(
-    slot: Slot,
-    value: Extract<Reply, { kind: "result" }>,
-  ): void {
-    const job = slot.current;
-    if (!slot.ready || !job || value.id !== job.request.id) {
-      this.fail(
-        new WorkerError(
+  private result(slot: Slot, value: Extract<Reply, { kind: "result" }>): void {
+    const current = slot.current;
+    if (!slot.ready || !current || value.id !== current.job.id) {
+      this.fault(
+        slot,
+        this.error(
           "WRK_PROTOCOL",
           "Worker reply does not match its active job.",
-          { workerId: slot.id },
+          slot,
         ),
       );
       return;
     }
     clearTimeout(slot.timer);
+    if (value.ok) current.resolve(value.value);
+    else {
+      const error = this.error(
+        value.error.code === "WRK_CLONE" ? "WRK_CLONE" : "WRK_TASK",
+        value.error.message,
+        slot,
+      );
+      error.meta!.remote = value.error;
+      current.reject(error);
+    }
     slot.current = undefined;
-    const result: WorkerOutcome<unknown> = value.ok
-      ? { status: "fulfilled", value: value.value }
-      : {
-        status: "rejected",
-        error: new WorkerError(
-          value.error.code === "WRK_CLONE" ? "WRK_CLONE" : "WRK_TASK",
-          value.error.message,
-          {
-            jobId: job.request.id,
-            task: job.request.task,
-            role: slot.role.name,
-            workerId: slot.id,
-            remote: value.error,
-          },
-        ),
-      };
-    this.complete(job, result);
     this.dispatch();
   }
   private dispatch(): void {
-    if (
-      this.pumping || !["ready", "closing"].includes(this.state) ||
-      this.slots.some((slot) => !slot.ready)
-    ) return;
+    if (this.pumping || this.state !== "active") return;
     this.pumping = true;
     try {
-      for (const slot of this.slots) this.pumpSlot(slot);
+      for (const slot of this.slots) {
+        while (!slot.dead && slot.ready && !slot.current && this.queue.length) {
+          const current = this.queue.shift()!;
+          slot.current = current;
+          slot.timer = setTimeout(
+            () =>
+              this.fault(
+                slot,
+                this.error(
+                  "WRK_TIMEOUT",
+                  "Worker job timed out; the job will not be retried.",
+                  slot,
+                ),
+              ),
+            this.setup.timeoutMs,
+          );
+          try {
+            slot.transport!.postMessage(current.request);
+          } catch (cause) {
+            this.fault(
+              slot,
+              this.error(
+                "WRK_CRASH",
+                "Could not dispatch worker job.",
+                slot,
+                cause,
+              ),
+            );
+          }
+        }
+      }
     } finally {
       this.pumping = false;
     }
-    this.finishDrain();
   }
-  private pumpSlot(slot: Slot): void {
-    while (!slot.current && this.state !== "closed") {
-      const index = this.queue.findIndex((job) => job.role === slot.role.name);
-      if (index < 0) return;
-      const [job] = this.queue.splice(index, 1);
-      if (!this.taskNames.get(slot.role.name)?.has(job.request.task)) {
-        this.complete(
-          job,
-          this.rejected(
-            job,
-            new WorkerError("WRK_CONFIG", "Unknown task in worker registry.", {
-              workerId: slot.id,
-            }),
-          ),
-        );
-        continue;
-      }
-      slot.current = job;
-      slot.timer = setTimeout(
-        () =>
-          this.fail(
-            new WorkerError(
-              "WRK_TIMEOUT",
-              "Worker job timed out; the pool was terminated without retry.",
-              {
-                workerId: slot.id,
-                jobId: job.request.id,
-                task: job.request.task,
-              },
-            ),
-          ),
-        this.setup.timeoutMs,
-      );
-      try {
-        slot.transport.postMessage(job.request);
-      } catch (cause) {
-        this.fail(
-          new WorkerError("WRK_CRASH", "Could not dispatch a worker job.", {
-            workerId: slot.id,
-          }, cause),
-        );
-      }
+  private fault(slot: Slot, error: WorkerError): void {
+    if (slot.dead) return;
+    slot.current?.reject(error);
+    slot.current = undefined;
+    const wasReady = slot.ready;
+    const stopped = this.stop(slot);
+    if (!wasReady && slot.restart === 0) {
+      this.fail(error);
+      return;
     }
-  }
-  private complete(job: Pending, result: WorkerOutcome<unknown>): void {
-    this.pending--;
-    job.resolve(result);
-  }
-  private rejected(job: Pending, error: WorkerError): WorkerOutcome<never> {
-    return {
-      status: "rejected",
-      error: new WorkerError(error.code, error.message, {
-        ...error.meta,
-        jobId: job.request.id,
-        task: job.request.task,
-        role: job.role,
-      }, error),
-    };
+    void stopped.then(() => {
+      if (this.state !== "active") return;
+      if (this.restarts >= this.setup.maxRestarts) {
+        this.fail(error);
+        return;
+      }
+      this.spawn(slot.index, ++this.restarts);
+    }, (cause) => {
+      if (this.state === "active") {
+        this.fail(
+          this.error(
+            "WRK_CRASH",
+            "Worker cleanup failed during replacement.",
+            slot,
+            cause,
+          ),
+        );
+      }
+    });
   }
   private fail(error: WorkerError): void {
-    if (this.state === "closed") return;
+    if (this.state === "failed" || this.state === "closed") return;
     this.failure = error;
-    this.startFailed(error);
+    this.state = "failed";
+    this.startup.reject(error);
     const abandoned = this.queue.splice(0);
     for (const slot of this.slots) {
       if (slot.current) {
         abandoned.push(slot.current);
         slot.current = undefined;
       }
+      this.stop(slot);
     }
-    for (const job of abandoned) this.complete(job, this.rejected(job, error));
-    this.shutdown();
-  }
-  private finishDrain(): void {
-    if (this.state === "closing" && this.pending === 0) {
-      if (
-        this.slots.length < this.size || this.slots.some((slot) => !slot.ready)
-      ) {
-        this.startFailed(
-          new WorkerError(
-            "WRK_CLOSED",
-            "Worker pool closed during initialization.",
-          ),
-        );
-      } else this.started();
-      this.shutdown();
-    }
-  }
-  private shutdown(): void {
-    this.state = "closed";
-    const failures: unknown[] = [];
-    const cleanup = (action: () => void): void => {
-      try {
-        action();
-      } catch (error) {
-        failures.push(error);
-      }
-    };
-    for (const slot of this.slots) {
-      clearTimeout(slot.timer);
-      for (const [type, listener] of slot.listeners) {
-        cleanup(() => slot.transport.removeEventListener(type, listener));
-      }
-      cleanup(() => slot.transport.terminate());
-    }
-    this.slots.length = 0;
-    this.taskNames.clear();
-    if (failures.length) {
-      this.drainFailed(
-        new WorkerError(
-          "WRK_CRASH",
-          "Worker transport cleanup failed; all workers were asked to stop.",
-          {},
-          new AggregateError(failures),
-        ),
+    for (const pending of abandoned) {
+      pending.reject(
+        error.code === "WRK_STARTUP" && this.restarts === 0
+          ? error
+          : this.unavailable(),
       );
-    } else this.didDrain();
+    }
+  }
+  private stop(slot: Slot): Promise<void> {
+    if (slot.stopping) return slot.stopping;
+    slot.dead = true;
+    slot.abort.abort();
+    if (slot.transport) clearTimeout(slot.timer);
+    slot.stopping = Promise.resolve().then(async () => {
+      try {
+        await Promise.race([slot.constructing, slot.expiration.promise]);
+      } finally {
+        clearTimeout(slot.timer);
+      }
+      if (!slot.transport) return;
+      const errors: unknown[] = [];
+      for (const [type, listener] of slot.listeners) {
+        try {
+          slot.transport.removeEventListener(type, listener);
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      try {
+        await slot.transport.terminate();
+      } catch (error) {
+        errors.push(error);
+      }
+      slot.listeners = [];
+      slot.transport = undefined;
+      this.slots.delete(slot);
+      if (errors.length) {
+        throw new WorkerError("WRK_CRASH", "Worker transport cleanup failed.", {
+          group: this.setup.name,
+          workerId: slot.id,
+        }, new AggregateError(errors));
+      }
+    });
+    void slot.stopping.catch(() => {});
+    this.stops.push(slot.stopping);
+    return slot.stopping;
+  }
+  close(): Promise<void> {
+    if (this.shutdown) return this.shutdown;
+    const error = new WorkerError(
+      "WRK_CLOSED",
+      "Worker generation was closed.",
+      { group: this.setup.name },
+    );
+    this.fail(error);
+    this.state = "closed";
+    this.shutdown = Promise.allSettled(this.stops).then((outcomes) => {
+      const errors = outcomes.flatMap((outcome) =>
+        outcome.status === "rejected" ? [outcome.reason] : []
+      );
+      if (errors.length) {
+        throw new WorkerError("WRK_CRASH", "Worker group cleanup failed.", {
+          group: this.setup.name,
+        }, new AggregateError(errors));
+      }
+    });
+    return this.shutdown;
   }
 }
-
-/**
- * Create reusable worker resources through `workerPool.for<typeof registry>()(options)`.
- *
- * The registry import may be type-only in the parent. Configure a homogeneous
- * `size` or named `roles`, a registry module URL, optional recipes and resource
- * limits. Construction validates and snapshots configuration; workers start lazily
- * on `ready()` or the first nonempty batch. Reuse one pool across parallel steps,
- * then call `close()` to drain it or `terminate()` to abort outstanding work.
- *
- * @returns A factory namespace whose `for()` method binds the registry contract.
- * The resulting options factory returns a typed WorkerPool, without spawning workers.
- *
- * @remarks `for()` takes no runtime arguments and does not intentionally throw.
- * The options factory throws `WRK_CONFIG` for invalid configuration and `WRK_CLONE`
- * for non-cloneable setup data. Worker startup and job failures occur later; see
- * WorkerPool.ready, WorkerPool.run and WorkerPool.settle for their contracts.
- */
-export const workerPool: WorkerPoolFactory = {
-  for<R extends WorkerRegistry>(): TypedWorkerPoolFactory<R> {
-    return ((options: unknown) =>
-      new Pool(options)) as unknown as TypedWorkerPoolFactory<R>;
-  },
-};
+/** Shared admission accounting, with independent schedulers for each definition. */
+export class Generation {
+  readonly groups: Map<string, Group>;
+  private pending = 0;
+  private closed = false;
+  constructor(private readonly setup: Setup) {
+    this.groups = new Map(
+      setup.groups.map((
+        group,
+      ) => [group.name, new Group(group, setup.createWorker)]),
+    );
+  }
+  check(jobs: readonly PreparedJob[]): void {
+    if (this.closed) {
+      throw new WorkerError("WRK_CLOSED", "Worker generation is closed.");
+    }
+    if (this.pending + jobs.length > this.setup.maxPending) {
+      throw new WorkerError(
+        "WRK_CAPACITY",
+        "No jobs were admitted: the complete batch exceeds available capacity.",
+        { maxPending: this.setup.maxPending },
+      );
+    }
+    for (const job of jobs) this.groups.get(job.group)!.available();
+  }
+  reserve(jobs: readonly PreparedJob[]): void {
+    this.check(jobs);
+    this.pending += jobs.length;
+  }
+  release(): void {
+    this.pending--;
+  }
+  stopAdmission(): void {
+    this.closed = true;
+  }
+  async ready(): Promise<void> {
+    await Promise.all([...this.groups.values()].map((group) => group.ready()));
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+    const outcomes = await Promise.allSettled(
+      [...this.groups.values()].map((group) => group.close()),
+    );
+    const errors = outcomes.flatMap((outcome) =>
+      outcome.status === "rejected" ? [outcome.reason] : []
+    );
+    if (errors.length) {
+      throw new WorkerError(
+        "WRK_CRASH",
+        "Generation cleanup failed; all groups were asked to stop.",
+        {},
+        new AggregateError(errors),
+      );
+    }
+  }
+}

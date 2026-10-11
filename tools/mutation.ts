@@ -17,6 +17,36 @@ for (const file of await sourceFiles()) {
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
   [
+    "worker-plugin-copy",
+    "src/workers/definition.ts",
+    "[...plugins, plugin]",
+    "plugins",
+  ],
+  [
+    "worker-nested-order",
+    "src/workers/jobs.ts",
+    "shape.map((child)",
+    "[...shape].reverse().map((child)",
+  ],
+  [
+    "worker-capacity-release",
+    "src/workers/parallel.ts",
+    "generation.release();",
+    "",
+  ],
+  [
+    "worker-terminal-dispose",
+    "src/workers/parallel.ts",
+    "dispose: () => lifetime.close(true)",
+    "dispose: () => lifetime.close()",
+  ],
+  [
+    "worker-batch-capacity",
+    "src/workers/pool.ts",
+    "this.pending + jobs.length > this.setup.maxPending",
+    "jobs.length > this.setup.maxPending",
+  ],
+  [
     "finalizer-invocation",
     "src/runtime/execution.ts",
     "yield* invoke(plugin, plugin.finally, []);",
@@ -175,6 +205,7 @@ async function copyTree(source: string, destination: string): Promise<void> {
 await Deno.mkdir(directory, { recursive: true });
 const tests = [
   "src",
+  "test/workers/parallel.integration.test.ts",
   "test/regressions",
   "test/concurrency",
   "test/properties",

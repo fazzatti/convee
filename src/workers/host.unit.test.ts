@@ -1,64 +1,58 @@
 import { assertEquals, assertRejects } from "@std/assert";
+import { describe, it } from "@std/testing/bdd";
+import { pipe, plugin, step } from "@convee";
+import { worker } from "@convee/workers";
 import { workerHost } from "@/workers/host.ts";
 import { PROTOCOL, type Reply } from "@/workers/protocol.ts";
-import { workerRegistry } from "@/workers/registry.ts";
-import registry from "@test/workers/registry.ts";
-import { describe, it } from "@std/testing/bdd";
-
+import { deferred } from "@test/workers/transport.ts";
+const init = {
+  protocol: PROTOCOL,
+  kind: "init",
+  module: "file:///definition.ts",
+};
+const run = { protocol: PROTOCOL, kind: "run", id: "1", args: [3] };
+const definition = worker((n: number) => n * 2, { module: import.meta.url });
 describe("Worker host protocol", () => {
-  const init = {
-    protocol: PROTOCOL,
-    kind: "init",
-    module: "file:///registry.ts",
-    pipelines: {},
-    role: { name: "default", size: 1, plugins: {} },
-  };
-  const run = {
-    protocol: PROTOCOL,
-    kind: "run",
-    id: "1",
-    task: "double",
-    args: [3],
-  };
-
-  it("worker host executes jobs with fresh context and reports ordinary errors", async () => {
-    const replies: Reply[] = [];
-    const host = workerHost(
-      (value) => replies.push(value),
-      () => Promise.resolve(registry),
-    );
-    await host.receive(init);
-    await host.receive(run);
-    await host.receive({ ...run, task: "missing" });
-    await host.receive({
-      ...run,
-      task: "count",
-      args: [],
-      context: { seed: { count: 4 }, capture: "all" },
-    });
-    await host.receive({ ...run, task: "count", args: [] });
-    assertEquals(replies[1], {
-      protocol: PROTOCOL,
-      kind: "result",
-      id: "1",
-      ok: true,
-      value: 6,
-    });
-    assertEquals(
-      replies[2].kind === "result" && !replies[2].ok && replies[2].error.code,
-      "WRK_CONFIG",
-    );
-    assertEquals(
-      replies[3].kind === "result" && replies[3].ok && replies[3].value,
-      5,
-    );
-    assertEquals(
-      replies[4].kind === "result" && replies[4].ok && replies[4].value,
-      1,
-    );
+  it("runs plain functions and native pipelines with worker-local hooks and fresh contexts", async () => {
+    const seen: unknown[] = [];
+    const body = step(function (n: number) {
+      const before = this.context().state.get("count") ?? 0;
+      this.context().state.set("count", Number(before) + 1);
+      seen.push(before);
+      if (n < 0) throw new Error("negative");
+      return n * 2;
+    }).use(plugin().onOutput((n: number) => n + 1));
+    for (const callable of [(n: number) => n * 2 + 1, body, pipe([body])]) {
+      const replies: Reply[] = [];
+      const host = workerHost(
+        (reply) => replies.push(reply),
+        () => Promise.resolve(worker(callable, { module: import.meta.url })),
+      );
+      await host.receive(init);
+      await host.receive({
+        ...run,
+        context: { seed: { count: 7 }, capture: "all" },
+      });
+      await host.receive(run);
+      assertEquals(replies[1], {
+        protocol: PROTOCOL,
+        kind: "result",
+        id: "1",
+        ok: true,
+        value: 7,
+      });
+      if (callable === body) {
+        await host.receive({ ...run, args: [-1] });
+        assertEquals(
+          replies[3].kind === "result" && !replies[3].ok &&
+            replies[3].error.message,
+          "negative",
+        );
+      }
+    }
+    assertEquals(seen, [7, 0, 0, 7, 0]);
   });
-
-  it("worker host reports module failures and stops accepting malformed messages", async () => {
+  it("reports malformed requests and load failures, then ignores subsequent messages", async () => {
     for (
       const value of [
         null,
@@ -71,7 +65,7 @@ describe("Worker host protocol", () => {
       const replies: Reply[] = [];
       const host = workerHost(
         (reply) => replies.push(reply),
-        () => Promise.resolve(registry),
+        () => Promise.resolve(definition),
       );
       await host.receive(value);
       await host.receive(init);
@@ -79,105 +73,80 @@ describe("Worker host protocol", () => {
       assertEquals(replies[0].kind, "fatal");
     }
     const replies: Reply[] = [];
-    const failed = workerHost(
+    await workerHost(
       (reply) => replies.push(reply),
       () => Promise.reject("load failed"),
-    );
-    await failed.receive(init);
+    ).receive(init);
     assertEquals(
       replies[0].kind === "fatal" && replies[0].error.message,
       "load failed",
     );
-  });
-
-  it("worker host forbids duplicate initialization and malformed jobs", async () => {
     for (
-      const value of [init, { ...run, id: 1 }, { ...run, task: 1 }, {
+      const value of [init, { ...run, id: 1 }, { ...run, args: null }, {
         ...run,
-        args: 1,
-      }, { ...run, context: null }]
+        context: null,
+      }]
     ) {
       const replies: Reply[] = [];
       const host = workerHost(
         (reply) => replies.push(reply),
-        () => Promise.resolve(registry),
+        () => Promise.resolve(definition),
       );
       await host.receive(init);
       await host.receive(value);
       assertEquals(replies[1].kind, "fatal");
     }
   });
-
-  it("overlapping initialization or jobs cannot revive a failed worker host", async () => {
-    let load!: (value: typeof registry) => void;
+  it("overlapping initialization and jobs cannot revive a failed host", async () => {
+    const loading = deferred<unknown>();
     const replies: Reply[] = [];
     const host = workerHost(
       (reply) => replies.push(reply),
-      () =>
-        new Promise((resolve) => {
-          load = resolve;
-        }),
+      () => loading.promise,
     );
     const pending = host.receive(init);
     await host.receive(init);
-    load(registry);
+    loading.resolve(definition);
     await pending;
     assertEquals(replies.length, 1);
-    let finish!: () => void;
-    let entered!: () => void;
-    const started = new Promise<void>((resolve) => {
-      entered = resolve;
-    });
-    const slow = workerRegistry({
-      tasks: {
-        slow: () => () =>
-          new Promise<void>((resolve) => {
-            finish = resolve;
-            entered();
-          }),
-      },
-    });
-    const worker = workerHost(
+    const finish = deferred();
+    const entered = deferred();
+    const slow = worker(() => {
+      entered.resolve();
+      return finish.promise;
+    }, { module: import.meta.url });
+    const remote = workerHost(
       (reply) => replies.push(reply),
       () => Promise.resolve(slow),
     );
-    await worker.receive(init);
-    const job = worker.receive({ ...run, task: "slow", args: [] });
-    // A broken runtime can finish before entering the body; do not spin forever.
-    await Promise.race([started, job]);
-    assertEquals(typeof finish, "function");
-    await worker.receive(run);
-    finish();
-    await job;
+    await remote.receive(init);
+    const active = remote.receive(run);
+    await entered.promise;
+    await remote.receive(run);
+    finish.resolve();
+    await active;
     assertEquals(replies.map((reply) => reply.kind), [
       "fatal",
       "ready",
       "fatal",
     ]);
   });
-
-  it("result clone failures are transported as errors and broken sends surface", async () => {
+  it("projects uncloneable outputs and surfaces a broken diagnostic channel", async () => {
     const replies: Reply[] = [];
+    const uncloneable = worker(() => () => 0, { module: import.meta.url });
     const host = workerHost(
       (reply) => replies.push(structuredClone(reply)),
-      () => Promise.resolve(registry),
+      () => Promise.resolve(uncloneable),
     );
     await host.receive(init);
-    await host.receive({ ...run, task: "unclonable", args: [] });
+    await host.receive(run);
     assertEquals(
       replies[1].kind === "result" && !replies[1].ok && replies[1].error.code,
       "WRK_CLONE",
     );
-    let calls = 0;
-    const transport = workerHost((reply) => {
-      if (++calls === 1) throw new Error("send failed");
-      replies.push(reply);
-    }, () => Promise.resolve(registry));
-    await transport.receive(init);
-    assertEquals(replies[2].kind, "fatal");
     const broken = workerHost(() => {
-      throw new Error("disconnected");
-    }, () => Promise.resolve(registry));
-    await assertRejects(() => broken.receive(init), Error, "disconnected");
+      throw new Error("send failed");
+    }, () => Promise.resolve(definition));
+    await assertRejects(() => broken.receive(init), Error, "send failed");
   });
 });

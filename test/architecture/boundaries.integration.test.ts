@@ -8,6 +8,7 @@ import {
 } from "@tools/source.ts";
 import * as api from "@convee";
 import * as workersApi from "@convee/workers";
+import * as viteApi from "@convee/workers/vite";
 import { describe, it } from "@std/testing/bdd";
 
 describe("Architecture boundaries", () => {
@@ -41,6 +42,15 @@ describe("Architecture boundaries", () => {
       );
       const edges: string[] = [];
       for (const dependency of imports) {
+        // Only the optional adapter loads a runtime builtin; Vite is types-only.
+        if (
+          path === "src/workers/transport.ts" &&
+          dependency.specifier === "node:worker_threads"
+        ) continue;
+        if (
+          path === "src/workers/vite.ts" &&
+          dependency.specifier === "npm:vite@8.3.4" && !dependency.runtime
+        ) continue;
         const destination = resolve(path, dependency.specifier);
         assert(
           files.includes(destination),
@@ -88,6 +98,7 @@ describe("Architecture boundaries", () => {
     assertEquals(config.exports, {
       ".": "./src/index.ts",
       "./workers": "./src/workers/index.ts",
+      "./workers/vite": "./src/workers/vite.ts",
     });
     assertEquals(config.publish.include, [
       "src/**/*.ts",
@@ -115,7 +126,19 @@ describe("Architecture boundaries", () => {
       actual.filter((entry) => !entry.typeOnly).map((entry) => entry.name)
         .sort(),
     );
-    assert(!Object.hasOwn(api, "workerPool"));
+    for (
+      const name of [
+        "worker",
+        "parallel",
+        "persistentParallel",
+        "conveeWorkers",
+      ]
+    ) assert(!Object.hasOwn(api, name));
+    assertEquals(await resolvedPublicExports("src/workers/vite.ts"), [
+      { name: "conveeWorkers", typeOnly: false },
+      { name: "ConveeWorkersPlugin", typeOnly: true },
+    ]);
+    assertEquals(Object.keys(viteApi), ["conveeWorkers"]);
     assertEquals(
       dependencies(parse("src/workers/entry.ts", "import(url);"), true),
       [],

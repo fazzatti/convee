@@ -10,7 +10,10 @@ behavior.
 PR checks pin Deno 2.6.0 and 2.9.6. Both must pass consumer type contracts,
 runtime tests, isolated package consumption, garbage-collection retention and
 graphs up to 100 nodes. Deno 2.9.6 runs the quality, mutation, stress and
-benchmark jobs.
+benchmark jobs. Separate consumers exercise Node 22.12.0 and 24.1.0, Bun 1.4.3,
+and Vite 8.3.4 development/production builds in Playwright 1.64.0 Chromium,
+Firefox and WebKit. These are explicit tested combinations, not claims for every
+edge host or bundler.
 
 Install one of these Deno versions and run commands from the repository root.
 The first run resolves pinned development dependencies from the lockfile. No
@@ -45,11 +48,14 @@ from the README and writes an independent temporary module under
 local source so the examples are checked against the code being changed.
 
 The helper runs `deno check`, not `deno run`: it validates imports and types,
-but does not execute examples or assert the displayed results. Each example
-includes its own imports and setup. Import-only examples and unused teaching
-declarations are allowed by disabling only the two unused-declaration compiler
-options in the generated config. Production and test compiler settings remain
-unchanged. Failures report the original README line.
+but does not execute examples or assert the displayed results. Examples include
+their imports and setup. A first-line filename comment (such as
+`// word-count.worker.ts`) names a shared temporary module so the worker/caller
+examples are checked together; the remaining examples use unique files. All
+files are written before checking imports. Import-only examples and unused
+teaching declarations are allowed by disabling only the two unused-declaration
+compiler options in the generated config. Production and test compiler settings
+remain unchanged. Failures report the original README line.
 
 Generated files are ignored by Git. The helper is not part of the published
 library or its runtime dependencies. Its extraction/configuration regression
@@ -67,13 +73,17 @@ tests run in `deno task test:tooling`.
   waiting, nested targeting and concurrent invocation state. Type tests reject
   hidden async cleanup in sync APIs and ensure finalizers do not weaken input
   typing.
-- Worker tests cover configured pipelines, child/role plugins, mixed result
-  tuples, global admission limits, queue ordering, payload snapshots, startup,
-  draining, forced shutdown, timeouts and protocol/transport failures. Real Deno
-  module workers exercise package loading, error/result cloning and a two-worker
+- Worker tests cover single-callable definitions, native inner/caller/outer
+  plugins, nested tuple association, independent group scheduling and atomic
+  admission across overlapping calls. Controlled transports exercise readiness,
+  crashes, malformed/late replies, bounded replacement, asynchronous
+  termination, unresponsive constructors, cancellation and cleanup failures.
+  Integration cases cover ordinary cleanup, persistence, reopen/drain races,
+  idle timers, terminal disposal, recovery and slots held through finalization.
+  Real Deno workers exercise module loading, clone boundaries and a two-worker
   CPU barrier that cannot pass through sequential execution.
-  `deno task test:workers` runs the focused suites. These tests are included in
-  `test`/`verify`; local module loading uses narrowly scoped read permissions.
+  `deno task test:workers` runs these focused suites; they are also included in
+  `test`/`verify`.
 - `test/concurrency` uses explicit promise gates, not elapsed-time guesses, to
   vary hook phase, capture mode and completion order with a shared parent.
 - `test/fixtures` contains a realistic parse/validate/enrich workflow and the
@@ -89,10 +99,36 @@ variables. Generators and mutation tools write only `.artifacts` and launch
 run a modified contributor branch without reviewing it.
 
 Worker tests allow reads only of `src` and `test/workers` so module workers can
-load the reviewed fixture registry. Scheduler tests use controlled transports
+load the reviewed fixture definition. Scheduler tests use controlled transports
 for deterministic interleavings; the native-worker tests provide independent
-transport evidence. The isolated consumer also runs a real worker-backed mixed
+transport evidence. The isolated consumer also runs a real worker-backed
 pipeline from copied package sources without repository import aliases.
+
+## Runtime consumers
+
+`deno task test:runtime node bun` transpiles a separate ESM package and executes
+an independent consumer with the named runtimes on PATH. The consumer verifies
+nested results, ordinary cleanup, persistent reuse, close/reopen, context
+isolation, remote diagnostics, clone failure, crashes, timeouts, replacement
+budgets, caller recovery, idle release, disposal and termination. Compiled ESM
+verification does not claim that Node accepts every TypeScript loader or alias.
+
+For browser consumers, install only the pinned test dependencies:
+
+```sh
+npm ci --prefix test/runtime
+test/runtime/node_modules/.bin/playwright install chromium firefox webkit
+deno task test:runtime browsers
+```
+
+Linux CI adds Playwright's `--with-deps` installation option. The driver builds
+and serves real Vite development and production applications, runs the common
+consumer in each engine, checks page errors and asserts zero remaining worker
+handles. The report includes actual browser versions. WebKit is an engine test,
+not certification against an installed Safari release. The driver requires local
+HTTP ports and browser process execution. Reports and logs are saved under
+`.artifacts/runtime-consumer` and uploaded from each CI job. Runtime consumers
+exercise source copied from this checkout; they do not download a released SDK.
 
 ## Property replay and larger campaigns
 
@@ -116,8 +152,10 @@ shared-parent interleavings remain necessary alongside generated tests.
 
 `tools/mutation.ts` negates all `if` conditions in the invocation/context,
 step/pipe engines and plugin descriptor runtime. It also applies named mutations
-to copies, ordering, cleanup, callable identity and completion history. It does
-not mutate every expression, error message or TypeScript type.
+to copies, ordering, cleanup, callable identity and completion history. Worker
+mutants exercise immutable plugin copies, nested order, capacity across calls,
+capacity release and terminal disposal. It does not mutate every expression,
+error message or TypeScript type.
 
 `deno task test:tooling`, included in `verify`, tests the result parser against
 plain and ANSI-colored CI output, real failed-test summaries, infrastructure
@@ -159,17 +197,19 @@ Functions exceeding syntactic complexity 20 fail the explicit review budget. Do
 not split coherent code solely to improve this number.
 
 Architecture tests resolve imports, type imports and re-exports using the
-TypeScript AST. They enforce internal-only production dependencies, layer
-directions, runtime acyclicity, the reviewed public export fixture and packaging
-rules. Computed dynamic imports require an explicit design change. Type-only
+TypeScript AST. They enforce internal production dependencies, layer directions,
+runtime acyclicity, reviewed public export fixtures and packaging rules.
+Explicit exceptions are the Node adapter's `node:worker_threads` builtin and the
+optional Vite integration's type-only Vite contract; neither is loaded by core
+imports. Computed dynamic imports require an explicit design change. Type-only
 cycles are distinct from runtime cycles.
 
 The worker adapter adds one reviewed computed-import boundary in
-`src/workers/entry.ts`: loading the application's registry URL. All other
+`src/workers/entry.ts`: loading the application's definition URL. All other
 computed production imports remain rejected. The optional `/workers` entrypoint
 has its own reviewed export fixture, and core imports cannot depend on the
-worker layer. Its runtime is currently verified on Deno; browser bundling and
-Node-specific transports are separate consumer targets.
+worker layer. The Vite integration has a separate optional export; its loader is
+exercised against actual development and production bundles.
 
 The isolated consumer copies production sources into a separate package and
 rewrites internal aliases to relative imports, then checks and executes against

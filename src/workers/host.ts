@@ -1,4 +1,6 @@
-import { assemble } from "@/workers/assemble.ts";
+import { step } from "@/step/factory.ts";
+import type { Step } from "@/step/types.ts";
+import { definitionData } from "@/workers/definition.ts";
 import { remoteError, WorkerError } from "@/workers/error.ts";
 import {
   contextValid,
@@ -8,16 +10,14 @@ import {
   type Reply,
   type RunMessage,
 } from "@/workers/protocol.ts";
-import { workerRegistry } from "@/workers/registry.ts";
-import type { WorkerRegistry } from "@/workers/types.ts";
 
-/** Worker-side message handling, separated from the runtime-specific module loader. */
+/** Runtime-neutral worker-side protocol and native job lifecycle. */
 export function workerHost(
   send: (reply: Reply) => void,
-  load: (url: string) => Promise<WorkerRegistry>,
+  load: (url: string) => Promise<unknown>,
 ): { receive(value: unknown): Promise<void> } {
   let state: "empty" | "loading" | "ready" | "busy" | "failed" = "empty";
-  let tasks: ReturnType<typeof assemble> = new Map();
+  let executable: Step<unknown[], unknown>;
   async function initialize(value: InitMessage): Promise<void> {
     if (state !== "empty" || typeof value.module !== "string") {
       throw new WorkerError(
@@ -26,18 +26,24 @@ export function workerHost(
       );
     }
     state = "loading";
-    const registry = workerRegistry(await load(value.module));
-    // A concurrent invalid message may have failed initialization while loading.
+    const { callable } = definitionData(await load(value.module));
     if ((state as string) === "failed") return;
-    tasks = assemble(registry, value.pipelines, value.role);
+    executable = step(async function (...args: unknown[]) {
+      const runWith: unknown = Reflect.get(callable, "runWith");
+      if (typeof runWith === "function") {
+        return await Reflect.apply(runWith, callable, [{
+          context: { parent: this.context() },
+        }, ...args]);
+      }
+      return await Reflect.apply(callable, this, args);
+    });
     state = "ready";
-    send({ protocol: PROTOCOL, kind: "ready", tasks: [...tasks.keys()] });
+    send({ protocol: PROTOCOL, kind: "ready" });
   }
   async function run(value: RunMessage): Promise<void> {
     if (
       state !== "ready" || typeof value.id !== "string" ||
-      typeof value.task !== "string" || !Array.isArray(value.args) ||
-      !contextValid(value.context)
+      !Array.isArray(value.args) || !contextValid(value.context)
     ) {
       throw new WorkerError(
         "WRK_PROTOCOL",
@@ -47,13 +53,7 @@ export function workerHost(
     state = "busy";
     let reply: Reply;
     try {
-      const task = tasks.get(value.task);
-      if (!task) {
-        throw new WorkerError("WRK_CONFIG", "Unknown worker task.", {
-          task: value.task,
-        });
-      }
-      const output = await task.runWith({
+      const output = await executable.runWith({
         context: {
           ...value.context,
           capture: value.context?.capture ?? "none",
@@ -100,24 +100,16 @@ export function workerHost(
     async receive(value: unknown): Promise<void> {
       if (state === "failed") return;
       try {
-        if (
-          !messageRecord(value) || value.protocol !== PROTOCOL
-        ) throw new WorkerError("WRK_PROTOCOL", "Invalid worker protocol.");
+        if (!messageRecord(value) || value.protocol !== PROTOCOL) {
+          throw new WorkerError("WRK_PROTOCOL", "Invalid worker protocol.");
+        }
         if (value.kind === "init") {
-          await initialize(
-            value as unknown as InitMessage,
-          );
+          await initialize(value as unknown as InitMessage);
         } else if (value.kind === "run") {
-          await run(
-            value as unknown as RunMessage,
-          );
-        } else {throw new WorkerError(
-            "WRK_PROTOCOL",
-            "Unknown worker message.",
-          );}
+          await run(value as unknown as RunMessage);
+        } else throw new WorkerError("WRK_PROTOCOL", "Unknown worker message.");
       } catch (error) {
         state = "failed";
-        tasks.clear();
         send({ protocol: PROTOCOL, kind: "fatal", error: remoteError(error) });
       }
     },

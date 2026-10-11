@@ -17,6 +17,11 @@ describe("Worker error diagnostics", () => {
     assertEquals(remoteError(plain), { name: "Error", message: "plain" });
     assertEquals(remoteError("text"), { name: "NonError", message: "text" });
     assertEquals(remoteError(undefined).message, "undefined");
+    const malformed = new Error("bad");
+    Object.defineProperty(malformed, "name", { value: 42 });
+    Object.defineProperty(malformed, "message", { value: 42 });
+    assertEquals(remoteError(malformed).name, "Error");
+    assertEquals(remoteError(malformed).message, "Remote error");
     const hostile = {
       toString() {
         throw new Error("no");

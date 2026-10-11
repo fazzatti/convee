@@ -1,108 +1,96 @@
 import { assertEquals, assertThrows } from "@std/assert";
-import {
-  clone,
-  name,
-  plugins,
-  poolSetup,
-  positive,
-  recipes,
-  record,
-} from "@/workers/config.ts";
-import { WorkerError } from "@/workers/error.ts";
 import { describe, it } from "@std/testing/bdd";
-
+import { clone, setup } from "@/workers/config.ts";
+import { worker, WorkerError } from "@convee/workers";
+const definition = worker((n: number) => n, { module: import.meta.url });
+const options = {
+  workers: { a: { worker: definition, count: 1 } },
+  split: () => [],
+  join: () => 0,
+};
 describe("Worker configuration", () => {
-  const module = new URL("./registry.unit.test.ts", import.meta.url);
-
-  it("configuration validates resources before starting any workers", () => {
-    const invalid: unknown[] = [
-      null,
-      [],
-      {},
-      { module: "file:///x", size: 1 },
-      { module },
-      { module, size: 1, roles: {} },
-      { module, roles: {} },
-      { module, size: 0 },
-      { module, size: 1, createWorker: 1 },
-      { module, roles: { a: null } },
-      { module, roles: { a: { size: 1, tasks: [] } } },
-      { module, roles: { a: { size: 1, tasks: "x" } } },
-      { module, roles: { a: { size: 1, tasks: ["x", "x"] } } },
-      { module, size: 1, pipelines: { p: { steps: [] } } },
-    ];
-    for (const config of invalid) {
-      assertThrows(() => poolSetup(config), WorkerError);
-    }
-    for (const value of [0, -1, 0.5, NaN, Infinity, 2 ** 32, "1"]) {
-      assertThrows(() => positive(value, 1, "limit"), WorkerError);
-    }
-    assertEquals(positive(undefined, 7, "limit"), 7);
-    assertEquals(positive(2, 7, "limit"), 2);
-    assertThrows(() => name(" ", "name"), WorkerError);
-    assertThrows(() => record(null, "map"), WorkerError);
-    assertEquals(record({ x: 1 }, "map"), { x: 1 });
-  });
-
-  it("recipes and role settings are snapshotted and retain explicit plugin placement", () => {
-    const input = {
-      module,
-      size: 7,
-      pipelines: {
-        p: {
-          steps: ["first", {
-            task: "first",
-            id: "second",
-            plugins: [{ name: "p", options: { count: 2 } }],
-          }],
-          plugins: [{ name: "outer" }],
-        },
-      },
-    };
-    const config = poolSetup(input);
-    input.pipelines.p.steps.length = 0;
-    assertEquals(config.pipelines.p.steps.length, 2);
-    assertEquals(config.size, 7);
-    assertEquals(config.explicitRoles, false);
-    assertEquals(config.pipelines.p.steps[1].plugins, [{
-      name: "p",
-      options: { count: 2 },
-    }]);
-    const configured = poolSetup({
-      module,
-      roles: {
-        a: { size: 2, tasks: ["first"], plugins: { first: [{ name: "p" }] } },
-        b: { size: 1 },
-      },
-      timeoutMs: 500,
-    });
-    assertEquals(configured.size, 3);
-    assertEquals(configured.explicitRoles, true);
-    assertEquals(configured.timeoutMs, 500);
+  it("validates complete resource and lifetime configuration without starting workers", () => {
+    const valid = setup(options);
+    assertEquals([
+      valid.maxPending,
+      valid.groups[0].timeoutMs,
+      valid.groups[0].startupTimeoutMs,
+      valid.groups[0].maxRestarts,
+    ], [1024, 30000, 10000, 2]);
     assertEquals(
-      poolSetup({ module, roles: { default: { size: 1 } } }).explicitRoles,
-      false,
+      setup({ ...options, reopenOnUse: true, idleTimeoutMs: 1 }).reopenOnUse,
+      true,
     );
-    assertEquals(plugins(), []);
-    assertEquals(recipes(), {});
-    for (const value of [1, null, [{ name: "" }], [null]]) {
-      assertThrows(() => plugins(value), WorkerError);
-    }
     for (
-      const value of [{ p: null }, { p: { steps: "x" } }, {
-        p: { steps: [null] },
-      }, { p: { steps: ["x", "x"] } }]
-    ) assertThrows(() => recipes(value), WorkerError);
-  });
-
-  it("payload snapshots preserve cycles but reject executable values", () => {
-    const cycle: { self?: unknown } = {};
-    cycle.self = cycle;
-    const copy = clone(cycle);
-    assertEquals(copy.self === copy, true);
+      const value of [
+        null,
+        [],
+        {},
+        { ...options, split: 0 },
+        { ...options, join: 0 },
+        { ...options, mode: "invalid" },
+        { ...options, createWorker: 0 },
+        { ...options, reopenOnUse: "yes" },
+        { ...options, workers: {} },
+        { ...options, workers: { " ": options.workers.a } },
+        { ...options, workers: { a: null } },
+      ]
+    ) {
+      assertThrows(() => setup(value), WorkerError);
+    }
+    for (const value of [0, -1, 1.5, NaN, Infinity, 2147483648, null, "1"]) {
+      for (const key of ["maxPending", "idleTimeoutMs"]) {
+        assertThrows(() => setup({ ...options, [key]: value }), WorkerError);
+      }
+      for (const key of ["count", "timeoutMs", "startupTimeoutMs"]) {
+        assertThrows(
+          () =>
+            setup({
+              ...options,
+              workers: { a: { ...options.workers.a, [key]: value } },
+            }),
+          WorkerError,
+        );
+      }
+    }
     assertEquals(
-      assertThrows(() => clone(() => 1), WorkerError).code,
-      "WRK_CLONE",
+      setup({
+        ...options,
+        workers: { a: { ...options.workers.a, maxRestarts: 0 } },
+      }).groups[0].maxRestarts,
+      0,
+    );
+    assertThrows(
+      () =>
+        setup({
+          ...options,
+          workers: { a: { ...options.workers.a, maxRestarts: -1 } },
+        }),
+      WorkerError,
+    );
+  });
+  it("snapshots group settings and rejects invalid branded modules", () => {
+    const input = { ...options, workers: { a: { ...options.workers.a } } };
+    const config = setup(input);
+    input.workers.a.count = 5;
+    assertEquals(config.groups[0].count, 1);
+    const fake = { ...definition, module: 0 };
+    assertThrows(
+      () => setup({ ...options, workers: { a: { worker: fake, count: 1 } } }),
+      WorkerError,
+    );
+  });
+  it("clones data and cycles without transferring buffer ownership", () => {
+    const buffer = new ArrayBuffer(4);
+    const input: { buffer: ArrayBuffer; self?: unknown } = { buffer };
+    input.self = input;
+    const output = clone(input);
+    assertEquals(output.self, output);
+    assertEquals(buffer.byteLength, 4);
+    assertThrows(
+      () => clone({ callback: () => 0 }),
+      WorkerError,
+      "structured cloning",
     );
   });
 });

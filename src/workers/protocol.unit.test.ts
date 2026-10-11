@@ -6,7 +6,7 @@ describe("Worker protocol messages", () => {
   it("protocol accepts only correlated result, readiness and error envelopes", () => {
     const error = { name: "Error", message: "failed" };
     for (
-      const value of [{ protocol: PROTOCOL, kind: "ready", tasks: ["a"] }, {
+      const value of [{ protocol: PROTOCOL, kind: "ready" }, {
         protocol: PROTOCOL,
         kind: "fatal",
         error,
@@ -31,9 +31,6 @@ describe("Worker protocol messages", () => {
         {},
         { protocol: "other" },
         { protocol: PROTOCOL, kind: "unknown" },
-        { protocol: PROTOCOL, kind: "ready", tasks: ["a", "a"] },
-        { protocol: PROTOCOL, kind: "ready", tasks: [1] },
-        { protocol: PROTOCOL, kind: "ready", tasks: null },
         { protocol: PROTOCOL, kind: "result", id: 1, ok: true },
         { protocol: PROTOCOL, kind: "result", id: "a", ok: "yes" },
         { protocol: PROTOCOL, kind: "fatal", error: { name: "E", message: 1 } },

@@ -500,181 +500,284 @@ automatically redacted.
 
 ## Worker-backed parallel steps
 
-The optional `@fifo/convee/workers` entrypoint runs registered functions, steps
-and pipelines in reusable module workers. A `parallel` operation is an ordinary
-async Convee step: it has input/output types, supports `.use()` and
-`.runWith()`, and fits anywhere an async step fits. Its `split` and `join`
-callbacks execute in the caller; each submitted job executes in a worker.
+The optional `@fifo/convee/workers` entrypoint runs a function, step or pipeline
+in dedicated workers. A worker definition has **one job**. A `parallel`
+operation is an ordinary async Convee step with input/output types, `.use()`,
+`.run()` and `.runWith()`. Split, join and outer plugins execute in the caller.
 
-Deno module workers are the tested runtime. Browser applications must bundle the
-worker entry and application registry appropriately; `createWorker(entry, slot)`
-allows a custom Web Worker transport. A Node `worker_threads` adapter is not
-included. Importing Convee's main entrypoint does not load the worker adapter or
-start workers. Pools start lazily on `ready()` or the first nonempty submission.
+### Define a worker, then use it
 
-### Register, configure, split and join
-
-Workers load a module whose default export is a `workerRegistry`. Its factories
-provide the actual implementations; configuration refers to those factories by
-name. The following single-file example uses `import.meta.main` to run the
-application only in the caller, while allowing workers to import its registry.
-Run it with Deno and permission to read the local worker modules, for example
-`deno run --allow-read worker-example.ts`.
+The worker file exports its definition directly:
 
 ```ts
-import { pipe, plugin, step } from "jsr:@fifo/convee";
-import { parallel, workerPool, workerRegistry } from "jsr:@fifo/convee/workers";
+// word-count.worker.ts
+import { worker } from "jsr:@fifo/convee/workers";
 
-const registry = workerRegistry({
-  tasks: {
-    length: () => (text: string) => text.length,
-    double: () => step((n: number) => n * 2),
-    label: () => pipe([(id: number) => `document:${id}`]),
+export default worker(
+  (text: string) => text.trim().split(/\s+/).filter(Boolean).length,
+  { module: import.meta.url },
+);
+```
+
+A different worker can wrap a native pipeline, with its own inner plugins:
+
+```ts
+// title.worker.ts
+import { pipe } from "jsr:@fifo/convee";
+import { worker } from "jsr:@fifo/convee/workers";
+
+export default worker(
+  pipe([(text: string) => text.trim(), (text: string) => text.slice(0, 40)]),
+  { module: import.meta.url },
+);
+```
+
+The caller imports those objects. There are no task names or registry generics:
+
+```ts
+// documents.ts
+import { parallel } from "jsr:@fifo/convee/workers";
+import wordCount from "./word-count.worker.ts";
+import title from "./title.worker.ts";
+
+export const processDocuments = parallel({
+  workers: {
+    words: { worker: wordCount, count: 3 },
+    titles: { worker: title, count: 4 },
   },
-  plugins: {
-    offset: (options: { amount: number }) =>
-      plugin().onOutput((value: number) => value + options.amount),
-  },
+  split: ({ words, titles }, documents: string[]) =>
+    documents.map((text) => [words.job(text), titles.job(text)] as const),
+  join: (rows) => rows.map(([count, title]) => ({ count, title })),
 });
-export default registry;
 
-if (import.meta.main) {
-  const workers = workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 7,
-    pipelines: {
-      measure: {
-        steps: ["length", "double"],
-        plugins: [{ name: "offset", options: { amount: 1 } }],
-      },
-    },
-  });
-
-  const processDocument = parallel({
-    workers,
-    split: (text: string) =>
-      [
-        workers.job("measure", [text]),
-        workers.job("label", [42]),
-      ] as const,
-    // Inferred as a number followed by a string, even with out-of-order completion.
-    join: ([length, label]) => ({ length, label }),
-  });
-
-  const workflow = pipe([
-    step((text: string) => text.trim()),
-    processDocument,
-  ]);
-
-  try {
-    console.log(await workflow(" hello "));
-    // { length: 11, label: "document:42" }
-  } finally {
-    await workers.close();
-  }
-}
+const output = await processDocuments(["Hello world", "Another document"]);
+// [{ count: 2, title: "Hello world" }, { count: 2, title: "Another document" }]
 ```
 
-For a separate registry file, use a type-only import in the caller:
-`import type registry from "./worker-registry.ts"`. The curried
-`workerPool.for<typeof registry>()` binds that contract while inferring recipe
-and role literals from the following configuration. TypeScript checks task
-names, exact argument tuples, adjacent recipe links, plugin options and plugin
-input/output contracts. `workers.job()` retains each task's type in mixed
-tuples; homogeneous `.map()` batches retain their element type.
+`words.job` accepts exactly the word-count function's arguments. IntelliSense
+knows each group and `join` infers `count: number` and `title: string`. Keep
+`as const` on heterogeneous tuple rows: it preserves positional types instead of
+widening each position to a union. Nested arrays and readonly tuples retain
+their shape, including empty arrays. Splits must be dense, acyclic arrays of
+this parallel definition's jobs, nested at most 256 arrays deep.
 
-The module URL and its imported type must describe the same registry. Runtime
-checks validate names, structure, routing and cloneability; TypeScript types are
-erased, so arbitrary external JSON also needs application-defined value/schema
-validation. Factories should validate externally supplied options as needed.
+Counts are independent capacities. Three word-count workers and four title
+workers can each run their group's jobs as slots become available. They do not
+run in pairs or wait for the matching row. Rows associate **results**, not
+worker schedules. A group with two jobs uses at most two active slots,
+regardless of its configured count; twenty jobs queue behind the configured
+capacity. There is no capacity borrowing between groups. `join` runs once after
+all admitted jobs and their caller-side finalizers finish.
 
-Registered tasks can be plain functions or existing callable steps/pipelines.
-Factories must synchronously return a fresh definition for each construction;
-the actual job functions can be async. Recipes compose registered tasks,
-including registered nested pipelines, using normal Convee tuple transport. They
-cannot refer recursively to other configured recipes. Returning an object from
-`join` keeps an array-valued result together as one argument for the next
-pipeline child.
+Importing a worker definition does not start workers or execute its callable.
+The definition module and its dependencies do evaluate in both environments, so
+keep module initialization safe in both. `import.meta.url` identifies the file
+from inside that file; this standard JavaScript value is supplied once in the
+worker definition, never repeated by callers. Functions and closures are loaded
+from modules, not serialized into messages. Export one worker definition as the
+default of each worker file.
 
-### Plugin placement and worker roles
+### Three plugin scopes
 
-Recipe `plugins` surround the complete assembled pipeline. A child can instead
-be `{ task: "double", id: "adjusted", plugins: [{ name: "increment" }] }`.
-Repeated task names need different node IDs. Plugins attached through recipes
-must be untargeted: their placement supplies the scope. Existing pipelines
-returned by factories retain their own internal targeting and lifecycle.
+```ts
+import { plugin } from "jsr:@fifo/convee";
+import { parallel } from "jsr:@fifo/convee/workers";
+import wordCount from "./word-count.worker.ts";
 
-Use `roles` instead of `size` for different worker setups. For example, this
-configuration fragment allocates seven workers with two distinct roles:
-
-```json
-{
-  "roles": {
-    "normal": { "size": 6, "tasks": ["measure", "label"] },
-    "audited": {
-      "size": 1,
-      "tasks": ["measure"],
-      "plugins": {
-        "measure": [{ "name": "offset", "options": { "amount": 10 } }]
-      }
-    }
-  }
-}
+const checked = wordCount.use(
+  plugin().onInput((text: string) => text.trim()).onError(() => 0),
+);
+const countDocuments = parallel({
+  workers: { words: { worker: checked, count: 3 } },
+  split: ({ words }, documents: string[]) =>
+    documents.map((text) => words.job(text)),
+  join: (counts) => counts.reduce((sum, count) => sum + count, 0),
+}).use(plugin().onFinally(() => console.log("Batch finished")));
 ```
 
-Jobs then select a role explicitly, such as
-`workers.job("measure", [text], { role: "audited" })`. This prevents a scheduler
-choice from changing which plugins execute. Role plugins append around the
-selected task/recipe; each role can expose a different set of registered tasks
-or configured pipelines. A single role named `default` permits omitted routing.
+- Plugins attached to the **inner step or pipeline** execute inside the worker.
+- `wordCount.use(plugin)` returns a new definition whose plugins wrap **each job
+  in the caller**. Input hooks precede dispatch; output, error and finally hooks
+  run after the worker responds or fails. The original definition is unchanged.
+  Shared plugin objects can receive concurrent calls.
+- `parallel(...).use(plugin)` wraps the **whole invocation**, including split,
+  admission, job aggregation and join, using the ordinary mutable Step API.
 
-Definitions are assembled once per worker configuration and reused. Each job
-gets a fresh local Convee run context, optionally seeded through the job's
-`context: { seed, capture }` option. Capture defaults to `none` in workers. The
-caller's live context and plugin objects are not sent across the boundary, and
-worker context writes do not merge back automatically. Mutable state captured by
-a factory or plugin remains worker-local state across jobs; use invocation
-context for temporary state.
+All three follow native Convee phase and recovery semantics. Body errors can be
+recovered; input/output hook failures do not become extra body-recovery passes.
+Caller finalizers run after remote failures, including crashes/timeouts. Hard
+termination cannot guarantee worker-local finalizers or undo external effects.
 
-### Completion, failures and resource ownership
+### Invocation-owned and persistent lifetimes
 
-- `ready()` awaits initialization of every worker. Invalid assembly fails before
-  any job runs. A role only constructs its selected tasks.
-- `run(job)` returns that job's value. `settle(jobs)` returns ordered
-  `{ status: "fulfilled", value }` / `{ status: "rejected", error }` outcomes.
-- `parallel` defaults to `mode: "all"`: all admitted jobs settle before `join`,
-  or a `WorkerError` with code `WRK_BATCH` reaches the outer step's error hooks.
-  Its `meta.failures` and `AggregateError` cause retain individual failures.
-- With `mode: "collect"`, `join` receives those ordered outcomes and chooses the
-  result. Admission/configuration errors still reject the whole invocation.
-  Empty submissions call `join([])` without starting workers.
-- Ordinary task errors leave the pool usable. Remote errors have explicit
-  name/message/stack/code reports in `WorkerError.meta.remote`; original Error
-  identities, prototypes and arbitrary custom properties are not reconstructed.
-- Worker crashes, malformed replies, startup failures or execution timeouts stop
-  the pool and reject outstanding jobs. Jobs are never automatically retried.
-  Create a new pool when recovering from infrastructure failure.
-- `close()` stops admission, drains accepted work, then terminates workers. If a
-  custom transport throws during cleanup, cleanup continues for the other
-  workers and `close()` rejects with `WRK_CRASH`. `terminate()` stops them
-  immediately. Hard termination cannot guarantee worker-local finalizers or undo
-  side effects. The caller's ordinary Convee finalizers still run as its step
-  settles.
+Ordinary `parallel` starts fresh resources for each call and terminates them
+before that call settles, on success or failure. It has no `close()` method.
+Concurrent calls own independent workers and admission budgets. Groups start
+lazily when dispatched; an empty split calls join without starting any worker.
 
-Pool capacity is shared across simultaneous invocations: `size: 7` creates at
-most seven workers for that pool. `maxPending` bounds accepted jobs, including
-running jobs (default 1024). A batch exceeding capacity is rejected before any
-of its jobs are admitted. Initialization and per-dispatched-job timeouts default
-to 10000 ms and 30000 ms; set `startupTimeoutMs` and `timeoutMs` explicitly for
-longer work. Queue waiting is not part of the execution timeout.
+For intentional reuse across calls, own a `persistentParallel`:
 
-Configuration and admitted arguments are snapshotted with structured cloning;
-messages/results cross a structured-clone boundary as well. Functions and
-closures must stay in modules. This version has no transfer-list API. Native
-`SharedArrayBuffer` sharing retains its normal shared-memory semantics and needs
-application synchronization. Worker reuse amortizes startup, while each worker
-still retains its JavaScript environment and every job incurs transport costs.
-No workload-independent speedup is promised.
+```ts
+import { persistentParallel } from "jsr:@fifo/convee/workers";
+import wordCount from "./word-count.worker.ts";
+
+await using counter = persistentParallel({
+  workers: { words: { worker: wordCount, count: 3 } },
+  split: ({ words }, documents: string[]) =>
+    documents.map((text) => words.job(text)),
+  join: (counts) => counts,
+  reopenOnUse: true,
+  idleTimeoutMs: 30_000,
+});
+await counter.ready(); // Optional: warm every configured instance.
+await counter.step(["One document"]);
+await counter.step(["Another document"]); // Same generation and capacities.
+await counter.close(); // Drain complete invocations, then release workers.
+await counter.step(["Later work"]); // Fresh generation because reopenOnUse is true.
+// Scope exit permanently disposes counter, including on return or throw.
+```
+
+`.step` is the ordinary Step you can compose into pipelines. The owner controls
+its lifetime:
+
+| Operation                   | Behavior                                                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ready()`                   | Warm all groups; otherwise workers start lazily.                                                                                                                    |
+| `close()`                   | Reject new work, drain accepted invocations through caller hooks and join, then terminate transports. Terminal by default.                                          |
+| `reopenOnUse: true`         | A call after completed close starts a fresh generation. Calls during draining still fail.                                                                           |
+| `idleTimeoutMs`             | Optional; disabled when omitted. Starts after the last full invocation finishes and applies the same close policy. Pair with reopenOnUse for reusable idle windows. |
+| `dispose()` / `await using` | Graceful, permanent close, including for a step retained outside the scope.                                                                                         |
+| `terminate()`               | Immediate transport shutdown and permanent closure. Caller hooks already running may still finish.                                                                  |
+
+`await using` is optional; explicit `try/finally { await owner.dispose(); }`
+provides equivalent ownership. A definition created inside a function has a new
+lifetime on every function call. Garbage collection cannot provide reliable
+cleanup. Call close/dispose from outside an active invocation, not by awaiting
+its own owner from a hook or join, which would wait for itself to finish.
+Cleanup attempts every transport; failed cleanup is reported and never silently
+reopens that owner.
+
+Worker module/closure state persists across jobs on the same instance. Separate
+instances do not share that state, and a replacement/reopened generation starts
+fresh. Do not rely on routing a later job to the same instance. Per-job Convee
+context is always fresh.
+
+### Results, errors and context
+
+The default `mode: "all"` waits for every admitted job's full caller lifecycle.
+Unrecovered failures skip join and produce `WRK_BATCH`; `meta.failures` and its
+`AggregateError` cause retain individual errors. Successful job recovery counts
+as a fulfilled result. Use collect to handle mixed outcomes yourself:
+
+```ts
+import { parallel } from "jsr:@fifo/convee/workers";
+import wordCount from "./word-count.worker.ts";
+
+const collectCounts = parallel({
+  workers: { words: { worker: wordCount, count: 2 } },
+  mode: "collect",
+  split: ({ words }, texts: string[]) =>
+    texts.map((text) =>
+      words.job(text).withContext({
+        seed: { requestId: "req-42" },
+        capture: "none",
+      })
+    ),
+  join: (outcomes) =>
+    outcomes.map((outcome) =>
+      outcome.status === "fulfilled"
+        ? outcome.value
+        : { error: outcome.error.message }
+    ),
+});
+```
+
+Collect preserves the same nested shape, replacing each job with a typed
+`{ status: "fulfilled", value }` or `{ status: "rejected", error }`. Admission
+and split errors reject the whole invocation even in collect mode. A join error
+enters the outer Step's error/finally lifecycle.
+
+`.withContext({ seed, capture })` supplies explicit cloneable data to the fresh
+worker-local context. Capture defaults to `none`. The caller's live context and
+plugins are not copied, and worker state changes/history do not merge back. Use
+normal function syntax and native `this.context()` inside the worker when
+accessing that context.
+
+Remote errors provide bounded, data-only name, message, stack, code, domain,
+source, metadata and cause diagnostics through `WorkerError.meta.remote`.
+Prototypes, identity and arbitrary properties are not recreated. Infrastructure
+errors carry group, worker and job/path identity when available. Ordinary task
+exceptions do not poison the worker.
+
+### Capacity and recovery
+
+`maxPending` defaults to 1024 and bounds all admitted job leaves, including jobs
+still in caller input/output/error/finally hooks. A persistent generation shares
+one limit across groups and overlapping invocations. A complete batch is
+validated, snapshotted and admitted atomically before any job hook runs; a batch
+that does not fit rejects with `WRK_CAPACITY` instead of partially executing.
+Released slots can accept later batches while other jobs remain active.
+
+Each group accepts `startupTimeoutMs` (default 10000), `timeoutMs` (default
+30000), and `maxRestarts` (default 2; zero disables replacement). Startup
+includes construction, module loading and readiness. Execution timeout runs from
+dispatch to reply, including inner hooks; it excludes queue wait and caller
+hooks.
+
+Initial startup failures fail that group without automatic retry. A later crash,
+protocol failure or execution timeout fails the active job without replaying it,
+awaits termination, then may replace the instance for subsequent queued work.
+Extra start attempts consume one shared budget per group generation, including
+failed replacements. Exhaustion closes that group; collateral jobs fail with
+`WRK_UNAVAILABLE`. Other groups continue and completed results remain intact. A
+later batch referring to an unavailable group is rejected atomically. A
+successful close/reopen starts a new generation and budget; failures alone do
+not reset it. No automatic job retry is performed because work may have effects.
+
+Arguments and explicit context are snapshotted with structured cloning at
+admission; messages and replies cross the boundary again. Caller input hooks
+must also return cloneable values. There is no implicit transfer list or buffer
+detachment. `SharedArrayBuffer` retains native shared-memory semantics and
+requires application synchronization. Worker startup and transport have real
+costs; persistent reuse amortizes startup, not per-job serialization. No
+workload-independent speedup is promised.
+
+### Runtime and build integration
+
+Built-in transports select Deno module workers, Node/Bun `worker_threads`, or
+browser module workers. Node termination is awaited. There is no fallback that
+quietly executes jobs on the caller thread. Importing the core entrypoint never
+loads worker infrastructure. Each host still needs permission and a loader for
+its application modules; Node/Bun conformance runs against compiled ESM, and
+Deno also exercises TypeScript directly.
+
+Vite applications install the optional integration to emit discoverable worker
+entries in both development and production:
+
+```ts
+import { conveeWorkers } from "jsr:@fifo/convee/workers/vite";
+
+export default { plugins: [conveeWorkers()] }; // vite.config.ts
+```
+
+Use the same worker-file and caller syntax shown above. With a package installed
+through your runtime's package tooling, imports can use `@fifo/convee/workers`
+and `@fifo/convee/workers/vite`. The Vite plugin recognizes named `worker`
+imports (including aliases) and the literal `{ module: import.meta.url }`
+options. Keep this syntax in the worker file; arbitrary re-export wrappers and
+namespace imports are not build entry declarations. Existing Vite worker plugins
+are retained. Conformance covers development and production in Chromium, Firefox
+and WebKit; WebKit testing is not a Safari-release certification.
+
+For another build tool or runtime, `createWorker(entry, slot)` is a typed
+adapter hook returning an EventTarget transport with `postMessage` and
+`terminate`. The supplied entry is a Convee bootstrap, not the raw definition
+module. Asynchronous construction must honor `slot.signal` and release failed
+setup. A constructor still unresolved at its startup deadline reports
+unconfirmed cleanup rather than hanging indefinitely; late returned transports
+are stopped. Termination must settle only after actual cleanup. Runtime support
+is verified by real consumers, not by the mere existence of a global `Worker`
+constructor.
 
 ## Sync APIs
 

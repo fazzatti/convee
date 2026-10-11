@@ -1,55 +1,64 @@
-import { pipe, plugin, step } from "@convee";
-import { workerRegistry } from "@convee/workers";
-
-export default workerRegistry({
-  tasks: {
-    length: () => (text: string) => text.length,
-    double: () => step((n: number) => n * 2),
-    label: () => pipe([(n: number) => `value:${n}`]),
-    tuple: () => (n: number) => [n, "ok"] as [number, string],
-    pair: () => (n: number, tag: string) => `${tag}:${n}`,
-    fail: () => () => {
-      throw new Error("job failed");
-    },
-    unclonable: () => () => () => 1,
-    count: () =>
-      step(function () {
-        const count = Number(this.context().state.get("count") ?? 0) + 1;
-        this.context().state.set("count", count);
-        return count;
-      }),
-    finalized: () =>
-      step(() => ({ done: false })).use(
-        plugin()
-          .onOutput(function (value: { done: boolean }) {
-            this.context().state.set("value", value);
-            return value;
-          })
-          .onFinally(async function () {
-            await Promise.resolve();
-            (this.context().state.get("value") as { done: boolean }).done =
-              true;
-          }),
-      ),
-    barrier: () => (buffer: SharedArrayBuffer, label: string) => {
-      const values = new Int32Array(buffer);
-      Atomics.add(values, 0, 1);
-      Atomics.notify(values, 0);
-      while (Atomics.load(values, 0) < 2) {
-        if (Atomics.wait(values, 0, 1, 5000) === "timed-out") {
-          throw new Error(
-            "Jobs did not execute concurrently in separate workers.",
-          );
-        }
+import { ConveeError, plugin, step } from "@convee";
+import { worker } from "@convee/workers";
+let counter = 0;
+const instance = crypto.randomUUID();
+export interface Input {
+  readonly operation:
+    | "value"
+    | "state"
+    | "error"
+    | "clone"
+    | "timeout"
+    | "crash"
+    | "context"
+    | "cpu";
+  readonly value?: number;
+}
+export default worker(
+  step(
+    async function (
+      input: Input,
+    ): Promise<{ value: number; instance: string; counter: number }> {
+      counter++;
+      if (input.operation === "error") {
+        throw new ConveeError({
+          domain: "document",
+          source: "consumer",
+          code: "DOCUMENT_EMPTY",
+          message: "No document",
+          meta: { bounded: () => 1 },
+          cause: new Error("empty"),
+        });
       }
-      return label;
+      if (input.operation === "clone") {
+        return {
+          value: 0,
+          instance,
+          counter,
+          uncloneable: () => 0,
+        } as never;
+      }
+      if (input.operation === "crash") {
+        setTimeout(() => {
+          throw new Error("worker crash");
+        }, 0);
+        return await new Promise(() => {});
+      }
+      if (input.operation === "timeout") return await new Promise(() => {});
+      let value = input.value ?? 0;
+      if (input.operation === "context") {
+        value = Number(this.context().state.get("count") ?? 0);
+        this.context().state.set("count", value + 1);
+      }
+      if (input.operation === "cpu") {
+        for (let n = 0; n < 1000000; n++) value = (value + n) % 123457;
+      }
+      return { value, instance, counter };
     },
-  },
-  plugins: {
-    add: (options: { amount: number }) =>
-      plugin().onOutput((n: number) => n + options.amount),
-    prefix: (options: { text: string }) =>
-      plugin().onOutput((text: string) => options.text + text),
-    increment: () => plugin().onInput((n: number) => n + 1),
-  },
-});
+  ).use(
+    plugin().onOutput((
+      value: { value: number; instance: string; counter: number },
+    ) => ({ ...value, value: value.value + 1 })),
+  ),
+  { module: import.meta.url },
+);

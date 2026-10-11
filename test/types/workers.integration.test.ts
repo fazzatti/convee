@@ -1,136 +1,81 @@
 import { pipe, plugin, step } from "@convee";
-import { parallel, type WorkerOutcome, workerPool } from "@convee/workers";
-import type registry from "@test/workers/registry.ts";
+import {
+  parallel,
+  persistentParallel,
+  worker,
+  type WorkerOutcome,
+} from "@convee/workers";
 
 export function workerContracts(): void {
-  const pool = workerPool.for<typeof registry>()({
-    module: new URL("../workers/registry.ts", import.meta.url),
-    size: 2,
-    pipelines: {
-      measure: {
-        steps: ["length", "double"],
-        plugins: [{ name: "add", options: { amount: 3 } }],
-      },
-      tagged: { steps: ["tuple", "pair"] },
-      child: {
-        steps: [{ task: "double", plugins: [{ name: "increment" }] }, "label"],
-      },
-    },
+  const words = worker((text: string) => text.length, {
+    module: import.meta.url,
   });
-  const number: Promise<number> = pool.run(pool.job("measure", ["hello"]));
-  const text: Promise<string> = pool.run(pool.job("tagged", [3]));
-  const process = parallel({
-    workers: pool,
-    split: (text: string) =>
-      [pool.job("measure", [text]), pool.job("label", [1])] as const,
-    join: ([number, text]) => ({
-      number: number.toFixed(),
-      text: text.toUpperCase(),
-    }),
-  }).use(plugin().onFinally(async () => {}));
-  const flow = pipe([step((text: string) => text.trim()), process]);
-  const result: Promise<{ number: string; text: string }> = flow("hello");
-  const collect = parallel({
-    workers: pool,
+  const title = worker(step((text: string, prefix: string) => prefix + text), {
+    module: import.meta.url,
+  });
+  const pipeline = worker(
+    pipe([step((n: number) => n + 1), step((n: number) => String(n))]),
+    { module: import.meta.url },
+  );
+  const jobs = parallel({
+    workers: {
+      words: { worker: words, count: 3 },
+      title: { worker: title, count: 4 },
+    },
+    split: ({ words, title }, documents: string[]) =>
+      documents.map((text) =>
+        [words.job(text), title.job(text, "Title: ")] as const
+      ),
+    join: (values) =>
+      values.map(([count, title]) => ({
+        count: count.toFixed(),
+        title: title.toUpperCase(),
+      })),
+  });
+  const result: Promise<{ count: string; title: string }[]> = jobs(["abc"]);
+  const flow = pipe([step((text: string): [string[]] => [[text]]), jobs]);
+  const composed: Promise<{ count: string; title: string }[]> = flow("abc");
+  const owner = persistentParallel({
+    workers: { process: { worker: pipeline, count: 1 } },
     mode: "collect",
-    split: () => [pool.job("length", ["a"])] as const,
-    join: ([result]): WorkerOutcome<number> => result,
+    reopenOnUse: true,
+    idleTimeoutMs: 50,
+    split: ({ process }, n: number) =>
+      [
+        process.job(n).withContext({
+          seed: { requestId: "r" },
+          capture: "all",
+        }),
+      ] as const,
+    join: ([outcome]): WorkerOutcome<string> => outcome,
   });
-  const outcome: Promise<WorkerOutcome<number>> = collect();
-  const map = parallel({
-    workers: pool,
-    split: (texts: string[]) => texts.map((text) => pool.job("length", [text])),
-    join: (values) => values.reduce((sum, n) => sum + n, 0),
-  });
-  const sum: Promise<number> = map(["a"]);
-  void [number, text, result, outcome, sum];
-  // @ts-expect-error Unknown remote task.
-  pool.job("missing", []);
-  // @ts-expect-error Recipe input is inherited from its first task.
-  pool.job("measure", [123]);
-  // @ts-expect-error Exact argument tuple is retained.
-  pool.job("pair", [123]);
-  // @ts-expect-error Outer parallel Step input remains a string.
-  process(123);
-  // @ts-expect-error Typed successful output cannot be treated as a string.
-  const wrong: Promise<string> = pool.run(pool.job("double", [1]));
-  void wrong;
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    // @ts-expect-error Unknown recipe child.
-    pipelines: { bad: { steps: ["missing"] } },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    // @ts-expect-error Numeric output cannot feed a string-input task.
-    pipelines: { bad: { steps: ["double", "length"] } },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    pipelines: {
-      bad: {
-        steps: ["double"],
-        // @ts-expect-error Plugin options are inferred from its factory.
-        plugins: [{ name: "add", options: { amount: "x" } }],
-      },
+  const outcome: Promise<WorkerOutcome<string>> = owner.step(2);
+  const hooks = plugin().onOutput((n: number) => n + 1);
+  words.use(hooks);
+  // @ts-expect-error Worker plugin output must match the callable.
+  words.use(plugin().onOutput((value: string) => value.toUpperCase()));
+  // @ts-expect-error Wrong outer input.
+  jobs(12);
+  // @ts-expect-error Successful output is not a number.
+  const wrong: Promise<number> = jobs([]);
+  parallel({
+    workers: { words: { worker: words, count: 1 } },
+    split: (groups, text: string) => {
+      // @ts-expect-error Group names are validated and offered by IntelliSense.
+      groups.missing.job(text);
+      // @ts-expect-error Arguments are inferred from the worker function.
+      groups.words.job(1);
+      // @ts-expect-error Extra arguments are rejected.
+      groups.words.job(text, "extra");
+      return [groups.words.job(text)] as const;
+    },
+    join: ([number]) => {
+      // @ts-expect-error The first job returns number, never string.
+      number.toUpperCase();
+      return number.toFixed();
     },
   });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    pipelines: {
-      bad: {
-        steps: ["label"],
-        // @ts-expect-error Plugin output contract must match the whole recipe.
-        plugins: [{ name: "add", options: { amount: 1 } }],
-      },
-    },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    pipelines: {
-      // @ts-expect-error Child plugin input must match that child's arguments.
-      bad: { steps: [{ task: "length", plugins: [{ name: "increment" }] }] },
-    },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    size: 1,
-    // @ts-expect-error Recipe names must not shadow registered tasks.
-    pipelines: { double: { steps: ["double"] } },
-  });
-  const roles = workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    roles: {
-      normal: { size: 1, tasks: ["double"] },
-      audit: {
-        size: 1,
-        plugins: { double: [{ name: "add", options: { amount: 2 } }] },
-      },
-    },
-  });
-  roles.job("double", [1], { role: "audit" });
-  // @ts-expect-error Heterogeneous pools require explicit routing.
-  roles.job("double", [1]);
-  // @ts-expect-error Unknown role.
-  roles.job("double", [1], { role: "other" });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    // @ts-expect-error Unknown role task selection.
-    roles: { test: { size: 1, tasks: ["missing"] } },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    // @ts-expect-error Role plugin targets must name registered tasks or recipes.
-    roles: { test: { size: 1, plugins: { missing: [{ name: "increment" }] } } },
-  });
-  workerPool.for<typeof registry>()({
-    module: new URL(import.meta.url),
-    // @ts-expect-error Role plugins must match the selected task's contract.
-    roles: { test: { size: 1, plugins: { length: [{ name: "increment" }] } } },
-  });
+  // @ts-expect-error Worker definitions require a callable, not an object registry.
+  worker({ tasks: {} }, { module: import.meta.url });
+  void [result, composed, outcome, wrong];
 }

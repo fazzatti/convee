@@ -54,6 +54,17 @@ describe("README example tooling", () => {
       [{ source: 'import { assert } from "jsr:@std/assert";\n', line: 2 }],
     );
   });
+  it("supports named worker modules and the Vite entrypoint without path traversal", () => {
+    const [named] = readmeExamples(
+      '```ts\n// word-count.worker.ts\nimport { conveeWorkers } from "jsr:@fifo/convee/workers/vite";\n```',
+    );
+    assertEquals(named.file, "word-count.worker.ts");
+    assertEquals(named.source.includes('"@convee/workers/vite"'), true);
+    assertEquals(
+      readmeExamples("```ts\n// ../escape.ts\n```")[0].file,
+      undefined,
+    );
+  });
 
   it("example configuration only relaxes unused teaching declarations", () => {
     const options = Object.freeze({

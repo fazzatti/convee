@@ -15,8 +15,16 @@ function transform(code: string, id = "/app/document.worker.js") {
 const imports = 'import { worker as define, parallel } from "@convee/workers";';
 describe("Vite worker build integration", () => {
   it("retains existing worker build plugins and installs the bootstrap loader", () => {
-    const empty = hook("config", {}) as { worker: { plugins(): unknown[] } };
+    const empty = hook("config", {}) as {
+      worker: { plugins(): unknown[] };
+      optimizeDeps: { exclude: string[] };
+    };
     assertEquals(empty.worker.plugins().length, 1);
+    assertEquals(empty.optimizeDeps.exclude, [
+      "@fifo/convee",
+      "@jsr/fifo__convee",
+      "@convee",
+    ]);
     const configured = hook("config", {
       worker: { plugins: () => [{ name: "existing" }] },
     }) as typeof empty;
@@ -51,6 +59,21 @@ describe("Vite worker build integration", () => {
     );
     assertEquals(output.map, null);
     parse(output.code, { ecmaVersion: "latest", sourceType: "module" });
+  });
+  it("recognizes installed npm, JSR and local worker entrypoints", () => {
+    for (
+      const specifier of [
+        "@fifo/convee/workers",
+        "@jsr/fifo__convee/workers",
+        "jsr:@fifo/convee/workers",
+        "@convee/workers",
+      ]
+    ) {
+      const output = transform(
+        `import { worker } from "${specifier}"; export default worker(() => 1, { module: import.meta.url });`,
+      )!;
+      assert(output.code.includes("entry: __convee_worker_entry_"), specifier);
+    }
   });
   it("does not reinterpret unrelated functions, dynamic options or non-module URLs", () => {
     for (

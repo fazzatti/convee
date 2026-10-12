@@ -854,6 +854,12 @@ loads worker infrastructure. Each host still needs permission and a loader for
 its application modules; Node/Bun conformance runs against compiled ESM, and
 Deno also exercises TypeScript directly.
 
+The `/workers/entry` subpath is a dedicated-worker bootstrap for runtime and
+build integrations. Let the built-in transport load it, or use its resolved URL
+with a custom transport. Do not import it on the caller thread. Published npm
+packages include its JavaScript and host dependencies; source consumers use the
+matching TypeScript modules.
+
 Vite applications install the optional integration to emit discoverable worker
 entries in both development and production:
 
@@ -865,12 +871,14 @@ export default { plugins: [conveeWorkers()] }; // vite.config.ts
 
 Use the same worker-file and caller syntax shown above. With a package installed
 through your runtime's package tooling, imports can use `@fifo/convee/workers`
-and `@fifo/convee/workers/vite`. The Vite plugin recognizes named `worker`
-imports (including aliases) and the literal `{ module: import.meta.url }`
-options. Keep this syntax in the worker file; arbitrary re-export wrappers and
-namespace imports are not build entry declarations. Existing Vite worker plugins
-are retained. Conformance covers development and production in Chromium, Firefox
-and WebKit; WebKit testing is not a Safari-release certification.
+and `@fifo/convee/workers/vite`, or the JSR npm package's corresponding
+`@jsr/fifo__convee` subpaths. The Vite plugin recognizes named `worker` imports
+(including aliases) and the literal `{ module: import.meta.url }` options. Keep
+this syntax in the worker file; arbitrary re-export wrappers and namespace
+imports are not build entry declarations. Existing Vite worker plugins are
+retained, and SDK-owned steps and pipelines share the worker host's Convee
+runtime. Conformance covers development and production in Chromium, Firefox and
+WebKit; WebKit testing is not a Safari-release certification.
 
 For another build tool or runtime, `createWorker(entry, slot)` is a typed
 adapter hook returning an EventTarget transport with `postMessage` and

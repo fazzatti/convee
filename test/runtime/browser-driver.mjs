@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { build, createServer, preview } from "vite";
 import { chromium, firefox, webkit } from "playwright";
 const location = new URL("../../.artifacts/runtime-consumer/", import.meta.url);
@@ -7,14 +7,43 @@ const { conveeWorkers } = await import(
   new URL("./package/workers/vite.js", location).href
 );
 const root = fileURLToPath(location);
+// Model an installed SDK that exposes native Convee steps. Vite must prebundle
+// the SDK without embedding a second copy of Convee's private context registry.
+const sdk = new URL("./node_modules/@convee-fixture/sdk/", location);
+await mkdir(sdk, { recursive: true });
+await writeFile(
+  new URL("package.json", sdk),
+  JSON.stringify({
+    name: "@convee-fixture/sdk",
+    version: "1.0.0",
+    type: "module",
+    exports: "./index.js",
+  }),
+);
+await writeFile(
+  new URL("index.js", sdk),
+  'export { step } from "@fifo/convee";\n',
+);
+const registryPath = new URL("./browser.worker.js", location);
+const registry = await readFile(registryPath, "utf8");
+if (!registry.includes("pipe, plugin, step")) {
+  throw new Error("Missing step import for the installed-SDK worker fixture");
+}
+await writeFile(
+  registryPath,
+  registry.replace("pipe, plugin, step", "pipe, plugin") +
+    '\nimport { step } from "@convee-fixture/sdk";\n',
+);
 const config = {
   configFile: false,
   root,
   clearScreen: false,
   logLevel: "warn",
   plugins: [conveeWorkers()],
+  optimizeDeps: { include: ["@convee-fixture/sdk"] },
   resolve: {
     alias: {
+      "@fifo/convee": fileURLToPath(new URL("./package/index.js", location)),
       "@convee/workers": fileURLToPath(
         new URL("./package/workers/index.js", location),
       ),

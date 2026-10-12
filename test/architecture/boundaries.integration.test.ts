@@ -114,6 +114,7 @@ describe("Architecture boundaries", () => {
     assertEquals(config.exports, {
       ".": "./src/index.ts",
       "./workers": "./src/workers/index.ts",
+      "./workers/entry": "./src/workers/entry.ts",
       "./workers/vite": "./src/workers/vite.ts",
       "./wasm": "./src/wasm/index.ts",
       "./wasm/jco": "./src/wasm/jco.ts",

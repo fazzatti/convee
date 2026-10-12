@@ -1,4 +1,5 @@
 import {
+  type ConcurrencyErrorMeta,
   concurrent,
   type ConcurrentJob,
   type ConcurrentOutcome,
@@ -22,6 +23,7 @@ export function concurrentContracts(): void {
     join: () => 0,
   });
   const unit = concurrent({
+    capacityScope: "invocation",
     tasks: {
       count: { run: (text: string) => text.length, concurrency: 3 },
       label: step((text: string, prefix: string) => prefix + text),
@@ -30,9 +32,14 @@ export function concurrentContracts(): void {
         (value: number) => value.toString(),
       ]),
     },
-    split: ({ tasks, signal }, text: string, prefix: string = "title:") => {
+    split: (tasks, text: string, prefix: string = "title:") => {
+      const signal = tasks.count.signal;
       const abort: AbortSignal = signal;
       void abort;
+      // @ts-expect-error Builders are direct; there is no extra tasks wrapper.
+      tasks.tasks.count.job(text);
+      // @ts-expect-error Invocation signals cannot be replaced by a consumer.
+      tasks.count.signal = new AbortController().signal;
       // @ts-expect-error Task names are checked and available to IntelliSense.
       tasks.missing.job(text);
       // @ts-expect-error Job arguments follow the exact underlying callable.
@@ -89,7 +96,7 @@ export function concurrentContracts(): void {
   const collected = concurrent({
     tasks: { count: (s: string) => s.length },
     mode: "collect",
-    split: ({ tasks }, text: string) => [tasks.count.job(text)] as const,
+    split: (tasks, text: string) => [tasks.count.job(text)] as const,
     join: ([result]): ConcurrentOutcome<number> => {
       if (result.status === "fulfilled") {
         result.value.toFixed();
@@ -107,11 +114,32 @@ export function concurrentContracts(): void {
   const outcomes: Promise<ConcurrentOutcome<number>> = collected("abc");
   const mapped = concurrent({
     tasks: { length: (text: string) => Promise.resolve(text.length) },
-    split: ({ tasks }, texts: string[]) =>
+    split: (tasks, texts: string[]) =>
       texts.map((text) => tasks.length.job(text)),
     join: (numbers) => numbers.map((n) => n.toFixed()),
   });
   const strings: Promise<string[]> = mapped(["abc"]);
+  concurrent({
+    tasks: {},
+    // @ts-expect-error Capacity ownership accepts only explicit supported scopes.
+    capacityScope: "global",
+    split: () => [],
+    join: () => 0,
+  });
+  const named = concurrent({
+    capacityScope: "shared",
+    tasks: { signal: (signal: AbortSignal) => signal, tasks: () => "ok" },
+    split: ({ signal, tasks }) =>
+      [signal.job(signal.signal), tasks.job()] as const,
+    join: ([signal, text]) => {
+      const exact: [AbortSignal, string] = [signal, text];
+      return exact;
+    },
+  });
+  const meta: ConcurrencyErrorMeta = { failures: [new Error("task")] };
+  const failures: readonly Error[] | undefined = meta.failures;
+  // @ts-expect-error Failure diagnostics cannot be changed through the public type.
+  meta.failures?.push(new Error("extra"));
   concurrent({
     tasks: {},
     split: () => [] as const,
@@ -125,7 +153,7 @@ export function concurrentContracts(): void {
       optional: (prefix: string, count: number = 1, ...values: number[]) =>
         [prefix, count, values] as const,
     },
-    split: ({ tasks }) =>
+    split: (tasks) =>
       [tasks.optional.job("a"), tasks.optional.job("b", 2, 3, 4)] as const,
     join: ([first, second]) => {
       const n: number = first[1];
@@ -133,5 +161,15 @@ export function concurrentContracts(): void {
       return [n, s] as const;
     },
   });
-  void [forged, exact, output, compatible, final, outcomes, strings];
+  void [
+    forged,
+    exact,
+    output,
+    compatible,
+    final,
+    outcomes,
+    strings,
+    named,
+    failures,
+  ];
 }

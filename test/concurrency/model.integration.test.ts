@@ -27,6 +27,7 @@ describe("Concurrent scheduling model", () => {
       return unit;
     };
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 3,
       maxPending: 256,
       mode: "collect",
@@ -34,7 +35,7 @@ describe("Concurrent scheduling model", () => {
         a: { run: make(0), concurrency: 1 },
         b: { run: make(1), concurrency: 2 },
       },
-      split: ({ tasks }, batch: number) =>
+      split: (tasks, batch: number) =>
         [0, 1, 2].map((offset) => {
           const id = batch * 3 + offset;
           return (id % 2 ? tasks.a : tasks.b).job(id);

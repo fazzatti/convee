@@ -520,8 +520,8 @@ const summarize = concurrent({
   },
   concurrency: 4,
   maxPending: 100,
-  split: ({ tasks }, text: string) =>
-    [tasks.length.job(text), tasks.title.job(text)] as const,
+  split: ({ length, title }, text: string) =>
+    [length.job(text), title.job(text)] as const,
   join: ([length, title]) => ({ length, title }),
 });
 
@@ -536,11 +536,14 @@ supported. Each descriptor occurrence schedules one invocation. Descriptors
 belong to one split invocation and cannot be reused across calls.
 
 The global `concurrency` limit defaults to 8. A task's optional limit operates
-within that global capacity. **Limits are shared across calls on the same
-definition**, with FIFO dispatch among eligible jobs. `maxPending` defaults to
-1,024 active-plus-queued jobs; a batch that will not fit rejects atomically with
-`CNC_CAPACITY`. This is bounded admission, not wait-for-space backpressure or a
-requests-per-second rate limit. No task is retried automatically.
+within that global capacity, with FIFO dispatch among eligible jobs. Each
+invocation owns its limits by default, like `parallel`. Set
+`capacityScope: "shared"` to share limits across overlapping calls on the same
+definition; separate definitions always have independent budgets. `maxPending`
+defaults to 1,024 active-plus-queued jobs within the selected scope; a batch
+that will not fit rejects atomically with `CNC_CAPACITY`. This is bounded
+admission, not wait-for-space backpressure or a requests-per-second rate limit.
+No task is retried automatically.
 
 Tasks retain their slots through native input/output/error/finally hooks. Hooks
 attached to the concurrent step wrap the whole split/tasks/join execution; its
@@ -551,10 +554,12 @@ need their own ownership rules. Avoid awaiting recursive work submitted to the
 same exhausted scheduler.
 
 Default `mode: "all"` waits for every task to finish, then either joins ordered
-values or rethrows the first original task error in split order. It does not
-reject early like `Promise.all`. Use `mode: "collect"` to join ordered
-`{ status: "fulfilled", value }` / `{ status: "rejected", error }` outcomes,
-including multiple failures and failures from task finalizers.
+values or throws `ConcurrencyError` with code `CNC_BATCH`. Its `meta.failures`
+and `AggregateError` cause contain every original task error in split order,
+including finalizer failures. It does not reject early like `Promise.all`. Use
+`mode: "collect"` to join ordered `{ status: "fulfilled", value }` /
+`{ status: "rejected", error }` outcomes, including multiple failures and
+failures from task finalizers.
 
 ### Cooperative cancellation and deadlines
 
@@ -569,8 +574,7 @@ const readPage = concurrent({
     },
   },
   timeoutMs: 5_000,
-  split: ({ tasks, signal }, url: string) =>
-    [tasks.read.job(url, signal)] as const,
+  split: ({ read }, url: string) => [read.job(url, read.signal)] as const,
   join: ([text]) => text,
 });
 
@@ -582,7 +586,8 @@ const text = await readPage.runWith(
 console.log(text);
 ```
 
-Pass the split scope's derived signal to operations that support cancellation.
+Each builder exposes the same derived invocation signal. Pass it explicitly to
+operations that support cancellation; task names such as `signal` remain valid.
 An external abort or deadline removes queued jobs, signals running work and
 skips join if it has not started. The outer error/finally lifecycle runs **after
 running tasks finish their actual cleanup**. Error plugins can recover

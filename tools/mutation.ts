@@ -17,6 +17,24 @@ for (const file of await sourceFiles()) {
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
   [
+    "concurrency-default-ownership",
+    "src/concurrency/config.ts",
+    'options.capacityScope ?? "invocation"',
+    'options.capacityScope ?? "shared"',
+  ],
+  [
+    "concurrency-shared-ownership",
+    "src/concurrency/concurrent.ts",
+    'config.capacityScope === "shared"',
+    "false",
+  ],
+  [
+    "concurrency-all-failures",
+    "src/concurrency/concurrent.ts",
+    "const errors = outcomes.flatMap",
+    "const errors = outcomes.slice(0, 1).flatMap",
+  ],
+  [
     "concurrency-shared-limit",
     "src/concurrency/scheduler.ts",
     "this.running < this.config.concurrency",

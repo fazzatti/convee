@@ -18,6 +18,7 @@ export interface Setup {
   tasks: readonly TaskSetup[];
   concurrency: number;
   maxPending: number;
+  capacityScope: "invocation" | "shared";
 }
 
 export function positive(
@@ -49,6 +50,7 @@ export function configure(options: {
   maxPending?: number;
   timeoutMs?: number;
   mode?: string;
+  capacityScope?: "invocation" | "shared";
   split: unknown;
   join: unknown;
 }): Setup {
@@ -58,11 +60,14 @@ export function configure(options: {
     !options.tasks || typeof options.tasks !== "object" ||
     Array.isArray(options.tasks) ||
     (options.mode !== undefined && options.mode !== "all" &&
-      options.mode !== "collect")
+      options.mode !== "collect") ||
+    (options.capacityScope !== undefined &&
+      options.capacityScope !== "invocation" &&
+      options.capacityScope !== "shared")
   ) {
     throw new ConcurrencyError(
       "CNC_CONFIG",
-      "Expected named tasks, split, join and an all/collect mode.",
+      "Expected named tasks, split, join, an all/collect mode and an invocation/shared capacity scope.",
     );
   }
   const concurrency = positive(
@@ -98,5 +103,10 @@ export function configure(options: {
         : step(fn, { id: `@concurrent/${name}` }),
     };
   });
-  return { tasks, concurrency, maxPending };
+  return {
+    tasks,
+    concurrency,
+    maxPending,
+    capacityScope: options.capacityScope ?? "invocation",
+  };
 }

@@ -10,7 +10,7 @@ import type { StepInstance, StepPlugin, StepRunOptions } from "@/step/types.ts";
  */
 export type ConcurrentCallable = (...args: never[]) => unknown;
 
-/** Optional capacity dedicated to a named callable within the shared global limit. */
+/** Optional capacity dedicated to a named callable within the selected scope's global limit. */
 export interface ConcurrentTask<
   Fn extends ConcurrentCallable = ConcurrentCallable,
 > {
@@ -43,6 +43,8 @@ export interface ConcurrentJob<Output = unknown> {
 /** Named builders that validate job arguments and retain each callable's result type. */
 export type ConcurrentBuilders<Tasks extends ConcurrentTasks> = {
   readonly [Key in keyof Tasks]: {
+    /** Shared invocation signal; pass explicitly to cooperative tasks. Identical for every builder. */
+    readonly signal: AbortSignal;
     /**
      * Describe a local task invocation without starting it.
      *
@@ -57,13 +59,10 @@ export type ConcurrentBuilders<Tasks extends ConcurrentTasks> = {
   };
 };
 
-/** Per-invocation helpers for constructing jobs and propagating cooperative cancellation. */
-export interface ConcurrentScope<Tasks extends ConcurrentTasks> {
-  /** Builders belonging only to this invocation; do not cache jobs between runs. */
-  readonly tasks: ConcurrentBuilders<Tasks>;
-  /** Derived signal; explicitly pass it to tasks or I/O that support cancellation. */
-  readonly signal: AbortSignal;
-}
+/** Invocation-local task builders passed directly to split, as in worker parallel execution. */
+export type ConcurrentScope<Tasks extends ConcurrentTasks> = ConcurrentBuilders<
+  Tasks
+>;
 
 /** Dense, acyclic nested arrays and tuples of job descriptors, including empty arrays. */
 export type ConcurrentJobTree = readonly (ConcurrentJob | ConcurrentJobTree)[];
@@ -104,8 +103,9 @@ export interface ConcurrentInstance<Input extends unknown[], Output>
    * @param options - Native run settings, external signal and optional deadline.
    * @param input - Exact input tuple supplied to split after outer input hooks.
    * @returns The awaited join result after native output/error/finally hooks.
-   * @throws Native hook/task failures or CNC_CONFIG, CNC_CAPACITY, CNC_ABORTED or
-   * CNC_TIMEOUT. Cancellation is reported only after running tasks finish cleanup.
+   * @throws Native outer hook failures, CNC_BATCH with every task failure, or
+   * CNC_CONFIG, CNC_CAPACITY, CNC_ABORTED or CNC_TIMEOUT. Cancellation is reported
+   * only after running tasks finish cleanup.
    * @remarks Deadlines start after input hooks. A non-cooperative task, split or
    * join can delay completion indefinitely; arbitrary JavaScript is never killed.
    */
@@ -116,18 +116,19 @@ export interface ConcurrentInstance<Input extends unknown[], Output>
 }
 
 /**
- * Callable native step sharing its configured task capacities across all invocations.
+ * Callable native step with invocation-owned capacity unless sharing is explicitly configured.
  *
  * @param input - Input tuple passed through outer hooks to split.
  * @returns The awaited join result after native lifecycle hooks.
- * @throws Unrecovered task/hook failures and structured concurrency configuration,
- * admission, cancellation or timeout errors. All started tasks finish before outer cleanup.
+ * @throws CNC_BATCH aggregates unrecovered task failures. Native outer hook failures
+ * and configuration, admission, cancellation or timeout errors also reject the call.
+ * All started tasks finish before outer cleanup.
  */
 export type ConcurrentStep<Input extends unknown[], Output> =
   & ConcurrentInstance<Input, Output>
   & ((...input: Input) => Promise<Awaited<Output>>);
 
-/** Configuration for typed same-runtime task composition and shared bounded scheduling. */
+/** Configuration for typed same-runtime task composition and explicit capacity ownership. */
 export interface ConcurrentOptions<
   Tasks extends ConcurrentTasks,
   Input extends unknown[],
@@ -137,16 +138,18 @@ export interface ConcurrentOptions<
 > {
   /** Named callables, steps or pipelines; configuration is captured at construction. */
   readonly tasks: Tasks;
-  /** Global active-task limit across calls on this definition; positive integer, default 8. */
+  /** Global active-task limit within the selected capacity scope; positive integer, default 8. */
   readonly concurrency?: number;
-  /** Active plus queued task limit across calls; positive integer, default 1024. */
+  /** Each invocation owns its budget by default. shared explicitly reuses one budget across calls. */
+  readonly capacityScope?: "invocation" | "shared";
+  /** Active plus queued task limit within the selected scope; positive integer, default 1024. */
   readonly maxPending?: number;
   /** Optional positive cooperative split/jobs/join deadline; no timeout by default. */
   readonly timeoutMs?: number;
   /**
    * Create a finite job tree before any task is admitted.
    *
-   * @param scope - Invocation-local builders and cancellation signal.
+   * @param scope - Direct invocation-local builders, each exposing the same cooperative signal.
    * @param input - Native step inputs after input hooks.
    * @returns A dense nested job tree, optionally asynchronously; as const preserves tuples.
    * @throws Failures enter outer error/finally hooks; no task from this split starts.
@@ -169,7 +172,7 @@ export interface ConcurrentOptions<
         : ConcurrentResults<Jobs>
     >,
   ) => Output | Promise<Output>;
-  /** all drains then rethrows the first error in input order; collect joins all outcomes. */
+  /** all drains then throws CNC_BATCH aggregating every failure; collect joins ordered outcomes. */
   readonly mode?: Mode;
   /** Native outer step identity; generated when omitted. */
   readonly id?: string;

@@ -24,7 +24,7 @@ describe("Local concurrent steps", () => {
     const label = pipe([(n: number) => n + 1, (n: number) => `item-${n}`]);
     const unit = concurrent({
       tasks: { double, label, identity: <T>(value: T) => value },
-      split: ({ tasks }, n: number) =>
+      split: (tasks, n: number) =>
         [tasks.double.job(n), [tasks.label.job(n)], []] as const,
       join: ([n, [label], empty]) => ({ n, label, empty }),
     });
@@ -60,7 +60,7 @@ describe("Local concurrent steps", () => {
         },
       },
       mode: "collect",
-      split: ({ tasks }) =>
+      split: (tasks) =>
         [tasks.inspect.job(account, signer), tasks.fail.job()] as const,
       join: (results) => results,
     });
@@ -77,7 +77,7 @@ describe("Local concurrent steps", () => {
     let calls = 0;
     const unit = concurrent({
       tasks: { work: () => ++calls },
-      split: async ({ tasks }) => {
+      split: async (tasks) => {
         const job = tasks.work.job();
         ready.resolve();
         await release.promise;
@@ -105,9 +105,10 @@ describe("Local concurrent steps", () => {
       return name;
     };
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 2,
       tasks: { a: { run: body, concurrency: 1 }, b: body },
-      split: ({ tasks }, batch: number) =>
+      split: (tasks, batch: number) =>
         batch === 1
           ? [tasks.a.job("A1"), tasks.a.job("A2")]
           : [tasks.b.job("B1")],
@@ -153,9 +154,10 @@ describe("Local concurrent steps", () => {
         ),
       );
       const unit = concurrent({
+        capacityScope: "shared",
         concurrency: 1,
         tasks: { inner },
-        split: ({ tasks }, n: number) => [tasks.inner.job(n)],
+        split: (tasks, n: number) => [tasks.inner.job(n)],
         join: ([n]) => n,
       });
       const one = unit(1);
@@ -169,7 +171,7 @@ describe("Local concurrent steps", () => {
     }
   });
 
-  it("runs all-mode cleanup before exposing the first original error in input order", async () => {
+  it("runs all-mode cleanup before aggregating all original errors in input order", async () => {
     const entered = deferred(), release = deferred();
     const first = new Error("first"), second = new Error("second");
     let finalized = false, joined = false;
@@ -188,7 +190,7 @@ describe("Local concurrent steps", () => {
     );
     const unit = concurrent({
       tasks: { inner },
-      split: ({ tasks }) => [tasks.inner.job(1), tasks.inner.job(2)],
+      split: (tasks) => [tasks.inner.job(1), tasks.inner.job(2)],
       join: () => {
         joined = true;
       },
@@ -201,7 +203,13 @@ describe("Local concurrent steps", () => {
     await Promise.resolve();
     assertEquals(settled, false);
     release.resolve();
-    assertStrictEquals(await result, first);
+    const error = await result;
+    assert(error instanceof ConcurrencyError);
+    assertEquals(error.code, "CNC_BATCH");
+    assertEquals(error.meta?.failures, [first, second]);
+    assert(error.cause instanceof AggregateError);
+    assertStrictEquals(error.cause.errors[0], first);
+    assertStrictEquals(error.cause.errors[1], second);
     assert(finalized);
     assertEquals(joined, false);
   });
@@ -211,7 +219,7 @@ describe("Local concurrent steps", () => {
     const unit = concurrent({
       id: "batch",
       tasks: { work: (n: number) => n * 2 },
-      split: ({ tasks }, n: number) => [tasks.work.job(n)],
+      split: (tasks, n: number) => [tasks.work.job(n)],
       join: ([n]) => n,
       plugins: [
         plugin().onFinally(() => {
@@ -254,7 +262,7 @@ describe("Local concurrent steps", () => {
     const unit = concurrent({
       id: "outer",
       tasks: { inner },
-      split: ({ tasks }) => [tasks.inner.job(0), tasks.inner.job(1)],
+      split: (tasks) => [tasks.inner.job(0), tasks.inner.job(1)],
       join: (values) => values,
     });
     const result = unit.runWith({ context: { parent } });
@@ -269,6 +277,7 @@ describe("Local concurrent steps", () => {
     const entered = deferred(), release = deferred();
     const seen: number[] = [];
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 1,
       maxPending: 2,
       tasks: {
@@ -279,19 +288,19 @@ describe("Local concurrent steps", () => {
           return n;
         },
       },
-      split: ({ tasks }, values: number[]) =>
-        values.map((n) => tasks.work.job(n)),
+      split: (tasks, values: number[]) => values.map((n) => tasks.work.job(n)),
       join: (values) => values,
     });
     const first = unit([1, 2]);
     await entered.promise;
-    await assertRejects(
-      () => unit([3]),
-      ConcurrencyError,
-      "admission capacity",
-    );
-    assertEquals(seen, [1]);
+    const rejected = unit([3]).catch((error) => error);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const beforeRelease = [...seen];
     release.resolve();
+    const error = await rejected;
+    assert(error instanceof ConcurrencyError);
+    assertEquals(error.code, "CNC_CAPACITY");
+    assertEquals(beforeRelease, [1]);
     assertEquals(await first, [1, 2]);
     assertEquals(await unit([4]), [4]);
     await assertRejects(() => unit([5, 6, 7]), ConcurrencyError, "maxPending");
@@ -305,6 +314,7 @@ describe("Local concurrent steps", () => {
     const seen: number[] = [];
     let finalized = 0;
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 1,
       tasks: {
         work: async (n: number) => {
@@ -314,8 +324,7 @@ describe("Local concurrent steps", () => {
           return n;
         },
       },
-      split: ({ tasks }, values: number[]) =>
-        values.map((n) => tasks.work.job(n)),
+      split: (tasks, values: number[]) => values.map((n) => tasks.work.job(n)),
       join: (values) => values,
     });
     unit.use(
@@ -357,7 +366,7 @@ describe("Local concurrent steps", () => {
           signal.throwIfAborted();
         },
       },
-      split: ({ tasks, signal }) => [tasks.work.job(signal)],
+      split: ({ work }) => [work.job(work.signal)],
       join: () => {
         joined = true;
       },
@@ -420,9 +429,9 @@ describe("Local concurrent steps", () => {
           },
         },
         split: async (scope) => {
-          signal = scope.signal;
+          signal = scope.work.signal;
           if (phase === "split") await wait();
-          return [scope.tasks.work.job()];
+          return [scope.work.job()];
         },
         join: async (values) => {
           if (phase === "join") await wait();
@@ -440,7 +449,7 @@ describe("Local concurrent steps", () => {
     const tasks = { value: { run: step.sync(() => 1), concurrency: 1 } };
     const unit = concurrent({
       tasks,
-      split: ({ tasks }, empty: boolean) => empty ? [] : [tasks.value.job()],
+      split: (tasks, empty: boolean) => empty ? [] : [tasks.value.job()],
       join: (values) => values,
     });
     tasks.value.run = step.sync(() => 2);
@@ -459,7 +468,7 @@ describe("Local concurrent steps", () => {
     let saved: ConcurrentJob | undefined, calls = 0;
     const unit = concurrent({
       tasks: { work: () => ++calls },
-      split: ({ tasks }, reuse: boolean) => {
+      split: (tasks, reuse: boolean) => {
         if (!reuse) saved = tasks.work.job();
         return [saved!];
       },
@@ -516,6 +525,8 @@ describe("Local concurrent steps", () => {
         { tasks: { work: { run: 1 } } },
         { tasks: { work: { run: () => 1, concurrency: 0 } } },
         { split: null },
+        { capacityScope: "bad" },
+        { capacityScope: null },
         { join: null },
         { mode: "race" },
         { timeoutMs: 2_147_483_648 },

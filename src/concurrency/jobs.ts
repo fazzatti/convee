@@ -11,11 +11,16 @@ const descriptors = new WeakMap<object, Descriptor>();
 export type Shape = number | Shape[];
 export type PreparedJob = Omit<Descriptor, "owner">;
 
-export function builders(tasks: readonly TaskSetup[], owner: object): object {
+export function builders(
+  tasks: readonly TaskSetup[],
+  owner: object,
+  signal: AbortSignal,
+): object {
   return Object.freeze(
     Object.fromEntries(tasks.map((task) => [
       task.name,
       Object.freeze({
+        signal,
         job(...args: unknown[]): ConcurrentJob {
           const job = Object.freeze({});
           descriptors.set(job, { owner, task, args });

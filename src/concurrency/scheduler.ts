@@ -28,7 +28,7 @@ export class Scheduler {
     if (jobs.length > this.config.maxPending - this.pending) {
       throw new ConcurrencyError(
         "CNC_CAPACITY",
-        "The batch exceeds the available shared admission capacity.",
+        "The batch exceeds the available admission capacity.",
       );
     }
     const cancel = () => {

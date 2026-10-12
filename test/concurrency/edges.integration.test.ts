@@ -22,13 +22,14 @@ describe("Concurrent lifecycle boundaries", () => {
       return n;
     };
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 2,
       tasks: {
         odd: { run, concurrency: 2 },
         even: { run, concurrency: 2 },
       },
       split: (
-        { tasks },
+        tasks,
         n: number,
       ) => [(n % 2 ? tasks.odd : tasks.even).job(n)],
       join: ([n]) => n,
@@ -78,7 +79,7 @@ describe("Concurrent lifecycle boundaries", () => {
             return 2;
           },
         },
-        split: ({ tasks }) => [tasks.failed.job(1), tasks.next.job()] as const,
+        split: (tasks) => [tasks.failed.job(1), tasks.next.job()] as const,
         join: (results) => results,
       });
       const [first, second] = await unit();
@@ -121,8 +122,7 @@ describe("Concurrent lifecycle boundaries", () => {
     const unit = concurrent({
       tasks: { recovered: { run: recovered }, failed },
       mode: "collect",
-      split: ({ tasks }) =>
-        [tasks.recovered.job(0), tasks.failed.job()] as const,
+      split: (tasks) => [tasks.recovered.job(0), tasks.failed.job()] as const,
       join: (values) => values,
     });
     const [one, two] = await unit();
@@ -143,12 +143,14 @@ describe("Concurrent lifecycle boundaries", () => {
     });
     const unit = concurrent({
       tasks: { custom },
-      split: ({ tasks }) => [tasks.custom.job()],
+      split: (tasks) => [tasks.custom.job()],
       join: (values) => values,
     });
     const error = await unit().catch((error) => error);
     assert(error instanceof Error);
-    assertStrictEquals(error.cause, cause);
+    assert(error instanceof ConcurrencyError);
+    assertEquals(error.code, "CNC_BATCH");
+    assertStrictEquals(error.meta?.failures?.[0].cause, cause);
     assertEquals(
       new ConcurrencyError("CNC_CONFIG", "bad").toJSON().domain,
       "concurrency",
@@ -161,6 +163,7 @@ describe("Concurrent lifecycle boundaries", () => {
       abort = new AbortController();
     const seen: number[] = [];
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 1,
       tasks: {
         work: async (n: number) => {
@@ -170,7 +173,7 @@ describe("Concurrent lifecycle boundaries", () => {
           return n;
         },
       },
-      split: ({ tasks }, n: number) => [tasks.work.job(n)],
+      split: (tasks, n: number) => [tasks.work.job(n)],
       join: ([n]) => n,
     });
     const first = unit(1);
@@ -193,6 +196,7 @@ describe("Concurrent lifecycle boundaries", () => {
     const entered = deferred(), expired = deferred(), release = deferred();
     let calls = 0, finalized = 0;
     const unit = concurrent({
+      capacityScope: "shared",
       concurrency: 1,
       tasks: {
         work: async () => {
@@ -202,7 +206,8 @@ describe("Concurrent lifecycle boundaries", () => {
           return calls;
         },
       },
-      split: ({ tasks, signal }) => {
+      split: (tasks) => {
+        const signal = tasks.work.signal;
         signal.addEventListener("abort", () => expired.resolve(), {
           once: true,
         });
@@ -245,7 +250,7 @@ describe("Concurrent lifecycle boundaries", () => {
     const unit = concurrent({
       timeoutMs: 1,
       tasks: { work: () => 1 },
-      split: ({ tasks }) => [tasks.work.job()],
+      split: (tasks) => [tasks.work.job()],
       join: ([n]) => n,
     });
     assertEquals(
@@ -268,7 +273,7 @@ describe("Concurrent lifecycle boundaries", () => {
       const failure = new Error(phase);
       const unit = concurrent({
         tasks: { work: () => ++calls },
-        split: ({ tasks }) => {
+        split: (tasks) => {
           if (phase === "split") throw failure;
           return [tasks.work.job()];
         },
@@ -299,7 +304,7 @@ describe("Concurrent lifecycle boundaries", () => {
     let calls = 0;
     const unit = concurrent({
       tasks: { work: () => ++calls },
-      split: ({ tasks }) =>
+      split: (tasks) =>
         Object.defineProperty([], 0, {
           get() {
             abort.abort();
@@ -323,7 +328,7 @@ describe("Concurrent lifecycle boundaries", () => {
     };
     const unit = concurrent({
       tasks,
-      split: ({ tasks }) => {
+      split: (tasks) => {
         const job = tasks.__proto__.job();
         return [job, [job, tasks.constructor.job()]] as const;
       },

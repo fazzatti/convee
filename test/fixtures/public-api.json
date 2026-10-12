@@ -68,6 +68,10 @@
     "typeOnly": true
   },
   {
+    "name": "ConcurrencyErrorMeta",
+    "typeOnly": true
+  },
+  {
     "name": "concurrent",
     "typeOnly": false
   },

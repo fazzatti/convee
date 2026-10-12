@@ -1,6 +1,9 @@
 export { createRunContext } from "@/context/runtime.ts";
 export { ConcurrencyError, concurrent } from "@/concurrency/index.ts";
-export type { ConcurrencyErrorCode } from "@/concurrency/index.ts";
+export type {
+  ConcurrencyErrorCode,
+  ConcurrencyErrorMeta,
+} from "@/concurrency/index.ts";
 export type * from "@/concurrency/types.ts";
 export { RT_ERRORS } from "@/runtime/error.ts";
 export type {

@@ -28,7 +28,7 @@ class ConcurrentExecution {
   readonly id: string;
   readonly isSync = false;
   private registered: StepPlugin<Fn>[];
-  private readonly scheduler: Scheduler;
+  private readonly sharedScheduler?: Scheduler;
 
   constructor(
     private readonly options: Options,
@@ -36,7 +36,9 @@ class ConcurrentExecution {
   ) {
     this.id = options.id ?? crypto.randomUUID();
     this.registered = [...(options.plugins ?? [])];
-    this.scheduler = new Scheduler(config);
+    this.sharedScheduler = config.capacityScope === "shared"
+      ? new Scheduler(config)
+      : undefined;
   }
   get plugins(): readonly StepPlugin<Fn>[] {
     return [...this.registered];
@@ -82,6 +84,7 @@ class ConcurrentExecution {
         throw new ConcurrencyError(
           "CNC_CONFIG",
           "signal must be an AbortSignal.",
+          {},
           cause,
         );
       }
@@ -97,6 +100,7 @@ class ConcurrentExecution {
         new ConcurrencyError(
           "CNC_ABORTED",
           "Concurrent invocation aborted.",
+          {},
           signal!.reason,
         ),
       );
@@ -115,26 +119,33 @@ class ConcurrentExecution {
       }
       controller.signal.throwIfAborted();
       const token = {};
-      const scope = Object.freeze({
-        tasks: builders(this.config.tasks, token) as ConcurrentBuilders<
-          ConcurrentTasks
-        >,
-        signal: controller.signal,
-      });
+      const scope = builders(
+        this.config.tasks,
+        token,
+        controller.signal,
+      ) as ConcurrentBuilders<ConcurrentTasks>;
       const tree = await this.options.split(scope, ...input);
       controller.signal.throwIfAborted();
       const batch = prepare(tree, token, this.config.maxPending);
-      const outcomes = await this.scheduler.submit(
+      const scheduler = this.sharedScheduler ?? new Scheduler(this.config);
+      const outcomes = await scheduler.submit(
         batch.jobs,
         controller.signal,
         context,
       );
       controller.signal.throwIfAborted();
       if (this.options.mode !== "collect") {
-        const failure = outcomes.find((outcome) =>
-          outcome.status === "rejected"
+        const errors = outcomes.flatMap((outcome) =>
+          outcome.status === "rejected" ? [outcome.error] : []
         );
-        if (failure?.status === "rejected") throw failure.error;
+        if (errors.length) {
+          throw new ConcurrencyError(
+            "CNC_BATCH",
+            "One or more concurrent jobs failed.",
+            { failures: errors },
+            new AggregateError(errors),
+          );
+        }
       }
       const values = this.options.mode === "collect"
         ? outcomes
@@ -152,10 +163,11 @@ class ConcurrentExecution {
 }
 
 /**
- * Compose local tasks into a native step with shared bounded async concurrency.
+ * Compose local tasks into a native step with bounded async concurrency.
  *
  * Functions, steps and pipelines run in this runtime without cloning or worker
- * modules. Each definition shares global/per-task limits across overlapping calls.
+ * modules. Each invocation owns its global/per-task limits by default; an explicit
+ * shared capacity scope applies one budget across calls on this definition.
  * Split creates inert jobs; admission is atomic, and join sees input-ordered
  * results after every task and its hooks finish. No retries or implicit close.
  *
@@ -164,14 +176,14 @@ class ConcurrentExecution {
  * @typeParam Jobs - Nested descriptor shape; use as const for heterogeneous tuples.
  * @typeParam Output - Awaited join output returned by the callable native step.
  * @typeParam Mode - All-success values or explicit collected outcomes.
- * @param options - Tasks, split/join, shared limits, optional deadline and native plugins.
+ * @param options - Tasks, split/join, capacity scope/limits, optional deadline and native plugins.
  * @returns A reusable callable step; use runWith for a per-run signal or deadline.
  * @throws CNC_CONFIG synchronously for invalid configuration. Executions reject
- * with CNC_CAPACITY, CNC_ABORTED, CNC_TIMEOUT or unrecovered native task/hook errors.
- * All mode drains then rethrows the first original error in input order; collect
+ * with CNC_CAPACITY, CNC_ABORTED, CNC_TIMEOUT, CNC_BATCH or native outer hook errors.
+ * All mode drains then aggregates every original task error in input order; collect
  * joins outcomes. Cancellation skips join if not yet started and waits for
  * already-running work and its actual cleanup.
- * @remarks Limits cover task hooks, not outer hooks or join. Pass scope.signal
+ * @remarks Limits cover task hooks, not outer hooks or join. Pass each builder's signal
  * explicitly to cooperative I/O. A non-cooperative operation can delay cancellation
  * indefinitely. Shared references remain mutable; this does not provide isolation,
  * CPU parallelism or exclusive ownership of application resources. Do not await

@@ -871,11 +871,13 @@ export default { plugins: [conveeWorkers()] }; // vite.config.ts
 
 Use the same worker-file and caller syntax shown above. With a package installed
 through your runtime's package tooling, imports can use `@fifo/convee/workers`
-and `@fifo/convee/workers/vite`. The Vite plugin recognizes named `worker`
+and `@fifo/convee/workers/vite`, or the JSR npm package's corresponding
+`@jsr/fifo__convee` subpaths. The Vite plugin recognizes named `worker`
 imports (including aliases) and the literal `{ module: import.meta.url }`
 options. Keep this syntax in the worker file; arbitrary re-export wrappers and
 namespace imports are not build entry declarations. Existing Vite worker plugins
-are retained. Conformance covers development and production in Chromium, Firefox
+are retained, and SDK-owned steps and pipelines share the worker host's Convee
+runtime. Conformance covers development and production in Chromium, Firefox
 and WebKit; WebKit testing is not a Safari-release certification.
 
 For another build tool or runtime, `createWorker(entry, slot)` is a typed

@@ -60,6 +60,78 @@
     "typeOnly": true
   },
   {
+    "name": "ConcurrencyError",
+    "typeOnly": false
+  },
+  {
+    "name": "ConcurrencyErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "concurrent",
+    "typeOnly": false
+  },
+  {
+    "name": "ConcurrentBuilders",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentCallable",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentInstance",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentJob",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentJobTree",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentOutcome",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentOutcomes",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentResults",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentRunOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentScope",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentStep",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentTask",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentTaskFunction",
+    "typeOnly": true
+  },
+  {
+    "name": "ConcurrentTasks",
+    "typeOnly": true
+  },
+  {
     "name": "ContextStore",
     "typeOnly": true
   },

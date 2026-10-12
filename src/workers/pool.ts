@@ -1,4 +1,5 @@
 import { clone, type GroupSetup, type Setup } from "@/workers/config.ts";
+import { moduleUrl } from "@/workers/module-url.ts";
 import { WorkerError, type WorkerErrorCode } from "@/workers/error.ts";
 import { type PreparedJob } from "@/workers/jobs.ts";
 import {
@@ -148,7 +149,10 @@ export class Group {
       if (slot.dead) return;
       try {
         const transport = await this.createWorker(
-          new URL(this.setup.entry ?? "./entry.ts", import.meta.url),
+          new URL(
+            this.setup.entry ?? moduleUrl("entry", import.meta.url),
+            import.meta.url,
+          ),
           {
             id: slot.id,
             group: this.setup.name,

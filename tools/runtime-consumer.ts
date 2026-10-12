@@ -30,7 +30,9 @@ for (const path of await sourceFiles()) {
   });
   await Deno.writeTextFile(output, compiled.outputText);
 }
-for (const file of ["worker-registry", "worker-consumer"]) {
+for (
+  const file of ["worker-registry", "worker-consumer", "concurrency-consumer"]
+) {
   const source = (await Deno.readTextFile(`test/fixtures/${file}.ts`)).replace(
     /\.ts(["'])/g,
     ".js$1",
@@ -53,7 +55,7 @@ const runtimes = Deno.args.length ? Deno.args : ["node", "bun", "browsers"];
 await copyWasmFixture(destination, true);
 await Deno.writeTextFile(
   destination + "/run.js",
-  'await import("./worker-consumer.js");\nawait import("./wasm-consumer.js");\n',
+  'await import("./worker-consumer.js");\nawait import("./wasm-consumer.js");\nawait import("./concurrency-consumer.js");\n',
 );
 const report: unknown[] = [];
 for (const runtime of runtimes) {
@@ -69,7 +71,7 @@ for (const runtime of runtimes) {
     await Deno.writeTextFile(
       destination + "/browser.js",
       consumer.replace('"./worker-registry.js"', '"./browser.worker.js"') +
-        '\nawait import("./wasm-consumer.js");\n',
+        '\nawait import("./wasm-consumer.js");\nawait import("./concurrency-consumer.js");\n',
     );
     for (
       const name of ["wasm.worker", "wasm-abi.worker", "wasm-packet.worker"]

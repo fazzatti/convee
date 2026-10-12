@@ -17,6 +17,36 @@ for (const file of await sourceFiles()) {
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
   [
+    "concurrency-shared-limit",
+    "src/concurrency/scheduler.ts",
+    "this.running < this.config.concurrency",
+    "this.running < Number.MAX_SAFE_INTEGER",
+  ],
+  [
+    "concurrency-task-limit",
+    "src/concurrency/scheduler.ts",
+    "(this.active.get(task) ?? 0) < task.concurrency",
+    "true",
+  ],
+  [
+    "concurrency-shared-admission",
+    "src/concurrency/scheduler.ts",
+    "jobs.length > this.config.maxPending - this.pending",
+    "jobs.length > this.config.maxPending",
+  ],
+  [
+    "concurrency-result-order",
+    "src/concurrency/jobs.ts",
+    "shape.map((child)",
+    "[...shape].reverse().map((child)",
+  ],
+  [
+    "concurrency-job-ownership",
+    "src/concurrency/jobs.ts",
+    "!descriptor || descriptor.owner !== owner",
+    "!descriptor",
+  ],
+  [
     "wasm-owned-output",
     "src/wasm/session.ts",
     "const copy = structuredClone(output);",

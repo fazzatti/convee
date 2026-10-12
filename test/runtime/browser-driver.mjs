@@ -51,6 +51,15 @@ async function inspect(url, mode) {
           ),
       );
       await page.addInitScript(() => {
+        globalThis.__conveeForeignSignal = () => {
+          const frame = document.createElement("iframe");
+          document.body.append(frame);
+          try {
+            return new frame.contentWindow.AbortController().signal;
+          } finally {
+            frame.remove();
+          }
+        };
         const Original = globalThis.Worker;
         const active = new Set();
         globalThis.__conveeWorkers = { active, started: 0 };
@@ -72,7 +81,8 @@ async function inspect(url, mode) {
         await page.waitForFunction(
           () =>
             globalThis.__conveeReport?.passed &&
-            globalThis.__conveeWasmReport?.passed,
+            globalThis.__conveeWasmReport?.passed &&
+            globalThis.__conveeConcurrencyReport?.passed,
           null,
           { timeout: 30000, polling: 50 },
         );
@@ -90,6 +100,7 @@ async function inspect(url, mode) {
       const evidence = await page.evaluate(() => ({
         report: globalThis.__conveeReport,
         wasm: globalThis.__conveeWasmReport,
+        concurrency: globalThis.__conveeConcurrencyReport,
         started: globalThis.__conveeWorkers.started,
         remaining: globalThis.__conveeWorkers.active.size,
       }));

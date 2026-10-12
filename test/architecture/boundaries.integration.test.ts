@@ -22,6 +22,15 @@ describe("Architecture boundaries", () => {
     plugin: ["core", "context", "error", "plugin"],
     step: ["core", "context", "error", "runtime", "plugin", "step"],
     pipe: ["core", "context", "error", "runtime", "plugin", "step", "pipe"],
+    concurrency: [
+      "core",
+      "context",
+      "error",
+      "runtime",
+      "plugin",
+      "step",
+      "concurrency",
+    ],
     wasm: ["core", "context", "error", "runtime", "plugin", "step", "wasm"],
     workers: [
       "core",

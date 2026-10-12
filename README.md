@@ -500,6 +500,107 @@ other's updates. Serialize those updates when necessary. Snapshot containers are
 copied, but payload objects keep their identity and are not deep-cloned or
 automatically redacted.
 
+## Concurrent async steps
+
+`concurrent` runs functions, steps and pipelines in the current JavaScript
+runtime. It overlaps asynchronous work without workers, module URLs or
+structured cloning. Closures, clients, class instances and original task errors
+keep their identity. Synchronous CPU work still runs on the caller's thread.
+
+```ts
+import { concurrent, plugin, step } from "jsr:@fifo/convee";
+
+const length = step(async (text: string) => text.length);
+length.use(plugin().onOutput((value: number) => value + 1));
+
+const summarize = concurrent({
+  tasks: {
+    length: { run: length, concurrency: 2 },
+    title: (text: string) => text.split("\n")[0],
+  },
+  concurrency: 4,
+  maxPending: 100,
+  split: ({ length, title }, text: string) =>
+    [length.job(text), title.job(text)] as const,
+  join: ([length, title]) => ({ length, title }),
+});
+
+const result = await summarize("Hello\nworld");
+console.log(result); // { length: 12, title: "Hello" }
+```
+
+Jobs are inert until split completes and the whole batch is admitted. Task
+names, arguments and join values are inferred; `as const` preserves
+heterogeneous tuple positions. Nested arrays, dynamic arrays and empty plans are
+supported. Each descriptor occurrence schedules one invocation. Descriptors
+belong to one split invocation and cannot be reused across calls.
+
+The global `concurrency` limit defaults to 8. A task's optional limit operates
+within that global capacity, with FIFO dispatch among eligible jobs. Each
+invocation owns its limits by default, like `parallel`. Set
+`capacityScope: "shared"` to share limits across overlapping calls on the same
+definition; separate definitions always have independent budgets. `maxPending`
+defaults to 1,024 active-plus-queued jobs within the selected scope; a batch
+that will not fit rejects atomically with `CNC_CAPACITY`. This is bounded
+admission, not wait-for-space backpressure or a requests-per-second rate limit.
+No task is retried automatically.
+
+Tasks retain their slots through native input/output/error/finally hooks. Hooks
+attached to the concurrent step wrap the whole split/tasks/join execution; its
+outer hooks and join do not occupy task slots. Native child steps/pipelines
+share the invocation's parent context while retaining separate execution scopes.
+Shared objects and context state remain mutable; application resources still
+need their own ownership rules. Avoid awaiting recursive work submitted to the
+same exhausted scheduler.
+
+Default `mode: "all"` waits for every task to finish, then either joins ordered
+values or throws `ConcurrencyError` with code `CNC_BATCH`. Its `meta.failures`
+and `AggregateError` cause contain every original task error in split order,
+including finalizer failures. It does not reject early like `Promise.all`. Use
+`mode: "collect"` to join ordered `{ status: "fulfilled", value }` /
+`{ status: "rejected", error }` outcomes, including multiple failures and
+failures from task finalizers.
+
+### Cooperative cancellation and deadlines
+
+```ts
+import { concurrent } from "jsr:@fifo/convee";
+
+const readPage = concurrent({
+  tasks: {
+    read: async (url: string, signal: AbortSignal) => {
+      const response = await fetch(url, { signal });
+      return await response.text();
+    },
+  },
+  timeoutMs: 5_000,
+  split: ({ read }, url: string) => [read.job(url, read.signal)] as const,
+  join: ([text]) => text,
+});
+
+const controller = new AbortController();
+const text = await readPage.runWith(
+  { signal: controller.signal, timeoutMs: 10_000 },
+  "https://example.com",
+);
+console.log(text);
+```
+
+Each builder exposes the same derived invocation signal. Pass it explicitly to
+operations that support cancellation; task names such as `signal` remain valid.
+An external abort or deadline removes queued jobs, signals running work and
+skips join if it has not started. The outer error/finally lifecycle runs **after
+running tasks finish their actual cleanup**. Error plugins can recover
+`CNC_ABORTED` or `CNC_TIMEOUT`. Cancellation takes precedence over task
+outcomes, including collect mode.
+
+There is no timeout by default. Positive `timeoutMs` values cover split, queue
+wait, task execution and join, after outer input hooks; `runWith` can override
+the definition's deadline. JavaScript is never forcibly stopped: an operation
+that ignores cancellation, including an already-running split or join, can delay
+completion indefinitely. Task capacity is not released early. This API requires
+no `close()` or idle-worker policy.
+
 ## Worker-backed parallel steps
 
 The optional `@fifo/convee/workers` entrypoint runs a function, step or pipeline

@@ -40,13 +40,24 @@ await Deno.copyFile(
   "test/fixtures/package-consumer.ts",
   destination + "/consumer.ts",
 );
-for (const file of ["worker-consumer.ts", "worker-registry.ts"]) {
+for (
+  const file of [
+    "worker-consumer.ts",
+    "worker-registry.ts",
+    "concurrency-consumer.ts",
+  ]
+) {
   await Deno.copyFile("test/fixtures/" + file, destination + "/" + file);
 }
 await copyWasmFixture(destination, false);
 const report: { consumer: string; command: string; passed: boolean }[] = [];
 for (
-  const consumer of ["consumer.ts", "worker-consumer.ts", "wasm-consumer.ts"]
+  const consumer of [
+    "consumer.ts",
+    "worker-consumer.ts",
+    "wasm-consumer.ts",
+    "concurrency-consumer.ts",
+  ]
 ) {
   for (const command of ["check", "run"]) {
     const result = await new Deno.Command("deno", {

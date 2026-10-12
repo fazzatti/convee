@@ -65,7 +65,7 @@ jobs:
         with:
           deno-version: "2.9.6"
       - run: deno task verify
-      - run: deno coverage --html coverage
+      - run: deno coverage --include=src/ --html coverage
       - name: Publish quality summary
         if: always()
         run: |
@@ -88,7 +88,8 @@ jobs:
         if: success()
         with:
           files: coverage.lcov
-          fail_ci_if_error: false
+          disable_search: true
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
   stress:
     name: 60000 seeded property and state-model cases

@@ -1,9 +1,10 @@
 {
   "name": "@fifo/convee",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "exports": {
     ".": "./src/index.ts",
     "./workers": "./src/workers/index.ts",
+    "./workers/entry": "./src/workers/entry.ts",
     "./workers/vite": "./src/workers/vite.ts",
     "./wasm": "./src/wasm/index.ts",
     "./wasm/jco": "./src/wasm/jco.ts"

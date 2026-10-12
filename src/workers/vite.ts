@@ -1,4 +1,5 @@
 import type { Plugin } from "npm:vite@8.3.4";
+import { moduleUrl as runtimeModuleUrl } from "@/workers/module-url.ts";
 
 /** Minimal AST nodes used from Vite's parser; no parser is loaded into the SDK. */
 interface Node {
@@ -63,7 +64,7 @@ export function conveeWorkers(): ConveeWorkersPlugin {
       if (!path.endsWith(SUFFIX)) return;
       const definition = path.slice(0, -SUFFIX.length) + "?" + INNER;
       const bootstrap = decodeURIComponent(
-        new URL("./bootstrap.ts", import.meta.url).pathname,
+        runtimeModuleUrl("bootstrap", import.meta.url).pathname,
       );
       return `import definition from ${
         JSON.stringify(definition)

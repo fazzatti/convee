@@ -854,6 +854,12 @@ loads worker infrastructure. Each host still needs permission and a loader for
 its application modules; Node/Bun conformance runs against compiled ESM, and
 Deno also exercises TypeScript directly.
 
+The `/workers/entry` subpath is a dedicated-worker bootstrap for runtime and
+build integrations. Let the built-in transport load it, or use its resolved URL
+with a custom transport. Do not import it on the caller thread. Published npm
+packages include its JavaScript and host dependencies; source consumers use the
+matching TypeScript modules.
+
 Vite applications install the optional integration to emit discoverable worker
 entries in both development and production:
 

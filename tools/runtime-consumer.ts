@@ -20,8 +20,9 @@ for (const path of await sourceFiles()) {
   });
   const source = (await Deno.readTextFile(path)).replace(
     /(["'])@\/([^"']+)\1/g,
-    (_match, quote, imported) => quote + relative(target, imported) + quote,
-  ).replace(/\.ts(["'])/g, ".js$1");
+    (_match, quote, imported) =>
+      quote + relative(target, imported).replace(/\.ts$/, ".js") + quote,
+  );
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       target: ts.ScriptTarget.ES2022,

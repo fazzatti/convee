@@ -1,4 +1,5 @@
 import type { Plugin } from "npm:vite@8.3.4";
+import { moduleUrl as runtimeModuleUrl } from "@/workers/module-url.ts";
 
 /** Minimal AST nodes used from Vite's parser; no parser is loaded into the SDK. */
 interface Node {
@@ -34,11 +35,14 @@ function moduleUrl(value: Node): boolean {
  * Keep Convee's ordinary worker-file syntax in Vite development and production.
  *
  * Add `conveeWorkers()` to Vite's plugins. The integration recognizes imports of
- * worker from @fifo/convee/workers or @convee/workers (including aliases of the
- * imported function), and a literal options object with module: import.meta.url.
+ * worker from @fifo/convee/workers, @jsr/fifo__convee/workers or @convee/workers
+ * (including aliases of the imported function), and a literal options object
+ * with module: import.meta.url.
  * It emits separate bootstraps, installs their loader for worker builds, and
  * preserves the application's existing worker plugins. No companion files,
  * caller-side execution fallback or serialized functions are generated.
+ * Shared package imports remain unbundled during dependency optimization so
+ * worker hosts and SDK-owned pipelines retain one native run-context identity.
  *
  * @returns A Vite plugin. Construction has no runtime worker or filesystem effects.
  * @throws Invalid source or unsupported build configuration produces Vite build
@@ -52,6 +56,9 @@ export function conveeWorkers(): ConveeWorkersPlugin {
     config(config) {
       const plugins = config.worker?.plugins;
       return {
+        optimizeDeps: {
+          exclude: ["@fifo/convee", "@jsr/fifo__convee", "@convee"],
+        },
         worker: { plugins: () => [...(plugins?.() ?? []), conveeWorkers()] },
       };
     },
@@ -63,7 +70,7 @@ export function conveeWorkers(): ConveeWorkersPlugin {
       if (!path.endsWith(SUFFIX)) return;
       const definition = path.slice(0, -SUFFIX.length) + "?" + INNER;
       const bootstrap = decodeURIComponent(
-        new URL("./bootstrap.ts", import.meta.url).pathname,
+        runtimeModuleUrl("bootstrap", import.meta.url).pathname,
       );
       return `import definition from ${
         JSON.stringify(definition)
@@ -86,6 +93,7 @@ export function conveeWorkers(): ConveeWorkersPlugin {
         if (
           ![
             "@fifo/convee/workers",
+            "@jsr/fifo__convee/workers",
             "@convee/workers",
             "jsr:@fifo/convee/workers",
           ].includes(source)

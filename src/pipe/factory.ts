@@ -102,10 +102,23 @@ const sync = Object.assign(createContextualSyncPipeFactory(), {
 }) as SyncPipeFactory;
 
 /**
- * Creates a pipeline from steps, nested pipes, or raw functions.
+ * Compose an ordered sequence of steps, nested pipelines and raw functions.
  *
- * Raw functions are wrapped as steps automatically, and `pipe.sync(...)`
- * provides the synchronous counterpart when every inner step is synchronous.
+ * Raw functions are wrapped as steps. Each child's scalar output is passed as one
+ * argument to the next child; array outputs are spread as its argument tuple.
+ * Untargeted plugins wrap the whole pipeline, and targeted plugins address the
+ * pipeline ID or a direct child. The frozen callable exposes run, runWith, use,
+ * remove and defensive configuration views. Use pipe.sync for all-sync children.
+ *
+ * @param steps - Nonempty tuple with compatible adjacent input/output contracts.
+ *
+ * @param options - Optional pipeline ID and persistent plugins; ID defaults to a UUID.
+ * @returns A reusable async Pipe accepting the first child's arguments and resolving
+ * to the last child's output after pipeline-level transformation or recovery.
+ * @throws TypeError for no children, non-callable raw children or conflicting IDs;
+ * `PIP_002` for unknown plugin targets; pipe.sync also throws `PIP_004` for async
+ * children. Accessor errors propagate. Invocations reject on unrecovered child/hook
+ * errors, invalid input-hook results (`PIP_001`), or finalizer failures (`RT_000`).
  */
 export const pipe = Object.assign(createContextualPipeFactory(), {
   sync,

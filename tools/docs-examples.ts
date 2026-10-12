@@ -1,15 +1,20 @@
 export function readmeExamples(markdown: string): {
   source: string;
   line: number;
+  file?: string;
 }[] {
   return [...markdown.matchAll(
     /^```(?:ts|typescript)[ \t]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm,
   )].map((match) => ({
     source: match[1].replaceAll(
-      /(["'])jsr:@fifo\/convee\1/g,
-      '"../../src/index.ts"',
+      /(["'])jsr:@fifo\/convee(\/(?:workers(?:\/vite)?|wasm(?:\/jco)?))?\1/g,
+      (_match, _quote: string, entry: string | undefined) =>
+        JSON.stringify("@convee" + (entry ?? "")),
     ),
     line: markdown.slice(0, match.index).split("\n").length + 1,
+    ...(/^\/\/ ([a-z][a-z0-9.-]*\.ts)\r?\n/.test(match[1])
+      ? { file: match[1].match(/^\/\/ ([a-z][a-z0-9.-]*\.ts)/)![1] }
+      : {}),
   }));
 }
 
@@ -34,9 +39,17 @@ async function checkExamples(): Promise<void> {
       compilerOptions: exampleCompilerOptions(project.compilerOptions),
     }),
   );
+  const paths = new Set<string>();
   for (const [index, example] of examples.entries()) {
-    const path = directory + "/example-" + index + ".ts";
+    const path = directory + "/" + (example.file ?? "example-" + index + ".ts");
+    if (paths.has(path)) {
+      throw new Error("Duplicate README example file: " + path);
+    }
+    paths.add(path);
     await Deno.writeTextFile(path, example.source);
+  }
+  for (const [index, example] of examples.entries()) {
+    const path = directory + "/" + (example.file ?? "example-" + index + ".ts");
     const result = await new Deno.Command("deno", {
       args: ["check", "--config", config, "--import-map", "deno.json", path],
       stdout: "piped",

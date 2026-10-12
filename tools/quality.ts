@@ -1,8 +1,14 @@
-import { parse, sourceFiles, ts } from "./source.ts";
+import { parse, sourceFiles, ts } from "@tools/source.ts";
 
 const coverage = new Map<
   string,
-  { lines: Map<number, number>; branches: number; coveredBranches: number }
+  {
+    lines: Map<number, number>;
+    branches: number;
+    coveredBranches: number;
+    functions: number;
+    coveredFunctions: number;
+  }
 >();
 let current: ReturnType<typeof coverage.get>;
 for (const line of (await Deno.readTextFile("coverage.lcov")).split("\n")) {
@@ -11,7 +17,13 @@ for (const line of (await Deno.readTextFile("coverage.lcov")).split("\n")) {
     const marker = path.lastIndexOf("/src/");
     const relative = marker >= 0 ? path.slice(marker + 1) : path;
     current = relative.startsWith("src/") && !relative.endsWith(".test.ts")
-      ? { lines: new Map(), branches: 0, coveredBranches: 0 }
+      ? {
+        lines: new Map(),
+        branches: 0,
+        coveredBranches: 0,
+        functions: 0,
+        coveredFunctions: 0,
+      }
       : undefined;
     if (current) coverage.set(relative, current);
   } else if (current && line.startsWith("DA:")) {
@@ -20,6 +32,9 @@ for (const line of (await Deno.readTextFile("coverage.lcov")).split("\n")) {
   } else if (current && line.startsWith("BRDA:")) {
     current.branches++;
     if (Number(line.split(",").at(-1)) > 0) current.coveredBranches++;
+  } else if (current && line.startsWith("FNDA:")) {
+    current.functions++;
+    if (Number(line.slice(5).split(",")[0]) > 0) current.coveredFunctions++;
   }
 }
 
@@ -88,20 +103,27 @@ const rows = [...coverage].map(([file, data]) => ({
   covered: [...data.lines.values()].filter((hits) => hits > 0).length,
   branches: data.branches,
   coveredBranches: data.coveredBranches,
+  functions: data.functions,
+  coveredFunctions: data.coveredFunctions,
   missing: [...data.lines].filter(([, hits]) => !hits).map(([line]) => line),
 }));
 const totalLines = rows.reduce((sum, row) => sum + row.lines, 0);
 const totalBranches = rows.reduce((sum, row) => sum + row.branches, 0);
+const totalFunctions = rows.reduce((sum, row) => sum + row.functions, 0);
 const linePercent = 100 * rows.reduce((sum, row) => sum + row.covered, 0) /
   totalLines;
 const branchPercent = 100 *
   rows.reduce((sum, row) => sum + row.coveredBranches, 0) /
   totalBranches;
+const functionPercent = 100 *
+  rows.reduce((sum, row) => sum + row.coveredFunctions, 0) /
+  totalFunctions;
 const report = {
   methodology:
     "Syntactic cyclomatic approximation. CRAP uses executed source-line coverage, not basis-path coverage. A navigation metric, not proof of correctness.",
   linePercent,
   branchPercent,
+  functionPercent,
   rows,
   functions: functions.sort((left, right) =>
     right.crapLineProxy - left.crapLineProxy
@@ -116,16 +138,19 @@ console.log(
   JSON.stringify({
     linePercent,
     branchPercent,
-    functions: functions.length,
+    functionPercent,
+    instrumentedFunctions: totalFunctions,
+    analyzedFunctions: functions.length,
     maxComplexity: Math.max(...functions.map((entry) => entry.complexity)),
   }),
 );
 if (
   !Number.isFinite(linePercent) || !Number.isFinite(branchPercent) ||
-  linePercent < 98 || branchPercent < 95
+  !Number.isFinite(functionPercent) ||
+  linePercent !== 100 || branchPercent !== 100 || functionPercent !== 100
 ) {
   console.error(
-    "Coverage requires at least 98% lines and 95% branches. See .artifacts/quality.json.",
+    "Coverage requires 100% lines, branches and functions. See .artifacts/quality.json.",
   );
   Deno.exit(1);
 }

@@ -1,4 +1,5 @@
-import { sourceFiles } from "./source.ts";
+import { sourceFiles } from "@tools/source.ts";
+import { copyWasmFixture } from "@tools/wasm-fixture.ts";
 
 const destination = ".artifacts/package-consumer";
 await Deno.mkdir(destination + "/package", { recursive: true });
@@ -39,22 +40,39 @@ await Deno.copyFile(
   "test/fixtures/package-consumer.ts",
   destination + "/consumer.ts",
 );
-const report: { command: string; passed: boolean }[] = [];
-for (const command of ["check", "run"]) {
-  const result = await new Deno.Command("deno", {
-    args: [
-      command,
-      "--config",
-      destination + "/deno.json",
-      destination + "/consumer.ts",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  report.push({ command, passed: result.success });
-  if (!result.success) {
-    console.error(new TextDecoder().decode(result.stderr));
-    Deno.exit(1);
+for (const file of ["worker-consumer.ts", "worker-registry.ts"]) {
+  await Deno.copyFile("test/fixtures/" + file, destination + "/" + file);
+}
+await copyWasmFixture(destination, false);
+const report: { consumer: string; command: string; passed: boolean }[] = [];
+for (
+  const consumer of ["consumer.ts", "worker-consumer.ts", "wasm-consumer.ts"]
+) {
+  for (const command of ["check", "run"]) {
+    const result = await new Deno.Command("deno", {
+      args: [
+        command,
+        ...(command === "run" && consumer === "wasm-consumer.ts"
+          ? ["--allow-env=JCO_DEBUG", "--allow-read=" + destination]
+          : []),
+        ...(command === "run" && consumer === "worker-consumer.ts"
+          ? [
+            "--allow-read=" + destination + "/package," + destination +
+            "/worker-registry.ts",
+          ]
+          : []),
+        "--config",
+        destination + "/deno.json",
+        destination + "/" + consumer,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    report.push({ consumer, command, passed: result.success });
+    if (!result.success) {
+      console.error(new TextDecoder().decode(result.stderr));
+      Deno.exit(1);
+    }
   }
 }
 await Deno.writeTextFile(
@@ -69,4 +87,6 @@ await Deno.writeTextFile(
     2,
   ),
 );
-console.log("Isolated package consumer: type check and runtime passed.");
+console.log(
+  "Isolated core and real-worker consumers: type checks and runtime passed.",
+);

@@ -16,13 +16,19 @@ function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
 }
 
 /**
- * Structured Convee runtime error.
+ * Error carrying a stable code, domain, source, metadata and optional execution trace.
  *
- * This is intended to be a small, composable foundation for Convee errors:
- * - stable error codes
- * - consumer-facing diagnostics
- * - optional execution trace data
- * - native error chaining via `cause`
+ * Construct from a complete {@link ConveeErrorShape}; the native `cause` retains
+ * the original failure. Metadata and trace payloads are kept by reference and are
+ * not validated, redacted or deep-frozen. Use `toJSON()` for bounded diagnostics,
+ * and the catalog guards when a particular metadata shape must be checked.
+ *
+ * @typeParam Code - Stable application or catalog error code.
+ *
+ * @typeParam Meta - Structured metadata associated with the code.
+ * @typeParam Domain - Namespace that owns the failure.
+ * @remarks Construction returns an Error instance without throwing it. Property
+ * access failures in the supplied shape can still propagate from the constructor.
  */
 export class ConveeError<
   Code extends string = string,
@@ -47,7 +53,15 @@ export class ConveeError<
   /** Optional execution frames identifying where the failure originated. */
   readonly trace?: ConveeErrorShape<Code, Meta, Domain>["trace"];
 
-  /** function Object() { [native code] } */
+  /**
+   * Initialize a structured error from the supplied diagnostic fields.
+   *
+   * @param shape - Required domain, code, source and message, plus optional cause,
+   * metadata, details, diagnostics and execution trace. Nested values are not copied.
+   *
+   * @remarks Produces a new ConveeError; callers decide whether to throw or return it.
+   * @throws Exceptions raised by getters or proxies on the supplied shape propagate.
+   */
   constructor(shape: ConveeErrorShape<Code, Meta, Domain>) {
     super(
       shape.message,
@@ -64,7 +78,17 @@ export class ConveeError<
     this.trace = shape.trace;
   }
 
-  /** Returns a bounded, cycle-safe diagnostic projection; this is not redaction or a lossless wire format. */
+  /**
+   * Project this error into bounded, cycle-safe diagnostic data.
+   *
+   * Nested unsupported or cyclic values are summarized by the diagnostic serializer.
+   * This projection is neither a lossless transport format nor a redaction boundary.
+   *
+   * @returns A plain diagnostic record containing the error fields and cause projection.
+   *
+   * @throws Exceptions from replaced getters on this error's top-level fields propagate;
+   * nested values that cannot be inspected are handled by the serializer.
+   */
   toJSON(): Record<string, unknown> {
     return diagnosticValue({
       name: this.name,
@@ -80,7 +104,15 @@ export class ConveeError<
     }) as Record<string, unknown>;
   }
 
-  /** Checks in-process error shape and methods; does not authenticate the object or validate catalog metadata. */
+  /**
+   * Check the Convee brand, native Error identity and required diagnostic members.
+   *
+   * @param error - Any value, typically caught from an execution.
+   *
+   * @returns Whether the value has the in-process Convee error shape. A true result
+   * does not authenticate its origin or validate catalog-specific metadata.
+   * @throws Exceptions raised by property getters or proxy traps on the value propagate.
+   */
   static is(error: unknown): error is ConveeError<string, BaseMeta> {
     if (!isObjectLike(error)) {
       return false;
@@ -97,7 +129,15 @@ export class ConveeError<
     );
   }
 
-  /** Creates a generic unexpected failure with optional diagnostic overrides. */
+  /**
+   * Create an unexpected-failure error with optional diagnostic overrides.
+   *
+   * @param args - Optional fields overriding domain `core`, source `convee`, code
+   * `UNEXPECTED`, and message `Unexpected error`, with optional metadata and cause.
+   *
+   * @returns A new ConveeError; this helper constructs the error without throwing it.
+   * @throws Exceptions raised while reading the override properties propagate.
+   */
   static unexpected(args?: {
     domain?: ConveeErrorDomain;
     source?: string;
@@ -122,7 +162,19 @@ export class ConveeError<
     });
   }
 
-  /** Preserves existing Convee errors and wraps other failures with their original cause. */
+  /**
+   * Normalize a caught value while preserving an existing ConveeError by identity.
+   *
+   * Native Errors contribute their message, stack and original cause; other values
+   * become an unexpected error with that value as cause. Existing ConveeErrors are
+   * returned unchanged, so context overrides apply only when a new error is created.
+   *
+   * @param error - Error or arbitrary thrown value to normalize.
+   *
+   * @param ctx - Optional domain, source, code, message, metadata and trace overrides.
+   * @returns The original ConveeError or a new structured wrapper around the value.
+   * @throws Exceptions from inspecting hostile error or context properties propagate.
+   */
   static fromUnknown(
     error: unknown,
     ctx?: ConveeErrorContext<string, BaseMeta>,
@@ -159,7 +211,18 @@ export class ConveeError<
   }
 }
 
-/** Creates a `ConveeError` instance from a fully defined error shape. */
+/**
+ * Construct a typed ConveeError from an explicit diagnostic shape.
+ *
+ * @typeParam Code - Literal or application-defined error code to preserve.
+ *
+ * @typeParam Meta - Metadata carried by this error.
+ * @typeParam Domain - Error namespace to preserve.
+ * @param shape - Required identifiers and message, with optional metadata, cause
+ * and trace. Nested payloads remain references supplied by the caller.
+ * @returns A new structured Error without throwing or normalizing the supplied fields.
+ * @throws Exceptions raised while reading the shape properties propagate.
+ */
 export function conveeError<
   Code extends string = string,
   Meta extends BaseMeta = BaseMeta,
@@ -170,14 +233,30 @@ export function conveeError<
   return new ConveeError(shape);
 }
 
-/** Returns `true` when the provided value is a Convee error instance. */
+/**
+ * Check the Convee brand, native Error identity and required diagnostic members.
+ *
+ * @param error - Any value, typically caught from an execution.
+ *
+ * @returns Whether the value has the in-process Convee error shape. A true result
+ * does not authenticate its origin or validate catalog-specific metadata.
+ * @throws Exceptions raised by property getters or proxy traps on the value propagate.
+ */
 export function isConveeError(
   error: unknown,
 ): error is ConveeError<string, BaseMeta> {
   return ConveeError.is(error);
 }
 
-/** Creates a fallback unexpected Convee error with optional overrides. */
+/**
+ * Create an unexpected-failure error with optional diagnostic overrides.
+ *
+ * @param args - Optional fields overriding domain `core`, source `convee`, code
+ * `UNEXPECTED`, and message `Unexpected error`, with optional metadata and cause.
+ *
+ * @returns A new ConveeError; this helper constructs the error without throwing it.
+ * @throws Exceptions raised while reading the override properties propagate.
+ */
 export function unexpectedConveeError(args?: {
   domain?: ConveeErrorDomain;
   source?: string;
@@ -192,7 +271,19 @@ export function unexpectedConveeError(args?: {
   return ConveeError.unexpected(args);
 }
 
-/** Wraps an unknown thrown value in a normalized `ConveeError`. */
+/**
+ * Normalize a caught value while preserving an existing ConveeError by identity.
+ *
+ * Native Errors contribute their message, stack and original cause; other values
+ * become an unexpected error with that value as cause. Existing ConveeErrors are
+ * returned unchanged, so context overrides apply only when a new error is created.
+ *
+ * @param error - Error or arbitrary thrown value to normalize.
+ *
+ * @param ctx - Optional domain, source, code, message, metadata and trace overrides.
+ * @returns The original ConveeError or a new structured wrapper around the value.
+ * @throws Exceptions from inspecting hostile error or context properties propagate.
+ */
 export function conveeErrorFromUnknown(
   error: unknown,
   ctx?: ConveeErrorContext<string, BaseMeta>,
@@ -200,7 +291,17 @@ export function conveeErrorFromUnknown(
   return ConveeError.fromUnknown(error, ctx);
 }
 
-/** Narrows a Convee error to the creator that produced it. */
+/**
+ * Match a ConveeError against a catalog creator's code, domain and source.
+ *
+ * @typeParam TCreator - Catalog creator whose error type should be inferred.
+ *
+ * @param error - Value to inspect for the Convee brand and matching identifiers.
+ * @param creator - Error constructor providing the expected code, domain and source.
+ * @returns Whether the identifiers match, narrowing to the creator's declared type.
+ * This does not prove which function created the value or validate its metadata.
+ * @throws Exceptions raised while reading either argument's properties propagate.
+ */
 export function isConveeErrorOf<TCreator extends AnyConveeErrorCreator>(
   error: unknown,
   creator: TCreator,
@@ -224,7 +325,15 @@ export type DefinedConveeError<
   readonly meta: Meta;
 };
 
-/** Callable error constructor with immutable code, source and domain identifiers. */
+/**
+ * Callable catalog constructor with immutable identifying properties.
+ *
+ * @param args - Code-specific input passed to the catalog's build callback.
+ *
+ * @returns A new structured error containing the built metadata and diagnostic fields;
+ * the creator returns it without throwing it.
+ * @throws Exceptions from the build callback or input property access propagate.
+ */
 export type ConveeErrorCreator<
   Code extends string,
   Meta extends BaseMeta,
@@ -261,7 +370,16 @@ export type InferConveeErrors<TCatalog> = {
   [K in keyof TCatalog]: InferConveeError<TCatalog[K]>;
 }[keyof TCatalog];
 
-/** Typed definition function returned by createErrorFactory. */
+/**
+ * Definition function obtained by binding a domain and source with createErrorFactory.
+ *
+ * @param definition - Stable code, fallback message and a callback mapping creator
+ * arguments to metadata, optional message, cause, diagnostics and trace.
+ *
+ * @returns A callable creator whose immutable identifiers describe this definition.
+ * @throws Exceptions raised while inspecting the definition or base properties
+ * propagate. The build callback runs later, when the resulting creator is called.
+ */
 export type ErrorFactory<
   Domain extends ConveeErrorDomain,
   Source extends string,
@@ -273,7 +391,22 @@ export type ErrorFactory<
   },
 ) => ConveeErrorCreator<Code, Meta, Domain, Source, Message, Args>;
 
-/** Bind a domain and source to a family of typed error creators. */
+/**
+ * Bind a domain and source to a family of typed error constructors.
+ *
+ * The returned definition function accepts a code, default message and `build`
+ * callback. Its resulting creator passes its argument to `build`, constructs a
+ * ConveeError and exposes immutable code/domain/source/message identifier fields.
+ * It does not throw the constructed error or validate the metadata.
+ *
+ * @typeParam Domain - Namespace shared by this error family.
+ *
+ * @typeParam Source - Component identifier shared by this error family.
+ * @param base - Domain and source used for every constructed error.
+ * @returns A definition function that creates typed callable error constructors.
+ * @remarks Binding alone does not inspect the base properties or intentionally throw.
+ * Defining or invoking a creator propagates property-access and build-callback errors.
+ */
 export function createErrorFactory<
   Domain extends ConveeErrorDomain,
   Source extends string,

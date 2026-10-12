@@ -32,6 +32,15 @@ export type StepInvalidInputPluginResultMeta = {
 
 /** Explicit public types for the step error catalog. */
 export type StepErrorCatalog = {
+  /**
+   * Describe a non-Error value thrown during step execution.
+   *
+   * @param args - Original cause and step identity, with optional trace and
+   * diagnostic guidance, plus the plugin identity when known.
+   *
+   * @returns A `STP_000` ConveeError retaining the cause and identity metadata.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly UNKNOWN_THROWN: ConveeErrorCreator<
     "STP_000",
     StepUnknownThrownMeta,
@@ -40,6 +49,15 @@ export type StepErrorCatalog = {
     "Unknown step error",
     StepUnknownThrownArgs
   >;
+  /**
+   * Describe an input hook result that cannot supply the expected argument tuple.
+   *
+   * @param args - Step and plugin IDs, expected input arity, actual received value,
+   * and optional invocation trace.
+   *
+   * @returns A `STP_001` ConveeError retaining the received value in metadata.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly INVALID_INPUT_PLUGIN_RESULT: ConveeErrorCreator<
     "STP_001",
     StepInvalidInputPluginResultMeta,
@@ -68,7 +86,17 @@ export type StepInvalidInputPluginResultArgs = {
   trace?: ConveeErrorTrace;
 };
 
-/** Built-in step error catalog. */
+/**
+ * Built-in step error constructors, indexed by stable failure category.
+ *
+ * Each member accepts its named argument object and returns a ConveeError in the
+ * `step` domain with source `convee/step`. Constructors preserve diagnostic
+ * payload references and do not throw the error they create. Their identifier
+ * properties support code-based narrowing; see each member for inputs and output.
+ *
+ * @remarks Invalid runtime arguments or throwing property accessors can raise
+ * native errors during construction. Metadata is not deep-frozen or redacted.
+ */
 export const STP_ERRORS: StepErrorCatalog = {
   UNKNOWN_THROWN: defineStepError({
     code: "STP_000",
@@ -116,7 +144,15 @@ export type StepErrorOf<Code extends StepErrorCode> = Extract<
   { code: Code }
 >;
 
-/** Returns `true` when the provided error belongs to the step domain. */
+/**
+ * Recognize a built-in step error and validate its required metadata fields.
+ *
+ * @param error - Unknown caught value to check against the STP_ERRORS catalog.
+ *
+ * @returns True only for a ConveeError with the expected domain, source, known
+ * code and metadata shape. Unknown codes return false; this is not authentication.
+ * @throws Exceptions from getters or proxies encountered during inspection propagate.
+ */
 export function isStepError(error: unknown): error is StepError {
   if (
     !ConveeError.is(error) || error.domain !== "step" ||

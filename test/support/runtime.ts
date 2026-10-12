@@ -4,7 +4,7 @@ import {
   type PluginThis,
   type RunContextOptions,
   step,
-} from "../../src/index.ts";
+} from "@convee";
 
 export type Body = (this: PluginThis, ...args: unknown[]) => unknown;
 export type Hooks = Partial<

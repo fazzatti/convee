@@ -367,9 +367,18 @@ export class RunContextController<
 }
 
 /**
- * Creates a run context that can be shared across steps, pipes, and plugins.
+ * Create shared run state and snapshot access, or reuse an existing Convee context.
  *
- * Pass `parent` to reuse an existing execution context, or `seed` to preload
- * shared state for a new run.
+ * With a parent, seed entries merge into its state and the same parent context is
+ * returned; the parent's capture policy wins. Without a parent, a new identity and
+ * store are allocated, with capture defaulting to `outputs`. Payloads retain their
+ * object identities. Step and plugin `current()` require an active invocation.
+ *
+ * @typeParam Shared - Keys and value types of the shared state store.
+ *
+ * @param options - Optional parent, initial shared values, and snapshot capture policy.
+ * @returns The existing parent context or a fresh context with empty execution history.
+ * @throws TypeError if the parent is not a context created by this Convee runtime.
+ * Exceptions raised while reading seed or option properties propagate unchanged.
  */
 export const createRunContext = RunContextController.create;

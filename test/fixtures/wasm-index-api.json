@@ -1,0 +1,50 @@
+[
+  {
+    "name": "persistentWasm",
+    "typeOnly": false
+  },
+  {
+    "name": "PersistentWasm",
+    "typeOnly": true
+  },
+  {
+    "name": "PersistentWasmOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "wasm",
+    "typeOnly": false
+  },
+  {
+    "name": "WasmBindings",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmCallable",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmError",
+    "typeOnly": false
+  },
+  {
+    "name": "WasmErrorCode",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmFunctionKey",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmOptions",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmResource",
+    "typeOnly": true
+  },
+  {
+    "name": "WasmSession",
+    "typeOnly": true
+  }
+]

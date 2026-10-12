@@ -8,9 +8,29 @@ import type {
   PluginIdentity,
 } from "@/plugin/types.ts";
 
-/** Constructs immutable hook descriptors with identity owned by the options. */
+/**
+ * Factory namespace for immutable lifecycle-hook descriptors.
+ *
+ * Use `PluginEngine.create(definition, options)` to materialize a plugin directly;
+ * the fluent `plugin` factory delegates here after hooks are registered. Identity
+ * comes from options, and only supported hooks are copied from the definition.
+ *
+ * @remarks No engine instance is needed. The returned descriptor exposes its hooks,
+ * identity, supports and targets helpers. Validation errors are described by create.
+ */
 export class PluginEngine {
-  /** Validate and copy only the supported lifecycle hooks. */
+  /**
+   * Validate a definition and copy its callable lifecycle hooks into a frozen plugin.
+   *
+   * @param definition - At least one of input, output, error or finally; absent hooks
+   * must be undefined. Extra properties are ignored and hooks are not executed here.
+   *
+   * @param options - Optional stable ID and routing target; ID defaults to a random UUID.
+   * @returns A frozen descriptor retaining the hook functions, ID and target, with
+   * supports and targets helpers. Captured values inside hooks are not frozen.
+   * @throws ConveeError with `PLG_001` when no hook is supplied or a hook is non-callable.
+   * Exceptions from definition or option accessors propagate unchanged.
+   */
   static create<
     I extends PluginArgs,
     O,

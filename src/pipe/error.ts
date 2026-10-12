@@ -45,6 +45,15 @@ export type PipeNonSyncStepMeta = {
 
 /** Explicit public types for the pipe error catalog. */
 export type PipeErrorCatalog = {
+  /**
+   * Describe a non-Error value thrown during pipe execution.
+   *
+   * @param args - Original cause and pipe identity, with optional trace and
+   * diagnostic guidance.
+   *
+   * @returns A `PIP_000` ConveeError retaining the cause and identity metadata.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly UNKNOWN_THROWN: ConveeErrorCreator<
     "PIP_000",
     PipeUnknownThrownMeta,
@@ -53,6 +62,15 @@ export type PipeErrorCatalog = {
     "Unknown pipe error",
     PipeUnknownThrownArgs
   >;
+  /**
+   * Describe an input hook result that cannot supply the expected argument tuple.
+   *
+   * @param args - Pipe and plugin IDs, expected input arity, actual received value,
+   * and optional invocation trace.
+   *
+   * @returns A `PIP_001` ConveeError retaining the received value in metadata.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly INVALID_INPUT_PLUGIN_RESULT: ConveeErrorCreator<
     "PIP_001",
     PipeInvalidInputPluginResultMeta,
@@ -61,6 +79,14 @@ export type PipeErrorCatalog = {
     "Input plugins for multi-input pipelines must return the full input tuple.",
     PipeInvalidInputPluginResultArgs
   >;
+  /**
+   * Describe a plugin whose target is outside a pipeline's direct routing namespace.
+   *
+   * @param args - Pipeline and plugin IDs, requested target, allowed target IDs and trace.
+   *
+   * @returns A `PIP_002` ConveeError listing the allowed targets in its message and metadata.
+   * @throws Native errors if allowedTargets cannot be joined, or input getters throw.
+   */
   readonly UNKNOWN_PLUGIN_TARGET: ConveeErrorCreator<
     "PIP_002",
     PipeUnknownPluginTargetMeta,
@@ -69,6 +95,14 @@ export type PipeErrorCatalog = {
     "Unknown pipe plugin target",
     PipeUnknownPluginTargetArgs
   >;
+  /**
+   * Describe asynchronous children rejected during synchronous pipeline construction.
+   *
+   * @param args - Pipeline ID, child identity list and optional trace.
+   *
+   * @returns A `PIP_004` ConveeError retaining the supplied child IDs for diagnostics.
+   * @throws Exceptions from input property access propagate; the created error is returned.
+   */
   readonly NON_SYNC_STEP: ConveeErrorCreator<
     "PIP_004",
     PipeNonSyncStepMeta,
@@ -112,7 +146,17 @@ export type PipeNonSyncStepArgs = {
   trace?: ConveeErrorTrace;
 };
 
-/** Built-in pipe error catalog. */
+/**
+ * Built-in pipe error constructors, indexed by stable failure category.
+ *
+ * Each member accepts its named argument object and returns a ConveeError in the
+ * `pipe` domain with source `convee/pipe`. Constructors preserve diagnostic
+ * payload references and do not throw the error they create. Their identifier
+ * properties support code-based narrowing; see each member for inputs and output.
+ *
+ * @remarks Invalid runtime arguments or throwing property accessors can raise
+ * native errors during construction. Metadata is not deep-frozen or redacted.
+ */
 export const PIP_ERRORS: PipeErrorCatalog = {
   UNKNOWN_THROWN: definePipeError({
     code: "PIP_000",
@@ -189,7 +233,15 @@ export type PipeErrorOf<Code extends PipeErrorCode> = Extract<
   { code: Code }
 >;
 
-/** Returns `true` when the provided error belongs to the pipe domain. */
+/**
+ * Recognize a built-in pipe error and validate its required metadata fields.
+ *
+ * @param error - Unknown caught value to check against the PIP_ERRORS catalog.
+ *
+ * @returns True only for a ConveeError with the expected domain, source, known
+ * code and metadata shape. Unknown codes return false; this is not authentication.
+ * @throws Exceptions from getters or proxies encountered during inspection propagate.
+ */
 export function isPipeError(error: unknown): error is PipeError {
   if (
     !ConveeError.is(error) || error.domain !== "pipe" ||

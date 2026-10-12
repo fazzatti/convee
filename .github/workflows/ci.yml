@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_call:
 permissions:
   contents: read
@@ -26,6 +26,36 @@ jobs:
       - run: deno task test:types
       - run: deno task test
       - run: deno task test:consumer
+  rust-wasm:
+    name: Rebuild Rust components and verify generated bindings
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RUSTUP_TOOLCHAIN: "1.96.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24.1.0"
+      - run: rustup toolchain install 1.96.0 --profile minimal --target wasm32-unknown-unknown
+      - run: deno task wasm:build
+      - run: deno task test:wasm
+      - run: deno task test:types
+      - run: deno task test:consumer
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: rebuilt-rust-components
+          path: |
+            examples/rust-text/generated/
+            examples/rust-host/generated/
+            examples/rust-abi/generated/
+            examples/component-pair/generated/
+            .artifacts/package-consumer/report.json
+          if-no-files-found: error
   quality:
     name: Formatting, lint, docs, architecture, coverage and JSR
     runs-on: ubuntu-latest
@@ -35,13 +65,13 @@ jobs:
         with:
           deno-version: "2.9.6"
       - run: deno task verify
-      - run: deno coverage --html coverage
+      - run: deno coverage --include=src/ --html coverage
       - name: Publish quality summary
         if: always()
         run: |
           echo '## Convee quality evidence' >> "$GITHUB_STEP_SUMMARY"
           if [ -f .artifacts/quality.json ]; then
-            jq '{linePercent, branchPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
+            jq '{linePercent, branchPercent, functionPercent, methodology, mostComplex: .functions[0:8]}' .artifacts/quality.json >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
@@ -58,7 +88,8 @@ jobs:
         if: success()
         with:
           files: coverage.lcov
-          fail_ci_if_error: false
+          disable_search: true
+          fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
   stress:
     name: 60000 seeded property and state-model cases
@@ -126,3 +157,71 @@ jobs:
         with:
           name: benchmark-trends
           path: .artifacts/bench.json
+  node:
+    name: Compiled ESM workers (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.12.0", "24.1.0"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: ${{ matrix.node }}
+      - run: deno task test:runtime node
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: node-${{ matrix.node }}-consumer
+          path: |
+            .artifacts/runtime-consumer/report.json
+            .artifacts/runtime-consumer/node.log
+          if-no-files-found: error
+  bun:
+    name: Compiled ESM workers (Bun 1.4.3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: "1.4.3"
+      - run: deno task test:runtime bun
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: bun-consumer
+          path: |
+            .artifacts/runtime-consumer/report.json
+            .artifacts/runtime-consumer/bun.log
+          if-no-files-found: error
+  browsers:
+    name: Vite development and production (Chromium, Firefox, WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24.1.0"
+      - run: npm ci --prefix test/runtime
+      - run: test/runtime/node_modules/.bin/playwright install --with-deps chromium firefox webkit
+      - run: deno task test:runtime browsers
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: browser-consumers
+          path: |
+            .artifacts/runtime-consumer/report.json
+            .artifacts/runtime-consumer/browser-report.json
+            .artifacts/runtime-consumer/browsers.log
+          if-no-files-found: error

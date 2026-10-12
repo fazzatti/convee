@@ -36,7 +36,7 @@ for (const size of [10, 25, 50, 100]) {
 const path = `${directory}/consumer.ts`;
 await Deno.writeTextFile(
   path,
-  `import { pipe } from "../../src/index.ts";\n${declarations.join("\n")}\n`,
+  `import { pipe } from "@convee";\n${declarations.join("\n")}\n`,
 );
 const start = performance.now();
 const result = await new Deno.Command("deno", {

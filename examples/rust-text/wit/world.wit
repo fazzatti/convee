@@ -1,0 +1,19 @@
+package convee:examples;
+
+world text {
+    record summary {
+        words: u32,
+        title: string,
+    }
+    variant failure {
+        empty,
+        too-long(u32),
+    }
+    export count-words: func(text: string) -> u32;
+    export summarize: func(text: string) -> result<summary, failure>;
+    export echo-bytes: func(bytes: list<u8>) -> list<u8>;
+    export echo-wide: func(value: u64) -> u64;
+    export optional-title: func(text: option<string>) -> option<string>;
+    export increment: func() -> u32;
+    export trap: func();
+}

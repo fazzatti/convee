@@ -17,6 +17,54 @@ for (const file of await sourceFiles()) {
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
   [
+    "wasm-owned-output",
+    "src/wasm/session.ts",
+    "const copy = structuredClone(output);",
+    "const copy = output;",
+  ],
+  [
+    "wasm-reject-shared-output",
+    "src/wasm/session.ts",
+    "value instanceof SharedArrayBuffer",
+    "false",
+  ],
+  [
+    "wasm-retire-unsafe-session",
+    "src/wasm/session.ts",
+    "await this.release();",
+    "",
+  ],
+  [
+    "wasm-preserve-domain-session",
+    "src/wasm/session.ts",
+    "session.isApplicationError?.(error) === true",
+    "false",
+  ],
+  [
+    "wasm-replacement-budget",
+    "src/wasm/session.ts",
+    "this.restarts++;",
+    "this.restarts += 2;",
+  ],
+  [
+    "wasm-admission-capacity",
+    "src/wasm/lifecycle.ts",
+    "this.active >= this.maxPending",
+    "false",
+  ],
+  [
+    "wasm-dispose-while-draining",
+    "src/wasm/lifecycle.ts",
+    "this.terminal ||= terminal;",
+    "this.terminal ||= false;",
+  ],
+  [
+    "wasm-terminal-dispose",
+    "src/wasm/resource.ts",
+    "dispose: () => lifetime.close(true)",
+    "dispose: () => lifetime.close()",
+  ],
+  [
     "worker-plugin-copy",
     "src/workers/definition.ts",
     "[...plugins, plugin]",
@@ -206,6 +254,7 @@ await Deno.mkdir(directory, { recursive: true });
 const tests = [
   "src",
   "test/workers/parallel.integration.test.ts",
+  "test/wasm/resource.integration.test.ts",
   "test/regressions",
   "test/concurrency",
   "test/properties",

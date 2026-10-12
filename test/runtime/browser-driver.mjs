@@ -70,7 +70,9 @@ async function inspect(url, mode) {
       console.log("Opened " + url + " status=" + response.status());
       try {
         await page.waitForFunction(
-          () => globalThis.__conveeReport?.passed,
+          () =>
+            globalThis.__conveeReport?.passed &&
+            globalThis.__conveeWasmReport?.passed,
           null,
           { timeout: 30000, polling: 50 },
         );
@@ -87,6 +89,7 @@ async function inspect(url, mode) {
       }
       const evidence = await page.evaluate(() => ({
         report: globalThis.__conveeReport,
+        wasm: globalThis.__conveeWasmReport,
         started: globalThis.__conveeWorkers.started,
         remaining: globalThis.__conveeWorkers.active.size,
       }));

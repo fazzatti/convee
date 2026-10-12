@@ -34,6 +34,8 @@ The runtime model is intentionally simple:
 - `pipe` composes steps or nested pipes into a typed execution chain
 - `createRunContext` carries shared state and execution snapshots
 - `ConveeError` and the built-in error catalogs normalize failures
+- `parallel` runs intentional worker jobs and joins their results
+- `wasm` binds generated WebAssembly exports as ordinary steps
 
 Convee has no runtime dependencies. You compose ordinary functions and attach
 behavior explicitly where you need it.
@@ -779,6 +781,201 @@ are stopped. Termination must settle only after actual cleanup. Runtime support
 is verified by real consumers, not by the mere existence of a global `Worker`
 constructor.
 
+## WASM-backed steps
+
+The optional `@fifo/convee/wasm` entrypoint turns generated WASM exports into
+ordinary async steps. Rust bindings use the optional `/wasm/jco` adapter;
+neither entrypoint adds Rust, Jco or WASI to Convee's runtime dependencies.
+
+### Bind an export
+
+The examples use the checkout's `@example/` alias. In your application, import
+your own generated binding descriptor instead:
+
+```ts
+import { plugin } from "jsr:@fifo/convee";
+import { wasm } from "jsr:@fifo/convee/wasm";
+import { textBindings } from "@example/rust-text/bindings.ts";
+
+const text = wasm({ bindings: textBindings });
+const summarize = text.step("summarize", { id: "summary" })
+  .use(plugin().onInput((text: string) => text.trim()));
+console.log(await summarize("  Hello Rust  ")); // { words: 2, title: "Hello Rust" }
+```
+
+Export names, argument tuples, results and compatible plugins are inferred from
+generated declarations. A bound step supports the normal `.use()`, `.remove()`,
+`.run()` and `.runWith()` APIs, contexts and all four plugin gates. Bind
+different exports as separate steps to preserve hooks between pipeline stages.
+
+### Loading and instance lifetime
+
+`wasm()` creates a fresh guest session for each invocation and releases it after
+user finalizers, before the call settles. Sharing a binding descriptor reuses
+prepared code without sharing live guest state. The `.wasm` file contains
+portable bytecode; the host still prepares it for execution on its CPU.
+
+| Option or method           | Behavior                                                                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading: "lazy"`          | Default: prepare code on first use.                                                                                                   |
+| `loading: "eager"`         | Start preparation when the resource is defined, without creating a guest.                                                             |
+| `await resource.preload()` | Await code preparation without creating a guest or calling exports.                                                                   |
+| `maxPending`               | Default 1024: bound admitted calls across this resource's steps, through hooks and finalizers. Overload rejects with `WASM_CAPACITY`. |
+
+Jco preparation is shared per binding descriptor, including concurrent requests.
+A failed preparation can be retried on the next request. Await `preload()` to
+observe eager failures; background preparation does not leave an unhandled
+rejection. Engines may still compile or optimize functions on later calls.
+
+For intentional state reuse, own a `persistentWasm`:
+
+```ts
+import { persistentWasm } from "jsr:@fifo/convee/wasm";
+import { textBindings } from "@example/rust-text/bindings.ts";
+
+await using persistent = persistentWasm({
+  bindings: textBindings,
+  reopenOnUse: true,
+  idleTimeoutMs: 30_000,
+  maxRestarts: 2,
+});
+await persistent.preload(); // Prepare reusable code only.
+await persistent.ready(); // Also initialize the guest; otherwise it starts lazily.
+const increment = persistent.step("increment");
+console.log(await increment(), await increment()); // 1, 2
+await persistent.close(); // Drain accepted calls and release guest state.
+console.log(await increment()); // 1: reopening creates a fresh generation.
+// Scope exit permanently disposes the owner, including retained steps.
+```
+
+The persistent owner shares one session across its steps. Guest execution is
+exclusive; hooks may overlap. `maxPending` bounds their complete lifecycles.
+`close()` is idempotent and rejects new calls while draining. Reopening defaults
+to false; when enabled, it starts only after a successful close. Idle timeout is
+optional and starts after the last call or warmup finishes, using the same close
+policy. `dispose()` and `await using` are always terminal.
+
+Explicit `try/finally` disposal is an alternative to `await using`. Do not await
+close/dispose from the owner's own hooks, or reacquire it from its imports or
+initialization/cleanup callbacks. These operations would wait for themselves;
+synchronous guest reentry rejects with `WASM_REENTRANT`. Failed cleanup prevents
+replacement and reopening. Releasing references does not force immediate GC.
+
+### Rust bindings and host imports
+
+Define the public contract in WIT, implement its generated `Guest` trait with
+Rust's `wit-bindgen`, then generate JavaScript factories and TypeScript
+declarations with Jco's explicit instantiation mode. The
+[Rust text example](https://github.com/fazzatti/convee/tree/dev/examples/rust-text)
+includes the WIT, Rust source, build script, generated files and binding
+descriptor. To build and run the examples with Rust 1.96.0, Node 22.12+ and
+Deno:
+
+```sh
+rustup target add wasm32-unknown-unknown
+deno task wasm:build
+deno run --allow-read=examples --allow-env=JCO_DEBUG examples/rust-text/main.ts
+```
+
+The build pins wit-bindgen 0.62.0 and Jco 1.37.0 and emits an async
+`instantiate` factory plus a `modules.ts` asset manifest. Pass both to
+`jcoBindings`. Imports are typed by the generated contract and created afresh
+for each session; this
+[host example](https://github.com/fazzatti/convee/tree/dev/examples/rust-host)
+supplies a counter:
+
+```ts
+import { jcoBindings } from "jsr:@fifo/convee/wasm/jco";
+// @deno-types="@example/rust-host/generated/host.d.ts"
+import { instantiate } from "@example/rust-host/generated/host.js";
+import { modules } from "@example/rust-host/generated/modules.ts";
+
+const hostBindings = jcoBindings({
+  instantiate,
+  modules,
+  imports: () => {
+    let value = 0;
+    return { "next-value": { default: () => ++value } };
+  },
+});
+```
+
+Import-free components use `imports: () => ({})`. Add `disposeImports(imports)`
+to release host resources, including after failed instantiation. If the imports
+factory itself throws, it must clean up its partial allocations.
+
+Manifest keys match the generated core-module paths. Each entry accepts a
+`source` URL or async byte loader and an optional lowercase SHA-256 digest.
+Generated manifests resolve URLs internally, so callers need not repeat
+`import.meta.url`. HTTP assets use fetch; `file:` assets use filesystem loading
+on Deno/Node/Bun. Deploy matching glue, declarations and **all** core assets
+together. Digests check bytes, not the trustworthiness of the JavaScript glue.
+
+Other toolchains can implement `WasmBindings<Exports>`: `preload()` prepares
+reusable code, and `create()` returns an independent session with typed
+`exports`, optional `isApplicationError` and `dispose`. The adapter owns ABI
+conversion and partial-setup cleanup; a singleton binding cannot provide fresh
+session isolation.
+
+### Values, errors and recovery
+
+The Rust profile supports synchronous top-level WIT functions with owned
+scalars, strings, lists, records, tuples, enums, flags, variants, options,
+results and aliases, using memory32 and UTF-8. `u64`/`s64` use `bigint` and
+numeric lists use typed arrays. Function Results unwrap success or throw their
+error payload; nested Results remain tagged values. Outputs are copied before
+output hooks, so later calls or memory growth cannot overwrite retained values.
+
+Jco can coerce inputs, including integer wrapping and Unicode replacement. Add
+input plugins for stricter application validation; TypeScript does not validate
+numeric ranges or binary compatibility. Exported resources, borrowed or shared
+memory, guest async/streams/JSPI, threads and implicit WASI are outside this
+profile. Namespaced interface objects are not step names. The pinned validator
+also rejects empty records and flags with more than 32 members.
+
+`isApplicationError(error)` explicitly identifies domain failures that leave a
+session safe to reuse; they become `WASM_APPLICATION` with the original payload
+in `cause`. Its classifier must match the actual guest and host-import contract.
+Omit it to retire on every exception. Traps, unknown exceptions, codec failures
+and uncloneable/shared-memory outputs retire unsafe state before error recovery.
+A fallback does not repair the retired instance.
+
+Persistent `maxRestarts` allows two extra starts per generation by default; zero
+disables replacement. Failed replacements consume this budget, successful calls
+do not reset it, and only queued/future calls use replacements. Failed work is
+never replayed. Initial startup failure ends the generation; a successful
+explicit close/reopen starts a new one. Cleanup failures prevent unsafe reuse.
+
+`WasmError` provides stable `WASM_*` codes for configuration, loading,
+integrity, binding, capacity, lifecycle and cleanup errors. Native traps retain
+their original error. Explicit `preload()`/`ready()` reject directly; errors
+during step execution follow native body-recovery and finalization rules.
+
+### Runtimes and workers
+
+Deno, Node and Bun support the generated bindings; browser consumers cover Vite
+development and production in Chromium, Firefox and WebKit. Other bundlers and
+edge hosts need their own integration. Deno requires read/network permission for
+assets and `--allow-env=JCO_DEBUG` for the pinned glue. Browser assets need
+normal fetch/CORS/CSP access. WASI-dependent crates need explicit host adapters.
+
+Wrap a WASM step in an ordinary `worker(...)` definition, as in
+[document.worker.ts](https://github.com/fazzatti/convee/blob/dev/examples/rust-text/document.worker.ts),
+then use it with `parallel` or `persistentParallel`. Keep descriptors lazy:
+worker definition modules also evaluate in the caller. Caller preload does not
+warm worker isolates, and a persistent parallel owner's `ready()` starts workers
+without warming their lazy guests.
+
+A persistent guest captured inside a worker lasts for that worker generation.
+Termination releases the isolate but cannot guarantee its host-resource cleanup
+or roll back effects; there is no automatic callback to dispose a captured
+owner. Synchronous WASM cannot be interrupted by a same-thread timer or disposal
+call. Use worker timeouts/termination when hard interruption is required.
+
+WASM is not an automatic speedup. Include generated glue and asset sizes, cold
+preparation, instantiation, conversion/copying, worker messaging and peak memory
+when measuring your workload; small calls may cost more than JavaScript.
+
 ## Sync APIs
 
 Every runtime primitive has an explicit sync variant:
@@ -1082,31 +1279,6 @@ upgrading:
   metadata.
 - **Nested pipe inspection:** keep the original nested pipe variable for its
   full configuration API; nested entries in `steps` expose a shallow type.
-
-## Contributing and verification
-
-Run the standard checks from the repository root:
-
-```bash
-deno task verify
-```
-
-This checks formatting, lint, types, JSDoc, README examples, runtime tests,
-architecture, coverage, deep type graphs, isolated package consumption and a JSR
-publish dry run. It does not publish the package.
-
-Additional focused checks are available:
-
-```bash
-deno task test:stress
-deno task test:mutation
-deno task test:resources
-deno task bench
-```
-
-See [TESTING.md](TESTING.md) for the CI matrix, thresholds, permissions, failure
-replay and benchmark reports. Development tooling does not add runtime
-dependencies to the library.
 
 ## License
 

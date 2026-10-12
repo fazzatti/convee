@@ -1,0 +1,6 @@
+package convee:host-example;
+
+world host {
+    import next-value: func() -> u32;
+    export next: func() -> u32;
+}

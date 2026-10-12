@@ -1,4 +1,5 @@
 import { sourceFiles, ts } from "@tools/source.ts";
+import { copyWasmFixture } from "@tools/wasm-fixture.ts";
 
 const destination = ".artifacts/runtime-consumer";
 await Deno.mkdir(destination + "/package", { recursive: true });
@@ -49,6 +50,11 @@ await Deno.writeTextFile(
   JSON.stringify({ type: "module", private: true }),
 );
 const runtimes = Deno.args.length ? Deno.args : ["node", "bun", "browsers"];
+await copyWasmFixture(destination, true);
+await Deno.writeTextFile(
+  destination + "/run.js",
+  'await import("./worker-consumer.js");\nawait import("./wasm-consumer.js");\n',
+);
 const report: unknown[] = [];
 for (const runtime of runtimes) {
   if (runtime === "browsers") {
@@ -62,8 +68,20 @@ for (const runtime of runtimes) {
     );
     await Deno.writeTextFile(
       destination + "/browser.js",
-      consumer.replace('"./worker-registry.js"', '"./browser.worker.js"'),
+      consumer.replace('"./worker-registry.js"', '"./browser.worker.js"') +
+        '\nawait import("./wasm-consumer.js");\n',
     );
+    for (
+      const name of ["wasm.worker", "wasm-abi.worker", "wasm-packet.worker"]
+    ) {
+      const wasmWorker = await Deno.readTextFile(
+        destination + "/" + name + ".js",
+      );
+      await Deno.writeTextFile(
+        destination + "/" + name + ".js",
+        wasmWorker.replace('"./package/workers/index.js"', '"@convee/workers"'),
+      );
+    }
     await Deno.writeTextFile(
       destination + "/index.html",
       '<!doctype html><html><head><meta charset="utf-8"><title>Convee worker consumer</title></head><body><script type="module" src="/browser.js"></script></body></html>',
@@ -78,7 +96,7 @@ for (const runtime of runtimes) {
     args: [
       runtime === "browsers"
         ? "test/runtime/browser-driver.mjs"
-        : destination + "/worker-consumer.js",
+        : destination + "/run.js",
     ],
     stdout: "piped",
     stderr: "piped",

@@ -7,7 +7,7 @@ export function readmeExamples(markdown: string): {
     /^```(?:ts|typescript)[ \t]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm,
   )].map((match) => ({
     source: match[1].replaceAll(
-      /(["'])jsr:@fifo\/convee(\/workers(?:\/vite)?)?\1/g,
+      /(["'])jsr:@fifo\/convee(\/(?:workers(?:\/vite)?|wasm(?:\/jco)?))?\1/g,
       (_match, _quote: string, entry: string | undefined) =>
         JSON.stringify("@convee" + (entry ?? "")),
     ),

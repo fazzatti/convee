@@ -1,4 +1,5 @@
 import { sourceFiles } from "@tools/source.ts";
+import { copyWasmFixture } from "@tools/wasm-fixture.ts";
 
 const destination = ".artifacts/package-consumer";
 await Deno.mkdir(destination + "/package", { recursive: true });
@@ -42,12 +43,18 @@ await Deno.copyFile(
 for (const file of ["worker-consumer.ts", "worker-registry.ts"]) {
   await Deno.copyFile("test/fixtures/" + file, destination + "/" + file);
 }
+await copyWasmFixture(destination, false);
 const report: { consumer: string; command: string; passed: boolean }[] = [];
-for (const consumer of ["consumer.ts", "worker-consumer.ts"]) {
+for (
+  const consumer of ["consumer.ts", "worker-consumer.ts", "wasm-consumer.ts"]
+) {
   for (const command of ["check", "run"]) {
     const result = await new Deno.Command("deno", {
       args: [
         command,
+        ...(command === "run" && consumer === "wasm-consumer.ts"
+          ? ["--allow-env=JCO_DEBUG", "--allow-read=" + destination]
+          : []),
         ...(command === "run" && consumer === "worker-consumer.ts"
           ? [
             "--allow-read=" + destination + "/package," + destination +

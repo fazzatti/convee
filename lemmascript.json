@@ -1,0 +1,7 @@
+{
+  "proof-dir": "verification",
+  "run-log": false,
+  "unread-annotations": "error",
+  "string-semantics": "javascript-utf16",
+  "dafny-library": "local"
+}

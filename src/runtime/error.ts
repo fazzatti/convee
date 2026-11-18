@@ -3,6 +3,7 @@ import {
   createErrorFactory,
   type InferConveeErrors,
 } from "@/error/index.ts";
+import { orderedFailures } from "@/runtime/failures.ts";
 import type { ConveeErrorTrace } from "@/error/types.ts";
 
 /** One failed cleanup callback, preserving its error and invocation trace. */
@@ -66,8 +67,10 @@ export const RT_ERRORS: RuntimeErrorCatalog = {
     message: "Execution finalization failed.",
     build(args: FinalizationErrorArgs) {
       const { executionId, executionError, failures, trace } = args;
-      const errors = failures.map((failure) => failure.error);
-      if (executionError !== undefined) errors.unshift(executionError);
+      const errors = orderedFailures(
+        executionError,
+        failures.map((failure) => failure.error),
+      );
       return {
         cause: new AggregateError(errors, "Execution finalization failed.", {
           cause: errors[0],

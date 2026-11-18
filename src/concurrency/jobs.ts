@@ -1,3 +1,4 @@
+import { appendedIndex, branchAllowed, type Shape } from "@/core/job-tree.ts";
 import { ConcurrencyError } from "@/concurrency/error.ts";
 import type { TaskSetup } from "@/concurrency/config.ts";
 import type { ConcurrentJob } from "@/concurrency/types.ts";
@@ -8,7 +9,6 @@ interface Descriptor {
   args: unknown[];
 }
 const descriptors = new WeakMap<object, Descriptor>();
-export type Shape = number | Shape[];
 export type PreparedJob = Omit<Descriptor, "owner">;
 
 export function builders(
@@ -40,7 +40,7 @@ export function prepare(
   const ancestors = new Set<unknown>();
   function visit(value: unknown, depth: number): Shape {
     if (Array.isArray(value)) {
-      if (ancestors.has(value) || depth > 256) {
+      if (!branchAllowed(ancestors.has(value), depth)) {
         throw new ConcurrencyError(
           "CNC_CONFIG",
           "Job trees must be acyclic and at most 256 levels deep.",
@@ -50,7 +50,12 @@ export function prepare(
       const shape: Shape[] = [];
       const length = value.length;
       for (let index = 0; index < length; index++) {
-        shape.push(visit(value[index], depth + 1));
+        shape.push(
+          visit(
+            Object.hasOwn(value, index) ? value[index] : undefined,
+            depth + 1,
+          ),
+        );
       }
       ancestors.delete(value);
       return shape;
@@ -71,7 +76,7 @@ export function prepare(
       );
     }
     jobs.push({ task: descriptor.task, args: [...descriptor.args] });
-    return jobs.length - 1;
+    return appendedIndex(jobs.length);
   }
   if (!Array.isArray(tree)) {
     throw new ConcurrencyError(
@@ -81,10 +86,4 @@ export function prepare(
   }
   const shape = visit(tree, 0) as Shape[];
   return { jobs, shape };
-}
-
-export function reshape(shape: Shape, values: readonly unknown[]): unknown {
-  return typeof shape === "number"
-    ? values[shape]
-    : shape.map((child) => reshape(child, values));
 }

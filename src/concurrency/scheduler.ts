@@ -1,3 +1,10 @@
+import {
+  dispatchCounts,
+  occupancy,
+  settleCounts,
+} from "@/concurrency/accounting.ts";
+import { admittedOccupancy, fitsCapacity } from "@/core/capacity.ts";
+import { firstEligible } from "@/core/eligibility.ts";
 import type { RunContext } from "@/context/types.ts";
 import { ConcurrencyError } from "@/concurrency/error.ts";
 import type { Setup, TaskSetup } from "@/concurrency/config.ts";
@@ -15,7 +22,6 @@ export class Scheduler {
   private queue: Entry[] = [];
   private readonly active = new Map<TaskSetup, number>();
   private running = 0;
-  private pending = 0;
 
   constructor(private readonly config: Setup) {}
 
@@ -25,7 +31,12 @@ export class Scheduler {
     context: RunContext,
   ): Promise<ConcurrentOutcome<unknown>[]> {
     signal.throwIfAborted();
-    if (jobs.length > this.config.maxPending - this.pending) {
+    const next = admittedOccupancy(
+      occupancy(this.queue.length, this.running),
+      jobs.length,
+      this.config.maxPending,
+    );
+    if (next < 0) {
       throw new ConcurrencyError(
         "CNC_CAPACITY",
         "The batch exceeds the available admission capacity.",
@@ -34,13 +45,11 @@ export class Scheduler {
     const cancel = () => {
       this.queue = this.queue.filter((entry) => {
         if (entry.signal !== signal) return true;
-        this.pending--;
         entry.resolve({ status: "rejected", error: signal.reason });
         return false;
       });
     };
     signal.addEventListener("abort", cancel, { once: true });
-    this.pending += jobs.length;
     const promises = jobs.map((job) =>
       new Promise<ConcurrentOutcome<unknown>>((resolve) => {
         this.queue.push({ ...job, context, signal, resolve });
@@ -55,14 +64,23 @@ export class Scheduler {
   }
 
   private pump(): void {
-    while (this.running < this.config.concurrency) {
-      const index = this.queue.findIndex(({ task }) =>
-        (this.active.get(task) ?? 0) < task.concurrency
+    while (fitsCapacity(this.running, 1, this.config.concurrency)) {
+      const index = firstEligible(
+        this.queue,
+        0,
+        ({ task }) =>
+          fitsCapacity(this.active.get(task) ?? 0, 1, task.concurrency),
       );
       if (index < 0) return;
-      const [entry] = this.queue.splice(index, 1);
-      this.running++;
-      this.active.set(entry.task, (this.active.get(entry.task) ?? 0) + 1);
+      const entry = this.queue[index];
+      const counts = dispatchCounts(
+        this.queue.length,
+        this.running,
+        this.active.get(entry.task) ?? 0,
+      );
+      this.queue.splice(index, 1);
+      this.running = counts.running;
+      this.active.set(entry.task, counts.task);
       void this.execute(entry);
     }
   }
@@ -84,9 +102,9 @@ export class Scheduler {
           : new Error("Concurrent task failed.", { cause: error }),
       };
     }
-    this.running--;
-    this.pending--;
-    this.active.set(entry.task, this.active.get(entry.task)! - 1);
+    const counts = settleCounts(this.running, this.active.get(entry.task)!);
+    this.running = counts.running;
+    this.active.set(entry.task, counts.task);
     entry.resolve(outcome);
     this.pump();
   }

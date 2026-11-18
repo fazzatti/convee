@@ -23,6 +23,27 @@ function options(): JcoOptions<{ call(): number }, { count: number }> {
   };
 }
 describe("Jco factory adapter", () => {
+  it("shares preparation with a preload initiated inside the asset loader", async () => {
+    let loads = 0;
+    let nested: Promise<void> | undefined;
+    const bindings = jcoBindings({
+      ...options(),
+      modules: {
+        "a.wasm": {
+          source: () => {
+            loads++;
+            if (loads === 1) nested = bindings.preload();
+            return Promise.resolve(
+              new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]),
+            );
+          },
+        },
+      },
+    });
+    await bindings.preload();
+    await nested;
+    assertEquals(loads, 1);
+  });
   it("prepares all modules once without instantiation and creates independent sessions", async () => {
     let loads = 0, starts = 0, cleaned = 0;
     const base = options();

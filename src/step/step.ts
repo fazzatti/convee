@@ -1,3 +1,4 @@
+import { retain } from "@/core/selection.ts";
 import type { ContextValues, RunContextOptions } from "@/context/types.ts";
 import { callableFacade } from "@/runtime/callable.ts";
 import {
@@ -38,7 +39,7 @@ class StepExecution {
     return this;
   }
   remove(id: string): this {
-    this.registered = this.registered.filter((plugin) => plugin.id !== id);
+    this.registered = retain(this.registered, (plugin) => plugin.id !== id);
     return this;
   }
   run(...args: unknown[]): unknown {

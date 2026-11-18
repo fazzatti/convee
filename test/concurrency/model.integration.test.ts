@@ -3,6 +3,41 @@ import { describe, it } from "@std/testing/bdd";
 import { concurrent, plugin, step } from "@convee";
 
 describe("Concurrent scheduling model", () => {
+  it("settling one of two active jobs releases exactly one task slot", async () => {
+    const started = Array.from(
+      { length: 4 },
+      () => Promise.withResolvers<void>(),
+    );
+    const release = Array.from(
+      { length: 4 },
+      () => Promise.withResolvers<void>(),
+    );
+    const seen: number[] = [];
+    const unit = concurrent({
+      concurrency: 4,
+      tasks: {
+        limited: {
+          concurrency: 2,
+          run: async (id: number) => {
+            seen.push(id);
+            started[id].resolve();
+            await release[id].promise;
+            return id;
+          },
+        },
+      },
+      split: ({ limited }) => [0, 1, 2, 3].map((id) => limited.job(id)),
+      join: (values) => values,
+    });
+    const pending = unit();
+    await started[1].promise;
+    release[0].resolve();
+    await started[2].promise;
+    const beforeSecondSettlement = [...seen];
+    for (const gate of release) gate.resolve();
+    assertEquals(await pending, [0, 1, 2, 3]);
+    assertEquals(beforeSecondSettlement, [0, 1, 2]);
+  });
   it("preserves every result and lifecycle across 192 queued jobs and 64 overlapping runs", async () => {
     let active = 0, peak = 0, finalized = 0;
     const byGroup = [0, 0], peaks = [0, 0], seen = new Set<number>();

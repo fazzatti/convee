@@ -1,3 +1,8 @@
+import {
+  freshName,
+  insertSource,
+  sourceIntervals,
+} from "@/workers/source-edit.ts";
 import type { Plugin } from "npm:vite@8.3.4";
 import { moduleUrl as runtimeModuleUrl } from "@/workers/module-url.ts";
 
@@ -16,15 +21,101 @@ function node(value: unknown): value is Node {
   return value !== null && typeof value === "object" &&
     typeof Reflect.get(value, "type") === "string";
 }
-function walk(value: Node, visit: (value: Node) => void): void {
-  visit(value);
+function walk(
+  value: Node,
+  visit: (value: Node, parents: Node[]) => void,
+  parents: Node[] = [],
+): void {
+  visit(value, parents);
+  parents.push(value);
   for (const child of Object.values(value)) {
-    if (node(child)) walk(child, visit);
+    if (node(child)) walk(child, visit, parents);
     else if (Array.isArray(child)) {
-      for (const element of child) if (node(element)) walk(element, visit);
+      for (const element of child) {
+        if (node(element)) walk(element, visit, parents);
+      }
+    }
+  }
+  parents.pop();
+}
+
+function boundNames(pattern: Node, add: (name: string) => void): void {
+  switch (pattern.type) {
+    case "Identifier":
+      add(String(pattern.name));
+      break;
+    case "RestElement":
+      boundNames(pattern.argument as Node, add);
+      break;
+    case "AssignmentPattern":
+      boundNames(pattern.left as Node, add);
+      break;
+    case "ArrayPattern":
+      for (const element of pattern.elements as (Node | null)[]) {
+        if (element) boundNames(element, add);
+      }
+      break;
+    case "ObjectPattern":
+      for (const prop of pattern.properties as Node[]) {
+        boundNames(prop.type === "Property" ? prop.value as Node : prop, add);
+      }
+  }
+}
+const functions = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+]);
+const blocks = new Set([
+  "Program",
+  "BlockStatement",
+  "StaticBlock",
+  "ForStatement",
+  "ForOfStatement",
+  "ForInStatement",
+  "SwitchStatement",
+]);
+/** Record the full lexical extent, including uses preceding the declaration. */
+function localBindings(
+  value: Node,
+  parents: Node[],
+  hide: (pattern: Node, scope: Node) => void,
+): void {
+  const enclosingBlock = () =>
+    parents.findLast((parent) => blocks.has(parent.type))!;
+  if (functions.has(value.type)) {
+    for (const param of value.params as Node[]) hide(param, value);
+    if (node(value.id)) {
+      hide(
+        value.id,
+        value.type === "FunctionDeclaration" ? enclosingBlock() : value,
+      );
+    }
+  } else if (value.type === "VariableDeclaration") {
+    const owner = value.kind === "var"
+      ? parents.findLast((parent) =>
+        functions.has(parent.type) || parent.type === "StaticBlock" ||
+        parent.type === "Program"
+      )!
+      : enclosingBlock();
+    const scope = functions.has(owner.type) ? owner.body as Node : owner;
+    for (const declaration of value.declarations as Node[]) {
+      hide(declaration.id as Node, scope);
+    }
+  } else if (value.type === "CatchClause" && node(value.param)) {
+    hide(value.param, value);
+  } else if (
+    value.type === "ClassDeclaration" || value.type === "ClassExpression"
+  ) {
+    if (node(value.id)) {
+      hide(
+        value.id,
+        value.type === "ClassDeclaration" ? enclosingBlock() : value,
+      );
     }
   }
 }
+
 function moduleUrl(value: Node): boolean {
   const object = value.object as Node, property = value.property as Node;
   return value.type === "MemberExpression" && !value.computed &&
@@ -37,7 +128,8 @@ function moduleUrl(value: Node): boolean {
  * Add `conveeWorkers()` to Vite's plugins. The integration recognizes imports of
  * worker from @fifo/convee/workers, @jsr/fifo__convee/workers or @convee/workers
  * (including aliases of the imported function), and a literal options object
- * with module: import.meta.url.
+ * with module: import.meta.url. Later explicit entry properties take precedence.
+ * A later spread or computed key can override module, so that form is left to the caller.
  * It emits separate bootstraps, installs their loader for worker builds, and
  * preserves the application's existing worker plugins. No companion files,
  * caller-side execution fallback or serialized functions are generated.
@@ -86,7 +178,19 @@ export function conveeWorkers(): ConveeWorkersPlugin {
       const ast = this.parse(code) as unknown as Node;
       const bindings = new Set<string>();
       const identifiers = new Set<string>();
-      walk(ast, (value) => {
+      const shadows = new Map<string, { start: number; end: number }[]>();
+      walk(ast, (value, parents) => {
+        localBindings(value, parents, (pattern, scope) => {
+          // Switch cases share a scope. The discriminant is evaluated outside it.
+          const start = scope.type === "SwitchStatement"
+            ? (scope.cases as Node[])[0].start
+            : scope.start;
+          boundNames(pattern, (name) => {
+            const ranges = shadows.get(name) ?? [];
+            ranges.push({ start, end: scope.end });
+            shadows.set(name, ranges);
+          });
+        });
         if (value.type === "Identifier") identifiers.add(String(value.name));
         if (value.type !== "ImportDeclaration") return;
         const source = String((value.source as Node).value);
@@ -108,28 +212,41 @@ export function conveeWorkers(): ConveeWorkersPlugin {
       });
       const edits: number[] = [];
       walk(ast, (value) => {
+        if (value.type !== "CallExpression") return;
+        const callee = value.callee as Node;
         if (
-          value.type !== "CallExpression" ||
-          !bindings.has(String((value.callee as Node).name))
+          callee.type !== "Identifier" || !bindings.has(String(callee.name))
+        ) return;
+        if (
+          shadows.get(String(callee.name))?.some(({ start, end }) =>
+            start <= callee.start && callee.end <= end
+          )
         ) return;
         const options = (value.arguments as Node[])[1];
         if (!options || options.type !== "ObjectExpression") return;
-        for (const property of options.properties as Node[]) {
-          if (
-            property.type === "Property" && !property.computed &&
-            ((property.key as Node).name === "module" ||
-              (property.key as Node).value === "module") &&
-            moduleUrl(property.value as Node)
-          ) edits.push(options.start + 1);
+        // Object properties are evaluated left to right. Only the last possible
+        // writer of module can establish the static URL.
+        const lastModule = (options.properties as Node[]).findLast((property) =>
+          property.type === "SpreadElement" || property.computed === true ||
+          ((property.key as Node).name ?? (property.key as Node).value) ===
+            "module"
+        );
+        if (
+          lastModule?.type === "Property" && !lastModule.computed &&
+          moduleUrl(lastModule.value as Node)
+        ) {
+          edits.push(options.start + 1);
         }
       });
       if (!edits.length) return;
-      let binding = "__convee_worker_entry_" + edits[0];
-      while (identifiers.has(binding)) binding += "_";
-      for (const offset of edits.sort((a, b) => b - a)) {
-        code = code.slice(0, offset) + `entry: ${binding},` +
-          code.slice(offset);
-      }
+      const binding = freshName(
+        "__convee_worker_entry_" + edits[0],
+        identifiers,
+      );
+      const insertion = `entry: ${binding},`;
+      code = edits.length === 1
+        ? insertSource(code, edits[0], insertion)
+        : sourceIntervals(code, edits.sort((a, b) => a - b)).join(insertion);
       return {
         code:
           `import ${binding} from ${

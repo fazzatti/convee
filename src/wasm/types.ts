@@ -17,6 +17,8 @@ export interface WasmSession<Exports extends object> {
   readonly exports: Exports;
   /**
    * Recognize an expected domain error that leaves the instance safe for reuse.
+   * Invoked only for exceptions from the guest callable, including its generated glue.
+   * Native traps and failures detected by Convee during lookup or output ownership retire the session.
    * @param error - Original exception, before native Step normalization.
    * @returns True only for known application failures; omitted means all failures are unsafe.
    * @throws A classifier failure retires the session and preserves both errors.

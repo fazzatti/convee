@@ -80,6 +80,7 @@ describe("Vite worker build integration", () => {
       const source of [
         "export const value = 1;",
         'import { worker } from "other"; worker(() => 1, {module: import.meta.url});',
+        'import { worker as undefined } from "@convee/workers"; other.factory(fn, {module: import.meta.url});',
         'import worker from "@convee/workers"; worker(() => 1, {module: import.meta.url});',
         imports + "define(() => 1);",
         imports + "define(() => 1, options);",
@@ -100,6 +101,70 @@ describe("Vite worker build integration", () => {
     );
     assertEquals(transform(imports, "/app/a.js.convee-worker.js"), undefined);
     assertThrows(() => transform(imports + "invalid syntax"));
+  });
+  it("resolves shadowed aliases, hoisting, patterns, switch scopes and parameter defaults", () => {
+    const call = "define(() => 1, {module: import.meta.url})";
+    const cases: [string, number][] = [
+      [`function f(define) { return ${call}; }`, 0],
+      [`function f({key: [ ,define = 0]}, ...rest) { return ${call}; }`, 0],
+      [`const f = function define() { return ${call}; };`, 0],
+      [`{ ${call}; const { a, ...define } = {}; }`, 0],
+      [`{ ${call}; function define() {} }`, 0],
+      [`function outer() { ${call}; if (false) { var define; } }`, 0],
+      [`function outer(x = ${call}) { var define; return ${call}; }`, 1],
+      [`try {} catch (define) { ${call}; } try {} catch { ${call}; }`, 1],
+      [`for (let define of []) { ${call}; } ${call};`, 1],
+      [
+        `for (let define in {}) { ${call}; } for (let define; false;) { ${call}; }`,
+        0,
+      ],
+      [`switch (${call}) { case 0: ${call}; break; default: let define; }`, 1],
+      [
+        `{ class define { x = ${call}; } } const c = class define { x = ${call}; };`,
+        0,
+      ],
+      [`const c = class { static { ${call}; var define; } };`, 0],
+      [`export default function () { return ${call}; }`, 1],
+      [`const a = (x = ${call}) => x; const b = (define) => ${call};`, 1],
+      [`const e = "😀"; ${call}; ${call};`, 2],
+      [
+        "define(() => 1, { module: import.meta.url, module: import.meta.url });",
+        1,
+      ],
+    ];
+    for (const [source, expected] of cases) {
+      const output = transform(imports + source);
+      assertEquals(
+        output?.code.match(/entry: __convee_worker_entry_/g)?.length ?? 0,
+        expected,
+        source,
+      );
+      if (output) {
+        parse(output.code, { ecmaVersion: "latest", sourceType: "module" });
+      }
+    }
+  });
+  it("uses the last possible module writer and preserves explicit entry precedence", () => {
+    for (
+      const options of [
+        "module: import.meta.url, module: other",
+        "module: import.meta.url, ...extra",
+        "module: import.meta.url, [key]: other",
+        "module: import.meta.url, get module() { return other; }",
+      ]
+    ) {
+      assertEquals(
+        transform(imports + `define(fn, { ${options} });`),
+        undefined,
+      );
+    }
+    const result = transform(
+      imports +
+        "define(fn, { ...extra, module: import.meta.url, entry: own });",
+    )!;
+    assert(
+      result.code.includes(", ...extra, module: import.meta.url, entry: own"),
+    );
   });
   it("supports quoted named imports without colliding with application identifiers", () => {
     const source =

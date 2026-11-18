@@ -202,7 +202,8 @@ export interface PersistentParallel<Input extends unknown[], Output>
    */
   ready(): Promise<void>;
   /**
-   * Stop admission, drain complete active invocations and release transports.
+   * Stop new reservations, wait for active caller lifecycles, and release transports.
+   * A split still running at close cannot reserve a new batch. Already reserved jobs drain.
    * @returns A shared promise fulfilled after cleanup. With reopenOnUse, a later
    * call starts a fresh generation; calls during draining are rejected.
    * @throws Cleanup failures are reported after all transports were asked to stop.

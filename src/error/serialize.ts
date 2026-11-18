@@ -1,3 +1,9 @@
+import {
+  diagnosticWidth,
+  mayProject,
+  remainingVisits,
+} from "@/error/limits.ts";
+
 function dataField(
   value: object,
   key: string,
@@ -43,7 +49,7 @@ export function diagnosticValue(value: unknown): unknown {
   const ancestors = new WeakSet<object>();
   let remaining = 1000;
   function projectArray(value: unknown[], depth: number): unknown[] {
-    return Array.from({ length: Math.min(value.length, 100) }, (_, index) => {
+    return Array.from({ length: diagnosticWidth(value.length) }, (_, index) => {
       const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
       if (!descriptor) return undefined;
       return "value" in descriptor
@@ -56,7 +62,9 @@ export function diagnosticValue(value: unknown): unknown {
     if (typeof current === "symbol") return String(current);
     if (typeof current === "function") return "[Function]";
     if (current === null || typeof current !== "object") return current;
-    if (--remaining < 0 || depth >= 8) return "[Truncated]";
+    const available = remaining;
+    remaining = remainingVisits(remaining);
+    if (!mayProject(available, depth)) return "[Truncated]";
     if (ancestors.has(current)) return "[Circular]";
     ancestors.add(current);
     try {
@@ -65,7 +73,8 @@ export function diagnosticValue(value: unknown): unknown {
       }
       if (Array.isArray(current)) return projectArray(current, depth);
       const result: Record<string, unknown> = Object.create(null);
-      for (const key of Object.keys(current).slice(0, 100)) {
+      const keys = Object.keys(current);
+      for (const key of keys.slice(0, diagnosticWidth(keys.length))) {
         const descriptor = Object.getOwnPropertyDescriptor(current, key);
         result[key] = descriptor && "value" in descriptor
           ? project(descriptor.value, depth + 1)

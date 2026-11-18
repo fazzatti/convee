@@ -1,10 +1,12 @@
+import { retain } from "@/core/selection.ts";
 import { plugin } from "@/plugin/factory.ts";
 import { step } from "@/step/factory.ts";
 import type { StepPlugin, StepRunOptions } from "@/step/types.ts";
 import { callableFacade } from "@/runtime/callable.ts";
 import { type Setup, setup } from "@/workers/config.ts";
 import { WorkerError } from "@/workers/error.ts";
-import { builders, prepare, reshape } from "@/workers/jobs.ts";
+import { reshape } from "@/core/job-tree.ts";
+import { builders, prepare } from "@/workers/jobs.ts";
 import { Lifetime } from "@/workers/lifecycle.ts";
 import { Generation } from "@/workers/pool.ts";
 import type {
@@ -56,7 +58,7 @@ class ParallelExecution {
     return this;
   }
   remove(id: string): this {
-    this.registered = this.registered.filter((plugin) => plugin.id !== id);
+    this.registered = retain(this.registered, (plugin) => plugin.id !== id);
     return this;
   }
   run(...input: unknown[]): Promise<unknown> {

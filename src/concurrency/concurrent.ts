@@ -1,10 +1,12 @@
+import { retain } from "@/core/selection.ts";
 import type { RunContext } from "@/context/types.ts";
 import { callableFacade } from "@/runtime/callable.ts";
 import { step } from "@/step/factory.ts";
 import type { StepPlugin } from "@/step/types.ts";
 import { configure, type Setup, timeout } from "@/concurrency/config.ts";
 import { ConcurrencyError } from "@/concurrency/error.ts";
-import { builders, prepare, reshape } from "@/concurrency/jobs.ts";
+import { reshape } from "@/core/job-tree.ts";
+import { builders, prepare } from "@/concurrency/jobs.ts";
 import { Scheduler } from "@/concurrency/scheduler.ts";
 import type {
   ConcurrentBuilders,
@@ -48,7 +50,7 @@ class ConcurrentExecution {
     return this;
   }
   remove(id: string): this {
-    this.registered = this.registered.filter((plugin) => plugin.id !== id);
+    this.registered = retain(this.registered, (plugin) => plugin.id !== id);
     return this;
   }
   run(...input: unknown[]): Promise<unknown> {
@@ -182,7 +184,8 @@ class ConcurrentExecution {
  * with CNC_CAPACITY, CNC_ABORTED, CNC_TIMEOUT, CNC_BATCH or native outer hook errors.
  * All mode drains then aggregates every original task error in input order; collect
  * joins outcomes. Cancellation skips join if not yet started and waits for
- * already-running work and its actual cleanup.
+ * already-running work and its actual cleanup. A split or join already in progress
+ * that rejects propagates its own failure, including when cancellation arrived during the callback.
  * @remarks Limits cover task hooks, not outer hooks or join. Pass each builder's signal
  * explicitly to cooperative I/O. A non-cooperative operation can delay cancellation
  * indefinitely. Shared references remain mutable; this does not provide isolation,

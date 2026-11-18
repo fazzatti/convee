@@ -1,3 +1,16 @@
+import {
+  copyArguments,
+  registrationsForRun,
+  singleArgument,
+} from "@/core/sequences.ts";
+import {
+  afterPhase,
+  completionDisposition,
+  inputAction,
+} from "@/runtime/outcome.ts";
+import { firstEligible } from "@/core/eligibility.ts";
+import { retain } from "@/core/selection.ts";
+import { matchesPluginTarget } from "@/core/plugin-target.ts";
 import { createRunContext, RunContextController } from "@/context/runtime.ts";
 import type { RunContext, RunContextOptions } from "@/context/types.ts";
 import type { ConveeErrorTrace, ConveeTracePhase } from "@/error/types.ts";
@@ -46,6 +59,21 @@ export function assertSynchronous<Value>(value: Value): Value {
   return value;
 }
 
+/** Walk the captured hooks lazily so recovery can stop at its first successful hook. */
+function* hooksFor<P extends "input" | "error" | "output" | "finally">(
+  plugins: readonly RuntimePlugin[],
+  phase: P,
+): Generator<RuntimePlugin & Required<Pick<RuntimePlugin, P>>> {
+  const present = (plugin: RuntimePlugin) => !!plugin[phase];
+  for (
+    let index = firstEligible(plugins, 0, present);
+    index >= 0;
+    index = firstEligible(plugins, index + 1, present)
+  ) {
+    yield plugins[index] as RuntimePlugin & Required<Pick<RuntimePlugin, P>>;
+  }
+}
+
 function* lifecycle(
   execution: Execution,
   args: unknown[],
@@ -82,45 +110,60 @@ function* lifecycle(
   }
   controller.enterStep(execution.id, args);
   let input = args;
-  function* runPhases(): Generator<unknown, unknown, unknown> {
-    for (const plugin of execution.plugins) {
-      if (!plugin.input) continue;
+  function* applyInputs(): Generator<unknown, void, unknown> {
+    for (const plugin of hooksFor(execution.plugins, "input")) {
       const result = yield* invoke(plugin, plugin.input, input);
-      if (Array.isArray(result)) input = [...result];
-      else if (input.length === 1) input = [result];
+      const action = inputAction(Array.isArray(result), input.length);
+      if (action === "spread") input = copyArguments(result as unknown[]);
+      else if (action === "wrap") input = singleArgument(result);
       else throw execution.invalidInput(input.length, result, plugin.id);
       controller.updateCurrentStepInput(input);
     }
-    phase = "run";
-    pluginId = undefined;
-    let output: unknown;
-    try {
-      output = yield execution.body(input, context);
-    } catch (failure) {
-      let error = execution.normalize(failure, trace());
+  }
+  function* recover(error: Error): Generator<unknown, unknown, unknown> {
+    for (const plugin of hooksFor(execution.plugins, "error")) {
+      const result = yield* invoke(plugin, plugin.error, [error, [...input]]);
+      if (!(result instanceof Error)) return result;
+      error = result;
       controller.updateCurrentStepError(error);
-      phase = "error";
-      let recovered = false;
-      for (const plugin of execution.plugins) {
-        if (!plugin.error) continue;
-        const result = yield* invoke(plugin, plugin.error, [error, [...input]]);
-        if (result instanceof Error) {
-          error = result;
-          controller.updateCurrentStepError(error);
-        } else {
-          output = result;
-          recovered = true;
-          break;
-        }
-      }
-      if (!recovered) throw error;
     }
-    controller.updateCurrentStepOutput(output);
-    phase = "output";
-    for (const plugin of execution.plugins) {
-      if (!plugin.output) continue;
-      output = yield* invoke(plugin, plugin.output, [output]);
-      controller.updateCurrentStepOutput(output);
+    throw error;
+  }
+  function* runPhases(): Generator<unknown, unknown, unknown> {
+    let bodyError!: Error;
+    let output: unknown;
+    let current: ConveeTracePhase = "input";
+    while (current !== "finally") {
+      phase = current;
+      try {
+        switch (current) {
+          case "input":
+            yield* applyInputs();
+            break;
+          case "run":
+            pluginId = undefined;
+            output = yield execution.body(input, context);
+            break;
+          case "error":
+            output = yield* recover(bodyError);
+            break;
+          case "output":
+            controller.updateCurrentStepOutput(output);
+            for (const plugin of hooksFor(execution.plugins, "output")) {
+              output = yield* invoke(plugin, plugin.output, [output]);
+              controller.updateCurrentStepOutput(output);
+            }
+            break;
+        }
+      } catch (failure) {
+        const next = afterPhase(current, true);
+        if (next !== "error") throw failure;
+        bodyError = execution.normalize(failure, trace());
+        controller.updateCurrentStepError(bodyError);
+        current = next;
+        continue;
+      }
+      current = afterPhase(current, false);
     }
     return output;
   }
@@ -138,8 +181,7 @@ function* lifecycle(
     // must not prevent the remaining plugins from releasing their resources.
     phase = "finally";
     const failures: FinalizationFailure[] = [];
-    for (const plugin of execution.plugins) {
-      if (!plugin.finally) continue;
+    for (const plugin of hooksFor(execution.plugins, "finally")) {
       try {
         yield* invoke(plugin, plugin.finally, []);
       } catch (failure) {
@@ -150,7 +192,11 @@ function* lifecycle(
         });
       }
     }
-    if (failures.length > 0) {
+    const disposition = completionDisposition(
+      executionError !== undefined,
+      failures.length,
+    );
+    if (disposition === "throw-finalization") {
       pluginId = undefined;
       const error = RT_ERRORS.FINALIZATION_FAILED({
         executionId: execution.id,
@@ -161,18 +207,16 @@ function* lifecycle(
       controller.updateCurrentStepError(error);
       throw error;
     }
-    if (executionError !== undefined) throw executionError;
+    if (disposition === "throw-execution") throw executionError;
     return output;
   } finally {
     controller.leaveStep();
   }
 }
 
-export async function execute(
-  execution: Execution,
-  args: unknown[],
+export async function settleEffects(
+  iterator: Generator<unknown, unknown, unknown>,
 ): Promise<unknown> {
-  const iterator = lifecycle(execution, args);
   let cursor = iterator.next();
   while (!cursor.done) {
     let value: unknown;
@@ -187,8 +231,9 @@ export async function execute(
   return cursor.value;
 }
 
-export function executeSync(execution: Execution, args: unknown[]): unknown {
-  const iterator = lifecycle(execution, args);
+export function settleEffectsSync(
+  iterator: Generator<unknown, unknown, unknown>,
+): unknown {
   let cursor = iterator.next();
   while (!cursor.done) {
     let value: unknown;
@@ -203,13 +248,26 @@ export function executeSync(execution: Execution, args: unknown[]): unknown {
   return cursor.value;
 }
 
+export function execute(
+  execution: Execution,
+  args: unknown[],
+): Promise<unknown> {
+  return settleEffects(lifecycle(execution, args));
+}
+
+export function executeSync(execution: Execution, args: unknown[]): unknown {
+  return settleEffectsSync(lifecycle(execution, args));
+}
+
 export function activePlugins(
   persistent: readonly RuntimePlugin[],
   temporary: readonly RuntimePlugin[],
   id: string,
 ): RuntimePlugin[] {
-  return [...persistent, ...temporary].filter((plugin) => plugin.targets(id))
-    .map(capturePlugin);
+  const registrations = registrationsForRun(persistent, temporary);
+  return retain(registrations, (plugin) => plugin.targets(id)).map(
+    capturePlugin,
+  );
 }
 
 export function capturePlugin(plugin: RuntimePlugin): RuntimePlugin {
@@ -221,6 +279,6 @@ export function capturePlugin(plugin: RuntimePlugin): RuntimePlugin {
     output,
     error,
     finally: finalizer,
-    targets: (stepId) => target === undefined || target === stepId,
+    targets: (stepId) => matchesPluginTarget(target, stepId),
   };
 }

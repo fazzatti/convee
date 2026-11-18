@@ -1,0 +1,7 @@
+{
+  "name": "convee-verification-tools",
+  "private": true,
+  "dependencies": {
+    "lemmascript": "0.6.10"
+  }
+}

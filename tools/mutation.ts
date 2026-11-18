@@ -17,6 +17,42 @@ for (const file of await sourceFiles()) {
 const mutants: Mutant[] = [];
 const catalog: [string, string, string, string][] = [
   [
+    "pipe-skips-final-child",
+    "src/pipe/pipe.ts",
+    "for (const child of children)",
+    "for (const child of children.slice(0, -1))",
+  ],
+  [
+    "phase-failure-recovery-wiring",
+    "src/runtime/execution.ts",
+    "const next = afterPhase(current, true);",
+    "const next = afterPhase(current, false);",
+  ],
+  [
+    "per-task-slot-release",
+    "src/concurrency/scheduler.ts",
+    "const counts = settleCounts(this.running, this.active.get(entry.task)!);",
+    "const counts = {running: this.running - 1, task: 0};",
+  ],
+  [
+    "wasm-classifier-origin",
+    "src/wasm/session.ts",
+    "inGuestCall = false;\n      if",
+    "inGuestCall = true;\n      if",
+  ],
+  [
+    "live-plugin-target",
+    "src/context/runtime.ts",
+    "this.pluginStack.push({ ...snapshot, target });",
+    "this.pluginStack.push(snapshot);",
+  ],
+  [
+    "vite-alias-shadow",
+    "src/workers/vite.ts",
+    "start <= callee.start && callee.end <= end",
+    "false",
+  ],
+  [
     "concurrency-default-ownership",
     "src/concurrency/config.ts",
     'options.capacityScope ?? "invocation"',
@@ -37,26 +73,26 @@ const catalog: [string, string, string, string][] = [
   [
     "concurrency-shared-limit",
     "src/concurrency/scheduler.ts",
-    "this.running < this.config.concurrency",
-    "this.running < Number.MAX_SAFE_INTEGER",
+    "fitsCapacity(this.running, 1, this.config.concurrency)",
+    "true",
   ],
   [
     "concurrency-task-limit",
     "src/concurrency/scheduler.ts",
-    "(this.active.get(task) ?? 0) < task.concurrency",
+    "fitsCapacity(this.active.get(task) ?? 0, 1, task.concurrency)",
     "true",
   ],
   [
     "concurrency-shared-admission",
     "src/concurrency/scheduler.ts",
-    "jobs.length > this.config.maxPending - this.pending",
-    "jobs.length > this.config.maxPending",
+    "occupancy(this.queue.length, this.running),",
+    "0,",
   ],
   [
     "concurrency-result-order",
-    "src/concurrency/jobs.ts",
-    "shape.map((child)",
-    "[...shape].reverse().map((child)",
+    "src/core/job-tree.ts",
+    "return children.map",
+    "return [...children].reverse().map",
   ],
   [
     "concurrency-job-ownership",
@@ -91,14 +127,14 @@ const catalog: [string, string, string, string][] = [
   [
     "wasm-replacement-budget",
     "src/wasm/session.ts",
-    "this.restarts++;",
-    "this.restarts += 2;",
+    "this.restarts = next;",
+    "this.restarts = next + 1;",
   ],
   [
     "wasm-admission-capacity",
     "src/wasm/lifecycle.ts",
-    "this.active >= this.maxPending",
-    "false",
+    "admittedOccupancy(this.active, 1, this.maxPending)",
+    "this.active + 1",
   ],
   [
     "wasm-dispose-while-draining",
@@ -120,9 +156,9 @@ const catalog: [string, string, string, string][] = [
   ],
   [
     "worker-nested-order",
-    "src/workers/jobs.ts",
-    "shape.map((child)",
-    "[...shape].reverse().map((child)",
+    "src/workers/parallel.ts",
+    "reshape(batch.shape, values)",
+    "reshape(batch.shape, [...values].reverse())",
   ],
   [
     "worker-capacity-release",
@@ -139,8 +175,8 @@ const catalog: [string, string, string, string][] = [
   [
     "worker-batch-capacity",
     "src/workers/pool.ts",
-    "this.pending + jobs.length > this.setup.maxPending",
-    "jobs.length > this.setup.maxPending",
+    "this.pending,",
+    "0,",
   ],
   [
     "finalizer-invocation",
@@ -157,8 +193,14 @@ const catalog: [string, string, string, string][] = [
   [
     "finalizer-preserves-execution-error",
     "src/runtime/error.ts",
-    "errors.unshift(executionError)",
-    "errors.unshift(new Error('lost execution error'))",
+    "orderedFailures(\n        executionError,",
+    "orderedFailures(\n        undefined,",
+  ],
+  [
+    "continue-hook-traversal",
+    "src/runtime/execution.ts",
+    "index + 1, present",
+    "plugins.length, present",
   ],
   ["invocation-isolation", "src/runtime/execution.ts", ".fork()", ""],
   [
@@ -177,14 +219,14 @@ const catalog: [string, string, string, string][] = [
   [
     "registration-order",
     "src/runtime/execution.ts",
-    "[...persistent, ...temporary]",
-    "[...temporary, ...persistent]",
+    "registrationsForRun(persistent, temporary)",
+    "registrationsForRun(temporary, persistent)",
   ],
   [
     "input-tuple-copy",
     "src/runtime/execution.ts",
-    "input = [...result]",
-    "input = result",
+    "input = copyArguments(result as unknown[])",
+    "input = result as unknown[]",
   ],
   [
     "error-input-copy",
@@ -225,8 +267,8 @@ const catalog: [string, string, string, string][] = [
   [
     "pipe-routing-order",
     "src/pipe/pipe.ts",
-    "[...this.registered, ...(options.plugins ?? [])]",
-    "[...(options.plugins ?? []), ...this.registered]",
+    "registrationsForRun(this.registered, options.plugins ?? [])",
+    "registrationsForRun(options.plugins ?? [], this.registered)",
   ],
   [
     "plugin-definition-copy",
@@ -315,10 +357,11 @@ for await (const entry of Deno.readDir("test")) {
 }
 async function run(
   cwd: string,
+  suites: string[] = tests,
 ): Promise<{ passed: boolean; timedOut: boolean; output: string }> {
   const child = new Deno.Command("deno", {
     cwd,
-    args: ["test", "--no-check", "--reporter=dot", ...tests],
+    args: ["test", "--no-check", "--reporter=dot", ...suites],
     stdout: "piped",
     stderr: "piped",
   }).spawn();
@@ -373,7 +416,12 @@ await Promise.all(Array.from({ length: 4 }, async (_, worker) => {
         original.slice(mutant.end),
     );
     try {
-      const result = await run(workspace);
+      // A broken phase table can send the synchronous driver into an infinite
+      // loop. Test its actual transition outputs before invoking any user code.
+      const table = mutant.file === "src/runtime/outcome.ts"
+        ? await run(workspace, ["src/runtime/outcome.unit.test.ts"])
+        : undefined;
+      const result = table && !table.passed ? table : await run(workspace);
       const status = mutationStatus(result);
       results.push({
         id: mutant.id,

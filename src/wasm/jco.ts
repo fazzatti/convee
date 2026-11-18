@@ -1,3 +1,4 @@
+import { hexByte } from "@/wasm/digest.ts";
 import { WasmError } from "@/wasm/error.ts";
 import type { WasmBindings, WasmSession } from "@/wasm/types.ts";
 
@@ -61,10 +62,7 @@ async function compile(asset: JcoModule): Promise<WebAssembly.Module> {
   const bytes = Uint8Array.from(await read(asset.source));
   if (asset.sha256 !== undefined) {
     const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-    const actual = Array.from(
-      digest,
-      (value) => value.toString(16).padStart(2, "0"),
-    ).join("");
+    const actual = Array.from(digest, hexByte).join("");
     if (actual !== asset.sha256) {
       throw new WasmError(
         "WASM_INTEGRITY",
@@ -132,10 +130,13 @@ export function jcoBindings<Exports extends object, Imports>(
   const { instantiate, imports, disposeImports, isApplicationError } = options;
   let prepared: Promise<Map<string, WebAssembly.Module>> | undefined;
   function prepare(): Promise<Map<string, WebAssembly.Module>> {
-    return prepared ??= Promise.all(
-      entries.map(async ([path, asset]) =>
-        [path, await compile(asset)] as const
-      ),
+    // Publish the pending promise before a user-provided asset loader can reenter preload.
+    return prepared ??= Promise.resolve().then(() =>
+      Promise.all(
+        entries.map(async ([path, asset]) =>
+          [path, await compile(asset)] as const
+        ),
+      )
     )
       .then((compiled) => new Map(compiled))
       .catch((error) => {

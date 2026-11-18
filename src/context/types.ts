@@ -121,14 +121,14 @@ export interface PluginContextApi {
   /**
    * Read the plugin snapshot scoped to the active invocation.
    *
-   * @returns A fresh snapshot container sharing its identity's state store, with its ID and optional routing target.
+   * @returns A fresh snapshot container sharing its identity's state store, with the active registration's ID and target.
    * @throws Error when this view is used outside the corresponding plugin execution scope.
    */
   current(): PluginSnapshot;
   /**
    * Look up the shared run's snapshot for one plugin identity.
    *
-   * @param pluginId - Stable ID of the plugin whose snapshot is requested.
+   * @param pluginId - Stable ID of the plugin whose snapshot is requested. Its recorded target is the first seen for this ID.
    * @returns A defensive snapshot container, or undefined if the identity is unknown.
    * State and payload objects remain shared references.
    * @remarks This does not require an active invocation and does not intentionally throw.

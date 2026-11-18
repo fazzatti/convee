@@ -9,6 +9,8 @@ import type {
 
 import { diagnosticValue } from "@/error/serialize.ts";
 
+import { sameCatalog } from "@/error/catalog-identity.ts";
+
 const CONVEE_ERROR_BRAND = Symbol.for("convee/ConveeError");
 
 function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
@@ -308,9 +310,7 @@ export function isConveeErrorOf<TCreator extends AnyConveeErrorCreator>(
 ): error is InferConveeError<TCreator> {
   return (
     ConveeError.is(error) &&
-    error.code === creator.code &&
-    error.domain === creator.domain &&
-    error.source === creator.source
+    sameCatalog(error, creator)
   );
 }
 

@@ -78,7 +78,7 @@ jobs:
         run: deno task test
 
       - name: Publish package
-        run: deno publish
+        run: deno task package:publish
 
       - name: Create tag and release
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd

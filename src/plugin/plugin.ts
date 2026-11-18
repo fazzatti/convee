@@ -1,3 +1,4 @@
+import { matchesPluginTarget } from "@/core/plugin-target.ts";
 import type { ContextValues } from "@/context/types.ts";
 import { PLG_ERRORS } from "@/plugin/error.ts";
 import type {
@@ -81,7 +82,7 @@ export class PluginEngine {
       target,
       supports: (capability: PluginCapability) =>
         typeof hooks[capability] === "function",
-      targets: (stepId: string) => target === undefined || target === stepId,
+      targets: (stepId: string) => matchesPluginTarget(target, stepId),
     }) as unknown as
       & Plugin<I, O, E, Definition, Shared, Target>
       & PluginIdentity<Id, Target>;

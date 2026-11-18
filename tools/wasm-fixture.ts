@@ -62,7 +62,7 @@ export async function copyWasmFixture(
             module: ts.ModuleKind.ESNext,
           },
         }).outputText
-        : source,
+        : source.replaceAll('"./package/', '"./src/'),
     );
   }
 }

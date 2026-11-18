@@ -1,3 +1,5 @@
+import { canClassifyGuestFailure } from "@/wasm/session-policy.ts";
+import { nextRestart } from "@/core/capacity.ts";
 import { WasmError } from "@/wasm/error.ts";
 import type { WasmBindings, WasmSession } from "@/wasm/types.ts";
 
@@ -68,8 +70,10 @@ export class SessionGeneration {
       }
     }
     let cause: unknown;
-    while (this.restarts < this.maxRestarts) {
-      this.restarts++;
+    while (true) {
+      const next = nextRestart(this.restarts, this.maxRestarts);
+      if (next === this.restarts) break;
+      this.restarts = next;
       try {
         return this.session = await this.bindings.create();
       } catch (error) {
@@ -90,16 +94,20 @@ export class SessionGeneration {
     name: string,
     args: unknown[],
   ): Promise<unknown> {
+    let inGuestCall = false;
     try {
       this.guard(true);
-      const fn = Reflect.get(session.exports, name);
+      const receiver = session.exports;
+      const fn = Reflect.get(receiver, name);
       if (typeof fn !== "function") {
         throw new WasmError(
           "WASM_BINDING",
           "The requested WASM export is not callable.",
         );
       }
-      const output: unknown = Reflect.apply(fn, session.exports, args);
+      inGuestCall = true;
+      const output: unknown = Reflect.apply(fn, receiver, args);
+      inGuestCall = false;
       if (output && typeof Reflect.get(Object(output), "then") === "function") {
         void Promise.resolve(output).catch(() => {});
         throw new WasmError(
@@ -112,7 +120,10 @@ export class SessionGeneration {
       let error = caught;
       let application = false;
       try {
-        application = !(error instanceof WebAssembly.RuntimeError) &&
+        application = canClassifyGuestFailure(
+          inGuestCall,
+          error instanceof WebAssembly.RuntimeError,
+        ) &&
           session.isApplicationError?.(error) === true;
       } catch (classification) {
         error = new AggregateError(

@@ -1,4 +1,7 @@
+import { afterRelease } from "@/core/owner-phase.ts";
+import { admittedOccupancy, nextRestart } from "@/core/capacity.ts";
 import { clone, type GroupSetup, type Setup } from "@/workers/config.ts";
+import { mayDispatch, replyBelongs } from "@/workers/host-phase.ts";
 import { moduleUrl } from "@/workers/module-url.ts";
 import { WorkerError, type WorkerErrorCode } from "@/workers/error.ts";
 import { type PreparedJob } from "@/workers/jobs.ts";
@@ -254,7 +257,7 @@ export class Group {
   }
   private result(slot: Slot, value: Extract<Reply, { kind: "result" }>): void {
     const current = slot.current;
-    if (!slot.ready || !current || value.id !== current.job.id) {
+    if (!replyBelongs(slot.ready, current?.job, value)) {
       this.fault(
         slot,
         this.error(
@@ -266,7 +269,7 @@ export class Group {
       return;
     }
     clearTimeout(slot.timer);
-    if (value.ok) current.resolve(value.value);
+    if (value.ok) current!.resolve(value.value);
     else {
       const error = this.error(
         value.error.code === "WRK_CLONE" ? "WRK_CLONE" : "WRK_TASK",
@@ -274,7 +277,7 @@ export class Group {
         slot,
       );
       error.meta!.remote = value.error;
-      current.reject(error);
+      current!.reject(error);
     }
     slot.current = undefined;
     this.dispatch();
@@ -284,7 +287,14 @@ export class Group {
     this.pumping = true;
     try {
       for (const slot of this.slots) {
-        while (!slot.dead && slot.ready && !slot.current && this.queue.length) {
+        while (
+          mayDispatch(
+            slot.dead,
+            slot.ready,
+            slot.current !== undefined,
+            this.queue.length,
+          )
+        ) {
           const current = this.queue.shift()!;
           slot.current = current;
           slot.timer = setTimeout(
@@ -330,11 +340,13 @@ export class Group {
     }
     void stopped.then(() => {
       if (this.state !== "active") return;
-      if (this.restarts >= this.setup.maxRestarts) {
+      const next = nextRestart(this.restarts, this.setup.maxRestarts);
+      if (next === this.restarts) {
         this.fail(error);
         return;
       }
-      this.spawn(slot.index, ++this.restarts);
+      this.restarts = next;
+      this.spawn(slot.index, next);
     }, (cause) => {
       if (this.state === "active") {
         this.fail(
@@ -442,11 +454,16 @@ export class Generation {
       ) => [group.name, new Group(group, setup.createWorker)]),
     );
   }
-  check(jobs: readonly PreparedJob[]): void {
+  reserve(jobs: readonly PreparedJob[]): void {
     if (this.closed) {
       throw new WorkerError("WRK_CLOSED", "Worker generation is closed.");
     }
-    if (this.pending + jobs.length > this.setup.maxPending) {
+    const next = admittedOccupancy(
+      this.pending,
+      jobs.length,
+      this.setup.maxPending,
+    );
+    if (next < 0) {
       throw new WorkerError(
         "WRK_CAPACITY",
         "No jobs were admitted: the complete batch exceeds available capacity.",
@@ -454,13 +471,10 @@ export class Generation {
       );
     }
     for (const job of jobs) this.groups.get(job.group)!.available();
-  }
-  reserve(jobs: readonly PreparedJob[]): void {
-    this.check(jobs);
-    this.pending += jobs.length;
+    this.pending = next;
   }
   release(): void {
-    this.pending--;
+    this.pending = afterRelease(this.pending);
   }
   stopAdmission(): void {
     this.closed = true;

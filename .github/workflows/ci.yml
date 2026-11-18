@@ -11,6 +11,24 @@ concurrency:
   group: convee-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  formal:
+    name: Verify production contracts (LemmaScript and Dafny)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+        with:
+          deno-version: "2.9.6"
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24.1.0"
+          cache: npm
+          cache-dependency-path: tools/formal/package-lock.json
+      - run: deno task formal:setup
+      - run: deno task test:formal
+      - name: Check that committed proof files are current
+        run: test -z "$(git status --porcelain --untracked-files=all -- verification)"
   tests:
     name: Runtime and consumer types (Deno ${{ matrix.deno }})
     runs-on: ubuntu-latest
@@ -64,7 +82,7 @@ jobs:
       - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
         with:
           deno-version: "2.9.6"
-      - run: deno task verify
+      - run: deno task verify:quality
       - run: deno coverage --include=src/ --html coverage
       - name: Publish quality summary
         if: always()

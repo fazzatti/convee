@@ -1,3 +1,4 @@
+import { retain } from "@/core/selection.ts";
 import { step } from "@/step/factory.ts";
 import { plugin } from "@/plugin/factory.ts";
 import type { StepOptions, StepPlugin, StepRunOptions } from "@/step/types.ts";
@@ -33,7 +34,7 @@ class WasmStep {
     return this;
   }
   remove(id: string): this {
-    this.registered = this.registered.filter((value) => value.id !== id);
+    this.registered = retain(this.registered, (value) => value.id !== id);
     return this;
   }
   run(...input: unknown[]): Promise<unknown> {

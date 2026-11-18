@@ -1,3 +1,10 @@
+import { admittedOccupancy } from "@/core/capacity.ts";
+import {
+  afterRelease,
+  ownerAccepts,
+  type OwnerPhase,
+  phaseAfterClose,
+} from "@/core/owner-phase.ts";
 import { WasmError } from "@/wasm/error.ts";
 import { SessionGeneration } from "@/wasm/session.ts";
 import type { PersistentWasmOptions, WasmBindings } from "@/wasm/types.ts";
@@ -15,7 +22,7 @@ function integer(
 }
 /** Admission covers the full native lifecycle; only guest access is serialized. */
 export class WasmLifetime {
-  private phase: "open" | "closing" | "dormant" | "closed" = "open";
+  private phase: OwnerPhase = "open";
   private active = 0;
   private invoking = false;
   private terminal = false;
@@ -57,7 +64,7 @@ export class WasmLifetime {
   }
   private available(): void {
     if (this.failed) throw this.failed;
-    if (this.terminal || this.phase === "closing" || this.phase === "closed") {
+    if (!ownerAccepts(this.phase, this.terminal)) {
       throw new WasmError(
         "WASM_CLOSED",
         "WASM owner is not accepting executions.",
@@ -72,7 +79,8 @@ export class WasmLifetime {
   }
   enter(): SessionGeneration {
     this.available();
-    if (this.active >= this.maxPending) {
+    const next = admittedOccupancy(this.active, 1, this.maxPending);
+    if (next < 0) {
       throw new WasmError(
         "WASM_CAPACITY",
         "WASM admission capacity exhausted.",
@@ -80,7 +88,7 @@ export class WasmLifetime {
     }
     clearTimeout(this.timer);
     this.phase = "open";
-    this.active++;
+    this.active = next;
     const create = () =>
       new SessionGeneration(this.bindings, this.maxRestarts, (value) => {
         this.invoking = value;
@@ -88,7 +96,7 @@ export class WasmLifetime {
     return this.persistent ? this.generation ??= create() : create();
   }
   leave(): void {
-    this.active--;
+    this.active = afterRelease(this.active);
     if (this.active) return;
     this.drained?.();
     if (this.persistent && this.phase === "open" && this.idle !== undefined) {
@@ -133,7 +141,7 @@ export class WasmLifetime {
       } finally {
         this.generation = undefined;
         this.drained = undefined;
-        this.phase = this.terminal || !this.reopen ? "closed" : "dormant";
+        this.phase = phaseAfterClose(this.terminal, this.reopen);
       }
     })();
     return this.closing;

@@ -1,3 +1,5 @@
+import { copyArguments } from "@/core/sequences.ts";
+import { captureFields, retainedValue } from "@/context/capture.ts";
 import type {
   ContextStore,
   ContextValues,
@@ -68,10 +70,6 @@ class MemoryContextStore<
     return new Map(this.values);
   }
 }
-
-const cloneArray = (value: readonly unknown[]): readonly unknown[] => [
-  ...value,
-];
 
 export class RunContextController<
   Shared extends ContextValues = ContextValues,
@@ -169,7 +167,7 @@ export class RunContextController<
     const snapshot = this.ensureStepSnapshot(stepId);
     const frame: StepFrame = {
       snapshot,
-      input: cloneArray(input),
+      input: copyArguments(input),
     };
 
     this.stepStack.push(frame);
@@ -177,7 +175,7 @@ export class RunContextController<
 
   updateCurrentStepInput(input: readonly unknown[]): void {
     const frame = this.requireCurrentStepFrame();
-    frame.input = cloneArray(input);
+    frame.input = copyArguments(input);
   }
 
   updateCurrentStepOutput(output: unknown): void {
@@ -199,25 +197,16 @@ export class RunContextController<
 
     const { snapshot } = frame;
 
-    if (this.capture === "all") {
-      snapshot.input = cloneArray(frame.input);
-      snapshot.output = frame.output;
-      snapshot.error = frame.error;
-    } else if (this.capture === "outputs") {
-      snapshot.input = undefined;
-      snapshot.output = frame.output;
-      snapshot.error = undefined;
-    } else {
-      snapshot.input = undefined;
-      snapshot.output = undefined;
-      snapshot.error = undefined;
-    }
+    const keep = captureFields(this.capture);
+    snapshot.input = keep.input ? copyArguments(frame.input) : undefined;
+    snapshot.output = retainedValue(keep.output, frame.output);
+    snapshot.error = retainedValue(keep.error, frame.error);
     this.history.previous = { ...snapshot };
   }
 
   enterPlugin(pluginId: string, target?: string): void {
     const snapshot = this.ensurePluginSnapshot(pluginId, target);
-    this.pluginStack.push(snapshot);
+    this.pluginStack.push({ ...snapshot, target });
   }
 
   leavePlugin(): void {
@@ -280,7 +269,7 @@ export class RunContextController<
     return {
       id: frame.snapshot.id,
       state: frame.snapshot.state,
-      input: cloneArray(frame.input),
+      input: copyArguments(frame.input),
       output: frame.output,
       error: frame.error,
     };
@@ -298,7 +287,7 @@ export class RunContextController<
       state: snapshot.state,
       input: snapshot.input === undefined
         ? undefined
-        : cloneArray(snapshot.input),
+        : copyArguments(snapshot.input),
       output: snapshot.output,
       error: snapshot.error,
     };
@@ -311,7 +300,7 @@ export class RunContextController<
         ...snapshot,
         input: snapshot.input === undefined
           ? undefined
-          : cloneArray(snapshot.input),
+          : copyArguments(snapshot.input),
       };
   }
 
@@ -321,7 +310,7 @@ export class RunContextController<
       state: snapshot.state,
       input: snapshot.input === undefined
         ? undefined
-        : cloneArray(snapshot.input),
+        : copyArguments(snapshot.input),
       output: snapshot.output,
       error: snapshot.error,
     }));

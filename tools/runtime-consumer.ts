@@ -1,3 +1,4 @@
+import { stripProofComments } from "@tools/package-release.ts";
 import { sourceFiles, ts } from "@tools/source.ts";
 import { copyWasmFixture } from "@tools/wasm-fixture.ts";
 
@@ -18,11 +19,12 @@ for (const path of await sourceFiles()) {
   await Deno.mkdir(output.slice(0, output.lastIndexOf("/")), {
     recursive: true,
   });
-  const source = (await Deno.readTextFile(path)).replace(
-    /(["'])@\/([^"']+)\1/g,
-    (_match, quote, imported) =>
-      quote + relative(target, imported).replace(/\.ts$/, ".js") + quote,
-  );
+  const source = stripProofComments(path, await Deno.readTextFile(path))
+    .replace(
+      /(["'])@\/([^"']+)\1/g,
+      (_match, quote, imported) =>
+        quote + relative(target, imported).replace(/\.ts$/, ".js") + quote,
+    );
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       target: ts.ScriptTarget.ES2022,

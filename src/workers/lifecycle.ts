@@ -1,10 +1,16 @@
+import {
+  afterRelease,
+  ownerAccepts,
+  type OwnerPhase,
+  phaseAfterClose,
+} from "@/core/owner-phase.ts";
 import type { Setup } from "@/workers/config.ts";
 import { WorkerError } from "@/workers/error.ts";
 import { Generation } from "@/workers/pool.ts";
 
 /** Own complete caller lifecycles, not merely remote dispatch time. */
 export class Lifetime {
-  private phase: "open" | "closing" | "dormant" | "closed" = "open";
+  private phase: OwnerPhase = "open";
   private terminal = false;
   private active = 0;
   private generation?: Generation;
@@ -16,7 +22,7 @@ export class Lifetime {
   constructor(private readonly setup: Setup) {}
   enter(): Generation {
     if (this.failure) throw this.failure;
-    if (this.terminal || this.phase === "closing" || this.phase === "closed") {
+    if (!ownerAccepts(this.phase, this.terminal)) {
       throw new WorkerError(
         "WRK_CLOSED",
         "Persistent parallel is not accepting new executions.",
@@ -28,7 +34,7 @@ export class Lifetime {
     return this.generation ??= new Generation(this.setup);
   }
   leave(): void {
-    this.active--;
+    this.active = afterRelease(this.active);
     if (this.active !== 0) return;
     this.drained?.();
     if (this.phase === "open" && this.setup.idleTimeoutMs !== undefined) {
@@ -71,9 +77,7 @@ export class Lifetime {
       } finally {
         this.generation = undefined;
         this.drained = undefined;
-        this.phase = this.terminal || !this.setup.reopenOnUse
-          ? "closed"
-          : "dormant";
+        this.phase = phaseAfterClose(this.terminal, this.setup.reopenOnUse);
       }
     })();
     return this.closing;

@@ -1,3 +1,8 @@
+import {
+  acceptsRequest,
+  afterHostWork,
+  type HostPhase,
+} from "@/workers/host-phase.ts";
 import { step } from "@/step/factory.ts";
 import type { Step } from "@/step/types.ts";
 import { definitionData } from "@/workers/definition.ts";
@@ -16,10 +21,10 @@ export function workerHost(
   send: (reply: Reply) => void,
   load: (url: string) => Promise<unknown>,
 ): { receive(value: unknown): Promise<void> } {
-  let state: "empty" | "loading" | "ready" | "busy" | "failed" = "empty";
+  let state: HostPhase = "empty";
   let executable: Step<unknown[], unknown>;
   async function initialize(value: InitMessage): Promise<void> {
-    if (state !== "empty" || typeof value.module !== "string") {
+    if (!acceptsRequest(state, "init") || typeof value.module !== "string") {
       throw new WorkerError(
         "WRK_PROTOCOL",
         "Unexpected initialization message.",
@@ -27,7 +32,8 @@ export function workerHost(
     }
     state = "loading";
     const { callable } = definitionData(await load(value.module));
-    if ((state as string) === "failed") return;
+    const settled = afterHostWork(state);
+    if (settled === "failed") return;
     executable = step(async function (...args: unknown[]) {
       const runWith: unknown = Reflect.get(callable, "runWith");
       if (typeof runWith === "function") {
@@ -37,12 +43,12 @@ export function workerHost(
       }
       return await Reflect.apply(callable, this, args);
     });
-    state = "ready";
+    state = settled;
     send({ protocol: PROTOCOL, kind: "ready" });
   }
   async function run(value: RunMessage): Promise<void> {
     if (
-      state !== "ready" || typeof value.id !== "string" ||
+      !acceptsRequest(state, "run") || typeof value.id !== "string" ||
       !Array.isArray(value.args) || !contextValid(value.context)
     ) {
       throw new WorkerError(
@@ -75,8 +81,8 @@ export function workerHost(
         error: remoteError(error),
       };
     }
-    if ((state as string) === "failed") return;
-    state = "ready";
+    state = afterHostWork(state);
+    if (state === "failed") return;
     try {
       send(reply);
     } catch (cause) {

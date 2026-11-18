@@ -1,3 +1,10 @@
+import { retain } from "@/core/selection.ts";
+import {
+  copyArguments,
+  registrationsForRun,
+  singleArgument,
+} from "@/core/sequences.ts";
+import { childConflicts, includesRegistration } from "@/pipe/routing.ts";
 import type {
   ContextValues,
   RunContext,
@@ -5,11 +12,12 @@ import type {
 } from "@/context/types.ts";
 import { callableFacade } from "@/runtime/callable.ts";
 import {
-  assertSynchronous,
   capturePlugin,
   execute,
   executeSync,
   type RuntimePlugin,
+  settleEffects,
+  settleEffectsSync,
 } from "@/runtime/execution.ts";
 import { PIP_ERRORS } from "@/pipe/error.ts";
 import type {
@@ -42,15 +50,21 @@ class PipeExecution {
     }
     const identities = new Map<string, AnyPipeStep>();
     for (const child of steps) {
+      const childId = child.id;
+      const previous = identities.get(childId);
       if (
-        child.id === this.id ||
-        (identities.has(child.id) && identities.get(child.id) !== child)
+        childConflicts(
+          this.id,
+          childId,
+          previous !== undefined,
+          previous === child,
+        )
       ) {
         throw new TypeError(
-          `Conflicting step identity "${child.id}" in pipe "${this.id}".`,
+          `Conflicting step identity "${childId}" in pipe "${this.id}".`,
         );
       }
-      identities.set(child.id, child);
+      identities.set(childId, child);
     }
     this.children = [...steps];
     for (const plugin of options?.plugins ?? []) {
@@ -82,7 +96,7 @@ class PipeExecution {
     return this;
   }
   remove(id: string): this {
-    this.registered = this.registered.filter((plugin) => plugin.id !== id);
+    this.registered = retain(this.registered, (plugin) => plugin.id !== id);
     return this;
   }
   run(...args: unknown[]): unknown {
@@ -103,57 +117,46 @@ class PipeExecution {
     options: { plugins?: RuntimePlugin[]; context?: RunContextOptions },
     args: unknown[],
   ): unknown {
-    const plan = [...this.registered, ...(options.plugins ?? [])].map(
-      capturePlugin,
-    );
-    for (const plugin of plan) this.validate(plugin);
-    const pipelinePlugins = plan.filter((plugin) =>
-      plugin.target === undefined || plugin.target === this.id
-    );
-    const childOptions = (child: AnyPipeStep, context: RunContext) => {
-      const plugins = plan.filter((plugin) =>
-        plugin.target === child.id && plugin.target !== undefined
+    const plan = registrationsForRun(this.registered, options.plugins ?? [])
+      .map(
+        capturePlugin,
       );
+    for (const plugin of plan) this.validate(plugin);
+    const pluginsFor = (id: string, owner: boolean) =>
+      retain(plan, (plugin) => includesRegistration(plugin.target, id, owner));
+    const pipelinePlugins = pluginsFor(this.id, true);
+    const childOptions = (child: AnyPipeStep, context: RunContext) => {
+      const plugins = pluginsFor(child.id, false);
       return {
         context: { parent: context },
         ...(plugins.length ? { plugins } : {}),
       };
     };
-    const runSync = (input: unknown[], context: RunContext): unknown => {
-      let currentArgs = input;
-      let result: unknown;
-      for (const child of this.children) {
-        result = assertSynchronous(
-          Reflect.apply(child.runWith, child, [
-            childOptions(child, context),
-            ...currentArgs,
-          ]),
-        );
-        currentArgs = Array.isArray(result) ? [...result] : [result];
-      }
-      return result;
-    };
-    const runAsync = async (
+    const children = this.children;
+    function* runChildren(
       input: unknown[],
       context: RunContext,
-    ): Promise<unknown> => {
+    ): Generator<unknown, unknown, unknown> {
       let currentArgs = input;
       let result: unknown;
-      for (const child of this.children) {
-        result = await Reflect.apply(child.runWith, child, [
+      for (const child of children) {
+        result = yield Reflect.apply(child.runWith, child, [
           childOptions(child, context),
           ...currentArgs,
         ]);
-        currentArgs = Array.isArray(result) ? [...result] : [result];
+        currentArgs = Array.isArray(result)
+          ? copyArguments(result)
+          : singleArgument(result);
       }
       return result;
-    };
+    }
+    const settle = this.isSync ? settleEffectsSync : settleEffects;
     return (this.isSync ? executeSync : execute)({
       id: this.id,
       kind: "pipe",
       plugins: pipelinePlugins,
       context: options.context,
-      body: this.isSync ? runSync : runAsync,
+      body: (input, context) => settle(runChildren(input, context)),
       normalize: (error, trace) =>
         error instanceof Error
           ? error

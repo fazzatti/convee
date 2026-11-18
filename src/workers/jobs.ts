@@ -1,3 +1,4 @@
+import { appendedIndex, branchAllowed, type Shape } from "@/core/job-tree.ts";
 import { clone, type GroupSetup } from "@/workers/config.ts";
 import { WorkerError } from "@/workers/error.ts";
 import { contextValid } from "@/workers/protocol.ts";
@@ -14,7 +15,6 @@ export interface PreparedJob extends Omit<Descriptor, "owner"> {
   id: string;
   path: number[];
 }
-export type Shape = number | Shape[];
 function descriptor(data: Descriptor): WorkerJob {
   const job = Object.freeze({
     withContext(context: WorkerContext): WorkerJob {
@@ -48,7 +48,7 @@ export function prepare(
   const ancestors = new Set<unknown>();
   function visit(value: unknown, path: number[]): Shape {
     if (Array.isArray(value)) {
-      if (ancestors.has(value) || path.length > 256) {
+      if (!branchAllowed(ancestors.has(value), path.length)) {
         throw new WorkerError(
           "WRK_CONFIG",
           "Job trees must be acyclic and at most 256 levels deep.",
@@ -58,7 +58,12 @@ export function prepare(
       const result: Shape[] = [];
       const length = value.length;
       for (let index = 0; index < length; index++) {
-        result.push(visit(value[index], [...path, index]));
+        result.push(
+          visit(Object.hasOwn(value, index) ? value[index] : undefined, [
+            ...path,
+            index,
+          ]),
+        );
       }
       ancestors.delete(value);
       return result;
@@ -85,7 +90,7 @@ export function prepare(
       id: crypto.randomUUID(),
       path,
     });
-    return jobs.length - 1;
+    return appendedIndex(jobs.length);
   }
   if (!Array.isArray(tree)) {
     throw new WorkerError(
@@ -95,9 +100,4 @@ export function prepare(
   }
   const shape = visit(tree, []) as Shape[];
   return { jobs, shape };
-}
-export function reshape(shape: Shape, values: readonly unknown[]): unknown {
-  return typeof shape === "number"
-    ? values[shape]
-    : shape.map((child) => reshape(child, values));
 }
